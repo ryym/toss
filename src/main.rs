@@ -2,7 +2,8 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::io::{IsTerminal, Write};
-use std::{env, panic};
+use std::time::Duration;
+use std::{cmp, env, panic, thread};
 
 use termion::cursor::Goto;
 use termion::event::{Event, Key};
@@ -91,6 +92,26 @@ fn run() -> Result<(), AnyError> {
                         clear_screen(&mut screen)?;
                         row_start = lines.len() - term_rows;
                         draw_lines(&mut screen, &lines, row_start, term_rows)?;
+                    }
+                    'J' => {
+                        let dest = cmp::min(row_start + 10, lines.len() - 1);
+                        while row_start < dest {
+                            clear_screen(&mut screen)?;
+                            draw_lines(&mut screen, &lines, row_start, term_rows)?;
+                            screen.flush()?;
+                            thread::sleep(Duration::from_millis(10));
+                            row_start += 1;
+                        }
+                    }
+                    'K' => {
+                        let dest = row_start.saturating_sub(10);
+                        while row_start > dest {
+                            clear_screen(&mut screen)?;
+                            draw_lines(&mut screen, &lines, row_start, term_rows)?;
+                            screen.flush()?;
+                            thread::sleep(Duration::from_millis(10));
+                            row_start -= 1;
+                        }
                     }
                     _ => continue,
                 },
