@@ -1,7 +1,8 @@
-use std::env;
 use std::error::Error;
-use std::io::Write;
+use std::fs::File;
 use std::io::{self, BufRead, BufReader};
+use std::io::{IsTerminal, Write};
+use std::{env, panic};
 
 use termion::cursor::Goto;
 use termion::event::{Event, Key};
@@ -11,33 +12,57 @@ use termion::screen::IntoAlternateScreen;
 use termion::terminal_size;
 
 fn main() {
-    let mut args = env::args();
-    let file_path = args.nth(1).unwrap();
-    run(file_path).unwrap();
+    let original_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |panic_info| {
+        let message = if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            s.as_str()
+        } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            s
+        } else {
+            "Unknown panic message"
+        };
+        let info = format!("{}\n{:?}", message, panic_info);
+        let mut log_file = std::fs::File::create("toss-panic.log").unwrap();
+        let _ = log_file.write_all(info.as_bytes());
+        original_hook(panic_info);
+    }));
+
+    let result = run();
+    println!("result {:?}", result);
 }
 
 type AnyError = Box<dyn Error>;
 
-fn run(file_path: String) -> Result<(), AnyError> {
-    let file = std::fs::File::open(file_path)?;
-    let reader = BufReader::new(file);
-    let lines = reader.lines().map(|l| l.unwrap()).collect::<Vec<_>>();
+fn run() -> Result<(), AnyError> {
+    let stdin = io::stdin().lock();
+    let lines: Vec<String> = if stdin.is_terminal() {
+        let mut args = env::args();
+        let file_path = args.nth(1).unwrap();
+        let file = File::open(file_path)?;
+        let reader = BufReader::new(file);
+        reader.lines().map(|l| l.unwrap()).collect()
+    } else {
+        let reader = BufReader::new(stdin);
+        reader.lines().map(|l| l.unwrap()).collect()
+    };
 
     let (_term_cols, term_rows) = terminal_size()?;
     let term_rows = term_rows as usize;
 
-    let stdout = io::stdout();
-    let stdout = stdout.lock().into_raw_mode()?;
+    let stdout = io::stdout().lock();
+    let stdout = stdout.into_raw_mode()?;
     let mut screen = stdout.into_alternate_screen()?;
 
     let mut row_start = 0;
     clear_screen(&mut screen)?;
     draw_lines(&mut screen, &lines, row_start, term_rows)?;
 
-    let mut events = io::stdin().events();
+    let input_tty = File::open("/dev/tty")?;
+    let mut events = input_tty.events();
     loop {
         screen.flush()?;
         let event = events.next().unwrap()?;
+
         match event {
             Event::Key(key) => match key {
                 Key::Esc => return Ok(()),
