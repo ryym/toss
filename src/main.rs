@@ -93,23 +93,45 @@ fn run() -> Result<(), AnyError> {
                         row_start = lines.len() - term_rows;
                         draw_lines(&mut screen, &lines, row_start, term_rows)?;
                     }
-                    'J' => {
-                        let dest = cmp::min(row_start + 10, lines.len() - 1);
+                    'd' => {
+                        let half_page = term_rows / 2;
+                        let dest = cmp::min(row_start + half_page, lines.len() - 1);
                         while row_start < dest {
                             clear_screen(&mut screen)?;
                             draw_lines(&mut screen, &lines, row_start, term_rows)?;
                             screen.flush()?;
-                            thread::sleep(Duration::from_millis(10));
+                            thread::sleep(Duration::from_millis(4));
                             row_start += 1;
                         }
                     }
-                    'K' => {
-                        let dest = row_start.saturating_sub(10);
+                    'u' => {
+                        let half_page = term_rows / 2;
+                        let dest = row_start.saturating_sub(half_page);
                         while row_start > dest {
                             clear_screen(&mut screen)?;
                             draw_lines(&mut screen, &lines, row_start, term_rows)?;
                             screen.flush()?;
-                            thread::sleep(Duration::from_millis(10));
+                            thread::sleep(Duration::from_millis(4));
+                            row_start -= 1;
+                        }
+                    }
+                    'f' => {
+                        let dest = cmp::min(row_start + term_rows, lines.len() - 1);
+                        while row_start < dest {
+                            clear_screen(&mut screen)?;
+                            draw_lines(&mut screen, &lines, row_start, term_rows)?;
+                            screen.flush()?;
+                            thread::sleep(Duration::from_millis(4));
+                            row_start += 1;
+                        }
+                    }
+                    'b' => {
+                        let dest = row_start.saturating_sub(term_rows);
+                        while row_start > dest {
+                            clear_screen(&mut screen)?;
+                            draw_lines(&mut screen, &lines, row_start, term_rows)?;
+                            screen.flush()?;
+                            thread::sleep(Duration::from_millis(4));
                             row_start -= 1;
                         }
                     }
