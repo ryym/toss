@@ -96,44 +96,20 @@ fn run() -> Result<(), AnyError> {
                     'd' => {
                         let half_page = term_rows / 2;
                         let dest = cmp::min(row_start + half_page, lines.len() - 1);
-                        while row_start < dest {
-                            clear_screen(&mut screen)?;
-                            draw_lines(&mut screen, &lines, row_start, term_rows)?;
-                            screen.flush()?;
-                            thread::sleep(Duration::from_millis(4));
-                            row_start += 1;
-                        }
+                        smooth_scroll(&mut screen, &lines, &mut row_start, term_rows, dest)?;
                     }
                     'u' => {
                         let half_page = term_rows / 2;
                         let dest = row_start.saturating_sub(half_page);
-                        while row_start > dest {
-                            clear_screen(&mut screen)?;
-                            draw_lines(&mut screen, &lines, row_start, term_rows)?;
-                            screen.flush()?;
-                            thread::sleep(Duration::from_millis(4));
-                            row_start -= 1;
-                        }
+                        smooth_scroll(&mut screen, &lines, &mut row_start, term_rows, dest)?;
                     }
                     'f' => {
                         let dest = cmp::min(row_start + term_rows, lines.len() - 1);
-                        while row_start < dest {
-                            clear_screen(&mut screen)?;
-                            draw_lines(&mut screen, &lines, row_start, term_rows)?;
-                            screen.flush()?;
-                            thread::sleep(Duration::from_millis(4));
-                            row_start += 1;
-                        }
+                        smooth_scroll(&mut screen, &lines, &mut row_start, term_rows, dest)?;
                     }
                     'b' => {
                         let dest = row_start.saturating_sub(term_rows);
-                        while row_start > dest {
-                            clear_screen(&mut screen)?;
-                            draw_lines(&mut screen, &lines, row_start, term_rows)?;
-                            screen.flush()?;
-                            thread::sleep(Duration::from_millis(4));
-                            row_start -= 1;
-                        }
+                        smooth_scroll(&mut screen, &lines, &mut row_start, term_rows, dest)?;
                     }
                     _ => continue,
                 },
@@ -161,6 +137,33 @@ fn draw_lines<W: io::Write>(
 ) -> Result<(), AnyError> {
     for (i, line) in lines.iter().skip(row_start).take(row_end).enumerate() {
         write!(screen, "{}{}", Goto(0, (i + 1) as u16), line)?;
+    }
+    Ok(())
+}
+
+fn smooth_scroll<W: io::Write>(
+    mut screen: W,
+    lines: &[String],
+    row_start: &mut usize,
+    row_end: usize,
+    dest: usize,
+) -> Result<(), AnyError> {
+    let total_steps = dest.abs_diff(*row_start);
+    let go_down = dest > *row_start;
+    let base_delay = 240.0 / (total_steps as f64 + 2.0);
+    for step in 0..total_steps {
+        let progress = step as f64 / total_steps as f64;
+        let eased_progress = progress.powi(3);
+        let delay = (1.0 + base_delay * eased_progress) as u64;
+        clear_screen(&mut screen)?;
+        draw_lines(&mut screen, &lines, *row_start, row_end)?;
+        screen.flush()?;
+        thread::sleep(Duration::from_millis(delay));
+        if go_down {
+            *row_start += 1;
+        } else {
+            *row_start -= 1;
+        }
     }
     Ok(())
 }
