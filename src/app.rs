@@ -1,24 +1,25 @@
 use std::error::Error;
 use std::fs::File;
+use std::io::IsTerminal;
 use std::io::{self, BufRead, BufReader};
-use std::io::{IsTerminal, Write};
 use std::time::Duration;
 use std::{cmp, env, panic, thread};
 
-use termion::cursor::Goto;
-use termion::event::{Event, Key};
-use termion::input::TermRead;
-use termion::raw::IntoRawMode;
-use termion::screen::IntoAlternateScreen;
-use termion::terminal_size;
+use crate::screen::Screen;
+use crate::screen::{Event, Key};
 
 type AnyError = Box<dyn Error>;
 
 pub fn run() -> Result<(), AnyError> {
+    let mut screen = crate::screen::for_terminal()?;
+    let args = env::args().skip(1).collect::<Vec<_>>();
+    run_with(&mut screen, args)
+}
+
+fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError> {
     let stdin = io::stdin().lock();
     let lines: Vec<String> = if stdin.is_terminal() {
-        let mut args = env::args();
-        let file_path = args.nth(1).unwrap();
+        let file_path = args.first().unwrap();
         let file = File::open(file_path)?;
         let reader = BufReader::new(file);
         reader.lines().map(|l| l.unwrap()).collect()
@@ -27,23 +28,15 @@ pub fn run() -> Result<(), AnyError> {
         reader.lines().map(|l| l.unwrap()).collect()
     };
 
-    let (_term_cols, term_rows) = terminal_size()?;
-    let term_rows = term_rows as usize;
-
-    let stdout = io::stdout().lock();
-    let stdout = stdout.into_raw_mode()?;
-    let mut screen = stdout.into_alternate_screen()?;
-
+    let size = screen.size()?;
     let mut row_start = 0;
-    clear_screen(&mut screen)?;
-    draw_lines(&mut screen, &lines, row_start, term_rows)?;
+    screen.clear()?;
+    screen.draw(take(&lines, row_start, size.n_rows()))?;
 
-    let input_tty = File::open("/dev/tty")?;
-    let mut events = input_tty.events();
     loop {
         screen.flush()?;
-        let event = events.next().unwrap()?;
-
+        let event = screen.next_event()?;
+        let n_rows = screen.size()?.n_rows();
         match event {
             Event::Key(key) => match key {
                 Key::Esc => return Ok(()),
@@ -52,44 +45,44 @@ pub fn run() -> Result<(), AnyError> {
                     'j' => {
                         if row_start < lines.len() - 1 {
                             row_start += 1;
-                            clear_screen(&mut screen)?;
-                            draw_lines(&mut screen, &lines, row_start, term_rows)?;
+                            screen.clear()?;
+                            screen.draw(take(&lines, row_start, n_rows))?;
                         }
                     }
                     'k' => {
                         if row_start > 0 {
                             row_start -= 1;
-                            clear_screen(&mut screen)?;
-                            draw_lines(&mut screen, &lines, row_start, term_rows)?;
+                            screen.clear()?;
+                            screen.draw(take(&lines, row_start, n_rows))?;
                         }
                     }
                     'g' => {
-                        clear_screen(&mut screen)?;
+                        screen.clear()?;
                         row_start = 0;
-                        draw_lines(&mut screen, &lines, row_start, term_rows)?;
+                        screen.draw(take(&lines, row_start, n_rows))?;
                     }
                     'G' => {
-                        clear_screen(&mut screen)?;
-                        row_start = lines.len() - term_rows;
-                        draw_lines(&mut screen, &lines, row_start, term_rows)?;
+                        screen.clear()?;
+                        row_start = lines.len() - n_rows;
+                        screen.draw(take(&lines, row_start, n_rows))?;
                     }
                     'd' => {
-                        let half_page = term_rows / 2;
+                        let half_page = n_rows / 2;
                         let dest = cmp::min(row_start + half_page, lines.len() - 1);
-                        smooth_scroll(&mut screen, &lines, &mut row_start, term_rows, dest)?;
+                        smooth_scroll(screen, &lines, &mut row_start, dest)?;
                     }
                     'u' => {
-                        let half_page = term_rows / 2;
+                        let half_page = n_rows / 2;
                         let dest = row_start.saturating_sub(half_page);
-                        smooth_scroll(&mut screen, &lines, &mut row_start, term_rows, dest)?;
+                        smooth_scroll(screen, &lines, &mut row_start, dest)?;
                     }
                     'f' => {
-                        let dest = cmp::min(row_start + term_rows, lines.len() - 1);
-                        smooth_scroll(&mut screen, &lines, &mut row_start, term_rows, dest)?;
+                        let dest = cmp::min(row_start + n_rows, lines.len() - 1);
+                        smooth_scroll(screen, &lines, &mut row_start, dest)?;
                     }
                     'b' => {
-                        let dest = row_start.saturating_sub(term_rows);
-                        smooth_scroll(&mut screen, &lines, &mut row_start, term_rows, dest)?;
+                        let dest = row_start.saturating_sub(n_rows);
+                        smooth_scroll(screen, &lines, &mut row_start, dest)?;
                     }
                     _ => continue,
                 },
@@ -104,30 +97,13 @@ pub fn run() -> Result<(), AnyError> {
     }
 }
 
-fn clear_screen<W: io::Write>(mut screen: W) -> Result<(), AnyError> {
-    write!(screen, "{}{}", termion::clear::All, Goto(1, 1),)?;
-    Ok(())
-}
-
-fn draw_lines<W: io::Write>(
-    mut screen: W,
-    lines: &[String],
-    row_start: usize,
-    row_end: usize,
-) -> Result<(), AnyError> {
-    for (i, line) in lines.iter().skip(row_start).take(row_end).enumerate() {
-        write!(screen, "{}{}", Goto(0, (i + 1) as u16), line)?;
-    }
-    Ok(())
-}
-
-fn smooth_scroll<W: io::Write>(
-    mut screen: W,
+fn smooth_scroll<S: Screen>(
+    screen: &mut S,
     lines: &[String],
     row_start: &mut usize,
-    row_end: usize,
     dest: usize,
 ) -> Result<(), AnyError> {
+    let size = screen.size()?;
     let total_steps = dest.abs_diff(*row_start);
     let go_down = dest > *row_start;
     let base_delay = 240.0 / (total_steps as f64 + 2.0);
@@ -135,8 +111,8 @@ fn smooth_scroll<W: io::Write>(
         let progress = step as f64 / total_steps as f64;
         let eased_progress = progress.powi(3);
         let delay = (1.0 + base_delay * eased_progress) as u64;
-        clear_screen(&mut screen)?;
-        draw_lines(&mut screen, lines, *row_start, row_end)?;
+        screen.clear()?;
+        screen.draw(take(&lines, *row_start, size.n_rows()))?;
         screen.flush()?;
         thread::sleep(Duration::from_millis(delay));
         if go_down {
@@ -146,4 +122,9 @@ fn smooth_scroll<W: io::Write>(
         }
     }
     Ok(())
+}
+
+fn take(lines: &[String], start: usize, count: usize) -> &[String] {
+    let end = cmp::min(lines.len(), start + count);
+    &lines[start..end]
 }
