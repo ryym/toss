@@ -5,3 +5,7 @@ edition = "2024"
 
 [dependencies]
 termion = "4.0.5"
+
+[dev-dependencies]
+indoc = "2.0.6"
+pretty_assertions = "1.4.1"
