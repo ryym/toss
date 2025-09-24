@@ -26,6 +26,10 @@ pub(crate) struct ScreenSize {
 }
 
 impl ScreenSize {
+    pub(crate) fn new(n_rows: usize) -> Self {
+        Self { n_rows }
+    }
+
     pub(crate) fn n_rows(&self) -> usize {
         self.n_rows
     }

@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use std::error::Error;
 use std::fs::File;
 use std::io::IsTerminal;
