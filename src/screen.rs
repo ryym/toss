@@ -1,3 +1,6 @@
+#[cfg(test)]
+pub mod mock;
+
 use std::fs::File;
 use std::io;
 
@@ -17,6 +20,7 @@ pub(crate) trait Screen {
     fn flush(&mut self) -> io::Result<()>;
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct ScreenSize {
     n_rows: usize,
 }
@@ -50,9 +54,7 @@ impl<R: io::Read, W: io::Write> TerminalScreen<R, W> {
 impl<R: io::Read, W: io::Write> Screen for TerminalScreen<R, W> {
     fn size(&self) -> io::Result<ScreenSize> {
         let (_n_cols, n_rows) = terminal_size()?;
-        Ok(ScreenSize {
-            n_rows: n_rows as usize,
-        })
+        Ok(ScreenSize::new(n_rows as usize))
     }
 
     fn next_event(&mut self) -> io::Result<Event> {
