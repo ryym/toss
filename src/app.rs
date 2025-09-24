@@ -111,6 +111,11 @@ fn smooth_scroll<S: Screen>(
     let go_down = dest > *row_start;
     let base_delay = 240.0 / (total_steps as f64 + 2.0);
     for step in 0..total_steps {
+        if go_down {
+            *row_start += 1;
+        } else {
+            *row_start -= 1;
+        }
         let progress = step as f64 / total_steps as f64;
         let eased_progress = progress.powi(3);
         let delay = (1.0 + base_delay * eased_progress) as u64;
@@ -118,11 +123,6 @@ fn smooth_scroll<S: Screen>(
         screen.draw(take(&lines, *row_start, size.n_rows()))?;
         screen.flush()?;
         thread::sleep(Duration::from_millis(delay));
-        if go_down {
-            *row_start += 1;
-        } else {
-            *row_start -= 1;
-        }
     }
     Ok(())
 }

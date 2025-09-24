@@ -81,3 +81,58 @@ fn test_basic_navigation() -> Result<(), super::AnyError> {
 
     Ok(())
 }
+
+#[test]
+fn test_smooth_scroll() -> Result<(), super::AnyError> {
+    let mut screen = MockScreen::new(ScreenSize::new(4));
+    screen.set_events(vec![
+        Event::Key(Key::Char('d')),
+        Event::Key(Key::Char('u')),
+        Event::Key(Key::Char('q')),
+    ]);
+
+    let args = vec!["tests/testdata/small.txt".to_string()];
+    super::run_with(&mut screen, args)?;
+
+    // Animate navigations by rendering each step rather than jumping to the destination at once.
+    let want = indoc! {"
+        [CLEAR]
+        line 1
+        line 2
+        line 3
+        line 4
+        -----
+        [EVENT]:char:d
+        [CLEAR]
+        line 2
+        line 3
+        line 4
+        line 5
+        -----
+        [CLEAR]
+        line 3
+        line 4
+        line 5
+        line 6
+        -----
+        -----
+        [EVENT]:char:u
+        [CLEAR]
+        line 2
+        line 3
+        line 4
+        line 5
+        -----
+        [CLEAR]
+        line 1
+        line 2
+        line 3
+        line 4
+        -----
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(&screen.out, want);
+
+    Ok(())
+}
