@@ -115,7 +115,6 @@ fn test_smooth_scroll() -> Result<(), super::AnyError> {
         line 5
         line 6
         -----
-        -----
         [EVENT]:char:u
         [CLEAR]
         line 2
@@ -128,7 +127,6 @@ fn test_smooth_scroll() -> Result<(), super::AnyError> {
         line 2
         line 3
         line 4
-        -----
         -----
         [EVENT]:char:q
     "};
