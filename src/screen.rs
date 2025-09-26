@@ -46,7 +46,8 @@ pub(crate) fn for_terminal() -> io::Result<TerminalScreen<impl io::Read, impl io
     let input_tty = File::open("/dev/tty")?;
     let events = input_tty.events();
     let alt_screen = stdout.into_alternate_screen()?;
-    TerminalScreen::new(events, alt_screen)
+    let no_cursor = termion::cursor::HideCursor::from(alt_screen);
+    TerminalScreen::new(events, no_cursor)
 }
 
 impl<R: io::Read, W: io::Write> TerminalScreen<R, W> {
