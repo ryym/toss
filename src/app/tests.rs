@@ -13,7 +13,6 @@ fn test_open_and_quit() -> Result<(), super::AnyError> {
     super::run_with(&mut screen, args)?;
 
     let want = indoc! {"
-        [CLEAR]
         line 1
         line 2
         line 3
@@ -40,37 +39,31 @@ fn test_basic_navigation() -> Result<(), super::AnyError> {
     super::run_with(&mut screen, args)?;
 
     let want = indoc! {"
-        [CLEAR]
         line 1
         line 2
         line 3
         -----
         [EVENT]:char:j
-        [CLEAR]
         line 2
         line 3
         line 4
         -----
         [EVENT]:char:j
-        [CLEAR]
         line 3
         line 4
         line 5
         -----
         [EVENT]:char:k
-        [CLEAR]
         line 2
         line 3
         line 4
         -----
         [EVENT]:char:G
-        [CLEAR]
         line 8
         line 9
         line 10
         -----
         [EVENT]:char:g
-        [CLEAR]
         line 1
         line 2
         line 3
@@ -96,33 +89,28 @@ fn test_smooth_scroll() -> Result<(), super::AnyError> {
 
     // Animate navigations by rendering each step rather than jumping to the destination at once.
     let want = indoc! {"
-        [CLEAR]
         line 1
         line 2
         line 3
         line 4
         -----
         [EVENT]:char:d
-        [CLEAR]
         line 2
         line 3
         line 4
         line 5
         -----
-        [CLEAR]
         line 3
         line 4
         line 5
         line 6
         -----
         [EVENT]:char:u
-        [CLEAR]
         line 2
         line 3
         line 4
         line 5
         -----
-        [CLEAR]
         line 1
         line 2
         line 3

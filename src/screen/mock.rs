@@ -5,6 +5,9 @@ use crate::screen::ScreenSize;
 use super::{Event, Key};
 
 pub struct MockScreen {
+    /// Lines written by the app but not displayed yet.
+    draft: Vec<String>,
+    /// Output history. The content of draft is appended on `flush()`.
     pub out: String,
     pub size: ScreenSize,
     events: Vec<Event>,
@@ -12,7 +15,10 @@ pub struct MockScreen {
 
 impl MockScreen {
     pub fn new(size: ScreenSize) -> Self {
+        let mut draft = Vec::new();
+        draft.resize(size.n_rows(), String::new());
         Self {
+            draft,
             out: String::new(),
             size,
             events: vec![],
@@ -41,19 +47,21 @@ impl super::Screen for MockScreen {
     }
 
     fn clear(&mut self) -> io::Result<()> {
-        self.out.push_str("[CLEAR]\n");
+        self.draft.clear();
+        self.draft.resize(self.size.n_rows(), String::new());
         Ok(())
     }
 
-    fn draw(&mut self, lines: &[String]) -> io::Result<()> {
-        for line in lines {
-            self.out.push_str(&line);
-            self.out.push('\n');
-        }
+    fn draw_at(&mut self, row: usize, line: &String) -> io::Result<()> {
+        self.draft[row] = line.clone();
         Ok(())
     }
 
     fn flush(&mut self) -> io::Result<()> {
+        for line in &self.draft {
+            self.out.push_str(&line);
+            self.out.push('\n');
+        }
         self.out.push_str("-----\n");
         Ok(())
     }

@@ -115,7 +115,9 @@ impl<'s, S: Screen> App<'s, S> {
     ) -> Result<(), AnyError> {
         let row_end = cmp::min(lines.len(), row_start + n_rows);
         self.screen.clear()?;
-        self.screen.draw(&lines[row_start..row_end])?;
+        for (i, line) in (&lines[row_start..row_end]).iter().enumerate() {
+            self.screen.draw_at(i, line)?;
+        }
         self.screen.flush()?;
         Ok(())
     }
