@@ -25,11 +25,18 @@ fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError
 
 struct App<'s, S: Screen> {
     screen: &'s mut S,
+    lines: Vec<String>,
+    /// The index of lines which is at the top of the screen.
+    row_start: usize,
 }
 
 impl<'s, S: Screen> App<'s, S> {
     fn new(screen: &'s mut S) -> Self {
-        Self { screen }
+        Self {
+            screen,
+            lines: Vec::new(),
+            row_start: 0,
+        }
     }
 
     fn run(&mut self, args: Vec<String>) -> Result<(), AnyError> {
@@ -43,10 +50,11 @@ impl<'s, S: Screen> App<'s, S> {
             let reader = BufReader::new(stdin);
             reader.lines().map(|l| l.unwrap()).collect()
         };
+        self.lines = lines;
+        self.row_start = 0;
 
         let size = self.screen.size()?;
-        let mut row_start = 0;
-        self.draw_lines(&lines, row_start, size.n_rows())?;
+        self.draw_lines(size.n_rows())?;
 
         loop {
             let event = self.screen.next_event()?;
@@ -57,42 +65,42 @@ impl<'s, S: Screen> App<'s, S> {
                     Key::Char(chr) => match chr {
                         'q' => return Ok(()),
                         'j' => {
-                            if row_start < lines.len() - 1 {
-                                row_start += 1;
-                                self.draw_lines(&lines, row_start, n_rows)?;
+                            if self.row_start < self.lines.len() - 1 {
+                                self.row_start += 1;
+                                self.draw_lines(n_rows)?;
                             }
                         }
                         'k' => {
-                            if row_start > 0 {
-                                row_start -= 1;
-                                self.draw_lines(&lines, row_start, n_rows)?;
+                            if self.row_start > 0 {
+                                self.row_start -= 1;
+                                self.draw_lines(n_rows)?;
                             }
                         }
                         'g' => {
-                            row_start = 0;
-                            self.draw_lines(&lines, row_start, n_rows)?;
+                            self.row_start = 0;
+                            self.draw_lines(n_rows)?;
                         }
                         'G' => {
-                            row_start = lines.len() - n_rows;
-                            self.draw_lines(&lines, row_start, n_rows)?;
+                            self.row_start = self.lines.len() - n_rows;
+                            self.draw_lines(n_rows)?;
                         }
                         'd' => {
                             let half_page = n_rows / 2;
-                            let dest = cmp::min(row_start + half_page, lines.len() - 1);
-                            self.smooth_scroll(&lines, &mut row_start, dest)?;
+                            let dest = cmp::min(self.row_start + half_page, self.lines.len() - 1);
+                            self.smooth_scroll(dest)?;
                         }
                         'u' => {
                             let half_page = n_rows / 2;
-                            let dest = row_start.saturating_sub(half_page);
-                            self.smooth_scroll(&lines, &mut row_start, dest)?;
+                            let dest = self.row_start.saturating_sub(half_page);
+                            self.smooth_scroll(dest)?;
                         }
                         'f' => {
-                            let dest = cmp::min(row_start + n_rows, lines.len() - 1);
-                            self.smooth_scroll(&lines, &mut row_start, dest)?;
+                            let dest = cmp::min(self.row_start + n_rows, self.lines.len() - 1);
+                            self.smooth_scroll(dest)?;
                         }
                         'b' => {
-                            let dest = row_start.saturating_sub(n_rows);
-                            self.smooth_scroll(&lines, &mut row_start, dest)?;
+                            let dest = self.row_start.saturating_sub(n_rows);
+                            self.smooth_scroll(dest)?;
                         }
                         _ => continue,
                     },
@@ -107,41 +115,32 @@ impl<'s, S: Screen> App<'s, S> {
         }
     }
 
-    fn draw_lines(
-        &mut self,
-        lines: &[String],
-        row_start: usize,
-        n_rows: usize,
-    ) -> Result<(), AnyError> {
-        let row_end = cmp::min(lines.len(), row_start + n_rows);
+    fn draw_lines(&mut self, n_rows: usize) -> Result<(), AnyError> {
+        let row_end = cmp::min(self.lines.len(), self.row_start + n_rows);
         self.screen.clear()?;
-        for (i, line) in (&lines[row_start..row_end]).iter().enumerate() {
+        let displayed_lines = &self.lines[self.row_start..row_end];
+        for (i, line) in displayed_lines.iter().enumerate() {
             self.screen.draw_at(i, line)?;
         }
         self.screen.flush()?;
         Ok(())
     }
 
-    fn smooth_scroll(
-        &mut self,
-        lines: &[String],
-        row_start: &mut usize,
-        dest: usize,
-    ) -> Result<(), AnyError> {
+    fn smooth_scroll(&mut self, dest: usize) -> Result<(), AnyError> {
         let size = self.screen.size()?;
-        let total_steps = dest.abs_diff(*row_start);
-        let go_down = dest > *row_start;
+        let total_steps = dest.abs_diff(self.row_start);
+        let go_down = dest > self.row_start;
         let base_delay = 240.0 / (total_steps as f64 + 2.0);
         for step in 0..total_steps {
             if go_down {
-                *row_start += 1;
+                self.row_start += 1;
             } else {
-                *row_start -= 1;
+                self.row_start -= 1;
             }
             let progress = step as f64 / total_steps as f64;
             let eased_progress = progress.powi(3);
             let delay = (1.0 + base_delay * eased_progress) as u64;
-            self.draw_lines(&lines, *row_start, size.n_rows())?;
+            self.draw_lines(size.n_rows())?;
             thread::sleep(Duration::from_millis(delay));
         }
         Ok(())
