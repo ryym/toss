@@ -52,6 +52,29 @@ impl super::Screen for MockScreen {
         Ok(())
     }
 
+    fn scroll_forward(&mut self, n_steps: u16) -> io::Result<()> {
+        // Remove the first `n_steps` elements from the draft.
+        self.draft = self.draft.split_off(n_steps as usize);
+        self.draft.resize(self.size.n_rows(), String::new());
+        Ok(())
+    }
+
+    fn scroll_backward(&mut self, n_steps: u16) -> io::Result<()> {
+        // Prepend `n_steps` empty strings to the draft.
+        let mut draft = Vec::new();
+        draft.resize(self.size.n_rows(), String::new());
+        let n_steps = n_steps as usize;
+        for i in 0..n_steps {
+            draft[i] = String::new();
+        }
+        for i in 0..(self.size.n_rows() - n_steps) {
+            draft[i + n_steps] = self.draft[i].clone();
+        }
+        self.draft = draft;
+
+        Ok(())
+    }
+
     fn draw_at(&mut self, row: usize, line: &String) -> io::Result<()> {
         self.draft[row] = line.clone();
         Ok(())

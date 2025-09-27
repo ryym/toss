@@ -65,15 +65,13 @@ impl<'s, S: Screen> App<'s, S> {
                     Key::Char(chr) => match chr {
                         'q' => return Ok(()),
                         'j' => {
-                            if self.row_start < self.lines.len() - 1 {
-                                self.row_start += 1;
-                                self.draw_lines(n_rows)?;
+                            if self.scroll_forward(n_rows, 1)? {
+                                self.screen.flush()?;
                             }
                         }
                         'k' => {
-                            if self.row_start > 0 {
-                                self.row_start -= 1;
-                                self.draw_lines(n_rows)?;
+                            if self.scroll_backword(1)? {
+                                self.screen.flush()?;
                             }
                         }
                         'g' => {
@@ -126,21 +124,45 @@ impl<'s, S: Screen> App<'s, S> {
         Ok(())
     }
 
+    fn scroll_forward(&mut self, n_rows: usize, n_steps: u16) -> Result<bool, AnyError> {
+        if self.row_start + n_rows >= self.lines.len() {
+            return Ok(false);
+        }
+        self.screen.scroll_forward(n_steps)?;
+        let next_line = &self.lines[self.row_start + n_rows];
+        self.screen.draw_at(n_rows - 1, next_line)?;
+        self.row_start += 1;
+        Ok(true)
+    }
+
+    fn scroll_backword(&mut self, n_steps: u16) -> Result<bool, AnyError> {
+        if self.row_start == 0 {
+            return Ok(false);
+        }
+        self.screen.scroll_backward(n_steps)?;
+        self.row_start -= 1;
+        self.screen.draw_at(0, &self.lines[self.row_start])?;
+        Ok(true)
+    }
+
     fn smooth_scroll(&mut self, dest: usize) -> Result<(), AnyError> {
         let size = self.screen.size()?;
         let total_steps = dest.abs_diff(self.row_start);
         let go_down = dest > self.row_start;
         let base_delay = 240.0 / (total_steps as f64 + 2.0);
+
         for step in 0..total_steps {
             if go_down {
-                self.row_start += 1;
-            } else {
-                self.row_start -= 1;
+                if !self.scroll_forward(size.n_rows(), 1)? {
+                    break;
+                }
+            } else if !self.scroll_backword(1)? {
+                break;
             }
+            self.screen.flush()?;
             let progress = step as f64 / total_steps as f64;
             let eased_progress = progress.powi(3);
             let delay = (1.0 + base_delay * eased_progress) as u64;
-            self.draw_lines(size.n_rows())?;
             thread::sleep(Duration::from_millis(delay));
         }
         Ok(())

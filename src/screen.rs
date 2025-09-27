@@ -16,6 +16,8 @@ pub(crate) trait Screen {
     fn size(&self) -> io::Result<ScreenSize>;
     fn next_event(&mut self) -> io::Result<Event>;
     fn clear(&mut self) -> io::Result<()>;
+    fn scroll_forward(&mut self, n_steps: u16) -> io::Result<()>;
+    fn scroll_backward(&mut self, n_steps: u16) -> io::Result<()>;
     fn draw_at(&mut self, row: usize, line: &String) -> io::Result<()>;
     fn flush(&mut self) -> io::Result<()>;
 }
@@ -68,6 +70,14 @@ impl<R: io::Read, W: io::Write> Screen for TerminalScreen<R, W> {
 
     fn clear(&mut self) -> io::Result<()> {
         write!(self.output, "{}{}", termion::clear::All, Goto(1, 1),)
+    }
+
+    fn scroll_forward(&mut self, n_steps: u16) -> io::Result<()> {
+        write!(self.output, "{}", termion::scroll::Up(n_steps))
+    }
+
+    fn scroll_backward(&mut self, n_steps: u16) -> io::Result<()> {
+        write!(self.output, "{}", termion::scroll::Down(n_steps))
     }
 
     fn draw_at(&mut self, row: usize, line: &String) -> io::Result<()> {
