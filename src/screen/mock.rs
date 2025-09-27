@@ -75,8 +75,8 @@ impl super::Screen for MockScreen {
         Ok(())
     }
 
-    fn draw_at(&mut self, row: usize, line: &String) -> io::Result<()> {
-        self.draft[row] = line.clone();
+    fn draw_at(&mut self, row: usize, line: &str) -> io::Result<()> {
+        self.draft[row] = line.to_string();
         Ok(())
     }
 
