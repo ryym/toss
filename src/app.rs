@@ -69,12 +69,12 @@ impl<'s, S: Screen> App<'s, S> {
                     Key::Char(chr) => match chr {
                         'q' => return Ok(()),
                         'j' => {
-                            if self.scroll_forward(1)? {
+                            if self.scroll_forward_oneline()? {
                                 self.screen.flush()?;
                             }
                         }
                         'k' => {
-                            if self.scroll_backword(1)? {
+                            if self.scroll_backword_oneline()? {
                                 self.screen.flush()?;
                             }
                         }
@@ -133,22 +133,22 @@ impl<'s, S: Screen> App<'s, S> {
         Ok(())
     }
 
-    fn scroll_forward(&mut self, n_steps: u16) -> Result<bool, AnyError> {
+    fn scroll_forward_oneline(&mut self) -> Result<bool, AnyError> {
         if self.end_line_index() >= self.lines.len() {
             return Ok(false);
         }
-        self.screen.scroll_forward(n_steps)?;
+        self.screen.scroll_forward(1)?;
         let next_line = &self.lines[self.end_line_index()];
         self.screen.draw_at(self.n_screen_lines - 1, next_line)?;
         self.start_line_index += 1;
         Ok(true)
     }
 
-    fn scroll_backword(&mut self, n_steps: u16) -> Result<bool, AnyError> {
+    fn scroll_backword_oneline(&mut self) -> Result<bool, AnyError> {
         if self.start_line_index == 0 {
             return Ok(false);
         }
-        self.screen.scroll_backward(n_steps)?;
+        self.screen.scroll_backward(1)?;
         self.start_line_index -= 1;
         self.screen.draw_at(0, &self.lines[self.start_line_index])?;
         Ok(true)
@@ -161,10 +161,10 @@ impl<'s, S: Screen> App<'s, S> {
 
         for step in 0..total_steps {
             if go_down {
-                if !self.scroll_forward(1)? {
+                if !self.scroll_forward_oneline()? {
                     break;
                 }
-            } else if !self.scroll_backword(1)? {
+            } else if !self.scroll_backword_oneline()? {
                 break;
             }
             self.screen.flush()?;
