@@ -27,7 +27,7 @@ struct App<'s, S: Screen> {
     screen: &'s mut S,
     lines: Vec<String>,
     /// The index of lines which is at the top of the screen.
-    row_start: usize,
+    start_line_index: usize,
 }
 
 impl<'s, S: Screen> App<'s, S> {
@@ -35,7 +35,7 @@ impl<'s, S: Screen> App<'s, S> {
         Self {
             screen,
             lines: Vec::new(),
-            row_start: 0,
+            start_line_index: 0,
         }
     }
 
@@ -51,7 +51,7 @@ impl<'s, S: Screen> App<'s, S> {
             reader.lines().map(|l| l.unwrap()).collect()
         };
         self.lines = lines;
-        self.row_start = 0;
+        self.start_line_index = 0;
 
         let size = self.screen.size()?;
         self.draw_lines(size.n_rows())?;
@@ -75,29 +75,31 @@ impl<'s, S: Screen> App<'s, S> {
                             }
                         }
                         'g' => {
-                            self.row_start = 0;
+                            self.start_line_index = 0;
                             self.draw_lines(n_rows)?;
                         }
                         'G' => {
-                            self.row_start = self.lines.len() - n_rows;
+                            self.start_line_index = self.lines.len() - n_rows;
                             self.draw_lines(n_rows)?;
                         }
                         'd' => {
                             let half_page = n_rows / 2;
-                            let dest = cmp::min(self.row_start + half_page, self.lines.len() - 1);
+                            let dest =
+                                cmp::min(self.start_line_index + half_page, self.lines.len() - 1);
                             self.smooth_scroll(dest)?;
                         }
                         'u' => {
                             let half_page = n_rows / 2;
-                            let dest = self.row_start.saturating_sub(half_page);
+                            let dest = self.start_line_index.saturating_sub(half_page);
                             self.smooth_scroll(dest)?;
                         }
                         'f' => {
-                            let dest = cmp::min(self.row_start + n_rows, self.lines.len() - 1);
+                            let dest =
+                                cmp::min(self.start_line_index + n_rows, self.lines.len() - 1);
                             self.smooth_scroll(dest)?;
                         }
                         'b' => {
-                            let dest = self.row_start.saturating_sub(n_rows);
+                            let dest = self.start_line_index.saturating_sub(n_rows);
                             self.smooth_scroll(dest)?;
                         }
                         _ => continue,
@@ -114,9 +116,9 @@ impl<'s, S: Screen> App<'s, S> {
     }
 
     fn draw_lines(&mut self, n_rows: usize) -> Result<(), AnyError> {
-        let row_end = cmp::min(self.lines.len(), self.row_start + n_rows);
+        let row_end = cmp::min(self.lines.len(), self.start_line_index + n_rows);
         self.screen.clear()?;
-        let displayed_lines = &self.lines[self.row_start..row_end];
+        let displayed_lines = &self.lines[self.start_line_index..row_end];
         for (i, line) in displayed_lines.iter().enumerate() {
             self.screen.draw_at(i, line)?;
         }
@@ -125,30 +127,30 @@ impl<'s, S: Screen> App<'s, S> {
     }
 
     fn scroll_forward(&mut self, n_rows: usize, n_steps: u16) -> Result<bool, AnyError> {
-        if self.row_start + n_rows >= self.lines.len() {
+        if self.start_line_index + n_rows >= self.lines.len() {
             return Ok(false);
         }
         self.screen.scroll_forward(n_steps)?;
-        let next_line = &self.lines[self.row_start + n_rows];
+        let next_line = &self.lines[self.start_line_index + n_rows];
         self.screen.draw_at(n_rows - 1, next_line)?;
-        self.row_start += 1;
+        self.start_line_index += 1;
         Ok(true)
     }
 
     fn scroll_backword(&mut self, n_steps: u16) -> Result<bool, AnyError> {
-        if self.row_start == 0 {
+        if self.start_line_index == 0 {
             return Ok(false);
         }
         self.screen.scroll_backward(n_steps)?;
-        self.row_start -= 1;
-        self.screen.draw_at(0, &self.lines[self.row_start])?;
+        self.start_line_index -= 1;
+        self.screen.draw_at(0, &self.lines[self.start_line_index])?;
         Ok(true)
     }
 
     fn smooth_scroll(&mut self, dest: usize) -> Result<(), AnyError> {
         let size = self.screen.size()?;
-        let total_steps = dest.abs_diff(self.row_start);
-        let go_down = dest > self.row_start;
+        let total_steps = dest.abs_diff(self.start_line_index);
+        let go_down = dest > self.start_line_index;
         let base_delay = 240.0 / (total_steps as f64 + 2.0);
 
         for step in 0..total_steps {
