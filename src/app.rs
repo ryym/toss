@@ -28,6 +28,7 @@ struct App<'s, S: Screen> {
     lines: Vec<String>,
     /// The index of lines which is at the top of the screen.
     start_line_index: usize,
+    n_screen_lines: usize,
 }
 
 impl<'s, S: Screen> App<'s, S> {
@@ -36,6 +37,7 @@ impl<'s, S: Screen> App<'s, S> {
             screen,
             lines: Vec::new(),
             start_line_index: 0,
+            n_screen_lines: 0,
         }
     }
 
@@ -54,18 +56,20 @@ impl<'s, S: Screen> App<'s, S> {
         self.start_line_index = 0;
 
         let size = self.screen.size()?;
-        self.draw_lines(size.n_rows())?;
+        self.n_screen_lines = size.n_rows();
+        self.draw_lines()?;
 
         loop {
             let event = self.screen.next_event()?;
-            let n_rows = self.screen.size()?.n_rows();
+            let size = self.screen.size()?;
+            self.n_screen_lines = size.n_rows();
             match event {
                 Event::Key(key) => match key {
                     Key::Esc => return Ok(()),
                     Key::Char(chr) => match chr {
                         'q' => return Ok(()),
                         'j' => {
-                            if self.scroll_forward(n_rows, 1)? {
+                            if self.scroll_forward(1)? {
                                 self.screen.flush()?;
                             }
                         }
@@ -76,30 +80,29 @@ impl<'s, S: Screen> App<'s, S> {
                         }
                         'g' => {
                             self.start_line_index = 0;
-                            self.draw_lines(n_rows)?;
+                            self.draw_lines()?;
                         }
                         'G' => {
-                            self.start_line_index = self.lines.len() - n_rows;
-                            self.draw_lines(n_rows)?;
+                            self.start_line_index = self.lines.len() - self.n_screen_lines;
+                            self.draw_lines()?;
                         }
                         'd' => {
-                            let half_page = n_rows / 2;
+                            let half_page = self.n_screen_lines / 2;
                             let dest =
                                 cmp::min(self.start_line_index + half_page, self.lines.len() - 1);
                             self.smooth_scroll(dest)?;
                         }
                         'u' => {
-                            let half_page = n_rows / 2;
+                            let half_page = self.n_screen_lines / 2;
                             let dest = self.start_line_index.saturating_sub(half_page);
                             self.smooth_scroll(dest)?;
                         }
                         'f' => {
-                            let dest =
-                                cmp::min(self.start_line_index + n_rows, self.lines.len() - 1);
+                            let dest = cmp::min(self.end_line_index(), self.lines.len() - 1);
                             self.smooth_scroll(dest)?;
                         }
                         'b' => {
-                            let dest = self.start_line_index.saturating_sub(n_rows);
+                            let dest = self.start_line_index.saturating_sub(self.n_screen_lines);
                             self.smooth_scroll(dest)?;
                         }
                         _ => continue,
@@ -115,8 +118,12 @@ impl<'s, S: Screen> App<'s, S> {
         }
     }
 
-    fn draw_lines(&mut self, n_rows: usize) -> Result<(), AnyError> {
-        let row_end = cmp::min(self.lines.len(), self.start_line_index + n_rows);
+    fn end_line_index(&self) -> usize {
+        self.start_line_index + self.n_screen_lines
+    }
+
+    fn draw_lines(&mut self) -> Result<(), AnyError> {
+        let row_end = cmp::min(self.lines.len(), self.end_line_index());
         self.screen.clear()?;
         let displayed_lines = &self.lines[self.start_line_index..row_end];
         for (i, line) in displayed_lines.iter().enumerate() {
@@ -126,13 +133,13 @@ impl<'s, S: Screen> App<'s, S> {
         Ok(())
     }
 
-    fn scroll_forward(&mut self, n_rows: usize, n_steps: u16) -> Result<bool, AnyError> {
-        if self.start_line_index + n_rows >= self.lines.len() {
+    fn scroll_forward(&mut self, n_steps: u16) -> Result<bool, AnyError> {
+        if self.end_line_index() >= self.lines.len() {
             return Ok(false);
         }
         self.screen.scroll_forward(n_steps)?;
-        let next_line = &self.lines[self.start_line_index + n_rows];
-        self.screen.draw_at(n_rows - 1, next_line)?;
+        let next_line = &self.lines[self.end_line_index()];
+        self.screen.draw_at(self.n_screen_lines - 1, next_line)?;
         self.start_line_index += 1;
         Ok(true)
     }
@@ -148,14 +155,13 @@ impl<'s, S: Screen> App<'s, S> {
     }
 
     fn smooth_scroll(&mut self, dest: usize) -> Result<(), AnyError> {
-        let size = self.screen.size()?;
         let total_steps = dest.abs_diff(self.start_line_index);
         let go_down = dest > self.start_line_index;
         let base_delay = 240.0 / (total_steps as f64 + 2.0);
 
         for step in 0..total_steps {
             if go_down {
-                if !self.scroll_forward(size.n_rows(), 1)? {
+                if !self.scroll_forward(1)? {
                     break;
                 }
             } else if !self.scroll_backword(1)? {
