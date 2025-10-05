@@ -24,12 +24,17 @@ pub(crate) trait Screen {
 
 #[derive(Clone, Copy)]
 pub(crate) struct ScreenSize {
+    n_cols: usize,
     n_rows: usize,
 }
 
 impl ScreenSize {
-    pub(crate) fn new(n_rows: usize) -> Self {
-        Self { n_rows }
+    pub(crate) fn new(n_cols: usize, n_rows: usize) -> Self {
+        Self { n_cols, n_rows }
+    }
+
+    pub(crate) fn n_cols(&self) -> usize {
+        self.n_cols
     }
 
     pub(crate) fn n_rows(&self) -> usize {
@@ -60,8 +65,8 @@ impl<R: io::Read, W: io::Write> TerminalScreen<R, W> {
 
 impl<R: io::Read, W: io::Write> Screen for TerminalScreen<R, W> {
     fn size(&self) -> io::Result<ScreenSize> {
-        let (_n_cols, n_rows) = terminal_size()?;
-        Ok(ScreenSize::new(n_rows as usize))
+        let (n_cols, n_rows) = terminal_size()?;
+        Ok(ScreenSize::new(n_cols as usize, n_rows as usize))
     }
 
     fn next_event(&mut self) -> io::Result<Event> {

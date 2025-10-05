@@ -6,7 +6,7 @@ use crate::screen::{Event, Key, ScreenSize};
 
 #[test]
 fn test_open_and_quit() -> Result<(), super::AnyError> {
-    let mut screen = MockScreen::new(ScreenSize::new(3));
+    let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![Event::Key(Key::Char('q'))]);
 
     let args = vec!["tests/testdata/small.txt".to_string()];
@@ -25,7 +25,7 @@ fn test_open_and_quit() -> Result<(), super::AnyError> {
 
 #[test]
 fn test_basic_navigation() -> Result<(), super::AnyError> {
-    let mut screen = MockScreen::new(ScreenSize::new(3));
+    let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![
         Event::Key(Key::Char('j')),
         Event::Key(Key::Char('j')),
@@ -77,7 +77,7 @@ fn test_basic_navigation() -> Result<(), super::AnyError> {
 
 #[test]
 fn test_smooth_scroll() -> Result<(), super::AnyError> {
-    let mut screen = MockScreen::new(ScreenSize::new(4));
+    let mut screen = MockScreen::new(ScreenSize::new(10, 4));
     screen.set_events(vec![
         Event::Key(Key::Char('d')),
         Event::Key(Key::Char('u')),
