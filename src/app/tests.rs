@@ -5,7 +5,7 @@ use crate::screen::mock::MockScreen;
 use crate::screen::{Event, Key, ScreenSize};
 
 #[test]
-fn test_open_and_quit() -> Result<(), super::AnyError> {
+fn open_and_quit() -> Result<(), super::AnyError> {
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![Event::Key(Key::Char('q'))]);
 
@@ -24,7 +24,7 @@ fn test_open_and_quit() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn test_basic_navigation() -> Result<(), super::AnyError> {
+fn navigate_up_down_top_bottom() -> Result<(), super::AnyError> {
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![
         Event::Key(Key::Char('j')),
@@ -76,7 +76,7 @@ fn test_basic_navigation() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn test_smooth_scroll() -> Result<(), super::AnyError> {
+fn smooth_scroll_up_down() -> Result<(), super::AnyError> {
     let mut screen = MockScreen::new(ScreenSize::new(10, 4));
     screen.set_events(vec![
         Event::Key(Key::Char('d')),
