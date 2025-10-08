@@ -86,7 +86,7 @@ impl<R: io::Read, W: io::Write> Screen for TerminalScreen<R, W> {
     }
 
     fn draw_at(&mut self, row: usize, line: &str) -> io::Result<()> {
-        write!(self.output, "{}{}", Goto(0, (row + 1) as u16), line)?;
+        write!(self.output, "{}{}", Goto(1, (row + 1) as u16), line)?;
         Ok(())
     }
 
