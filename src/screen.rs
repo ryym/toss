@@ -22,7 +22,7 @@ pub(crate) trait Screen {
     fn flush(&mut self) -> io::Result<()>;
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct ScreenSize {
     n_cols: usize,
     n_rows: usize,
