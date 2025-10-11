@@ -2,7 +2,7 @@
 mod tests;
 
 use std::error::Error;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::IsTerminal;
 use std::io::{self, BufRead, BufReader};
 use std::time::Duration;
@@ -30,6 +30,9 @@ struct App<'s, S: Screen> {
     /// The index of row which is at the top of the screen.
     row_screen_start: usize,
     n_screen_rows: usize,
+    // Log for debug. Since the app interacts with the terminal in raw mode,
+    // we cannot print debug logs to stdout as usual.
+    log: String,
 }
 
 impl<'s, S: Screen> App<'s, S> {
@@ -39,10 +42,19 @@ impl<'s, S: Screen> App<'s, S> {
             wraps: LineWraps::new(vec![], 0),
             row_screen_start: 0,
             n_screen_rows: 0,
+            log: String::new(),
         }
     }
 
     fn run(&mut self, args: Vec<String>) -> Result<(), AnyError> {
+        let result = self._run(args);
+        if !self.log.is_empty() {
+            let _ = fs::write("toss-debug.log", &self.log);
+        }
+        result
+    }
+
+    fn _run(&mut self, args: Vec<String>) -> Result<(), AnyError> {
         let stdin = io::stdin().lock();
         let lines: Vec<String> = if stdin.is_terminal() {
             let file_path = args.first().unwrap();
