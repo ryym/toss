@@ -112,7 +112,7 @@ impl<'s, S: Screen> App<'s, S> {
                             let dest = self.row_screen_start.saturating_sub(half_page);
                             self.smooth_scroll(dest)?;
                         }
-                        'f' => {
+                        'f' | ' ' => {
                             let dest = cmp::min(self.row_screen_end(), self.wraps.rows_len() - 1);
                             self.smooth_scroll(dest)?;
                         }
