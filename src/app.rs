@@ -10,6 +10,7 @@ use std::{cmp, env, panic, thread};
 
 use crate::screen::Screen;
 use crate::screen::{Event, Key};
+use crate::wraps::LineWraps;
 
 type AnyError = Box<dyn Error>;
 
@@ -25,7 +26,7 @@ fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError
 
 struct App<'s, S: Screen> {
     screen: &'s mut S,
-    lines: Vec<String>,
+    wraps: LineWraps,
     /// The index of row which is at the top of the screen.
     row_screen_start: usize,
     n_screen_rows: usize,
@@ -35,7 +36,7 @@ impl<'s, S: Screen> App<'s, S> {
     fn new(screen: &'s mut S) -> Self {
         Self {
             screen,
-            lines: Vec::new(),
+            wraps: LineWraps::new(vec![], 0),
             row_screen_start: 0,
             n_screen_rows: 0,
         }
@@ -52,10 +53,10 @@ impl<'s, S: Screen> App<'s, S> {
             let reader = BufReader::new(stdin);
             reader.lines().map(|l| l.unwrap()).collect()
         };
-        self.lines = lines;
         self.row_screen_start = 0;
 
         let size = self.screen.size()?;
+        self.wraps = LineWraps::new(lines, size.n_cols());
         self.n_screen_rows = size.n_rows();
         self.draw_lines()?;
 
@@ -83,13 +84,15 @@ impl<'s, S: Screen> App<'s, S> {
                             self.draw_lines()?;
                         }
                         'G' => {
-                            self.row_screen_start = self.lines.len() - self.n_screen_rows;
+                            self.row_screen_start = self.wraps.rows_len() - self.n_screen_rows;
                             self.draw_lines()?;
                         }
                         'd' => {
                             let half_page = self.n_screen_rows / 2;
-                            let dest =
-                                cmp::min(self.row_screen_start + half_page, self.lines.len() - 1);
+                            let dest = cmp::min(
+                                self.row_screen_start + half_page,
+                                self.wraps.rows_len() - 1,
+                            );
                             self.smooth_scroll(dest)?;
                         }
                         'u' => {
@@ -98,7 +101,7 @@ impl<'s, S: Screen> App<'s, S> {
                             self.smooth_scroll(dest)?;
                         }
                         'f' => {
-                            let dest = cmp::min(self.row_screen_end(), self.lines.len() - 1);
+                            let dest = cmp::min(self.row_screen_end(), self.wraps.rows_len() - 1);
                             self.smooth_scroll(dest)?;
                         }
                         'b' => {
@@ -118,29 +121,47 @@ impl<'s, S: Screen> App<'s, S> {
         }
     }
 
+    /// The index of row which is next at the bottom of the screen (exclusive).
     fn row_screen_end(&self) -> usize {
         self.row_screen_start + self.n_screen_rows
     }
 
     fn draw_lines(&mut self) -> Result<(), AnyError> {
-        let row_end = cmp::min(self.lines.len(), self.row_screen_end());
+        let row_screen_end = cmp::min(self.wraps.rows_len(), self.row_screen_end());
         self.screen.clear()?;
-        let displayed_lines = &self.lines[self.row_screen_start..row_end];
-        for (i, line) in displayed_lines.iter().enumerate() {
-            self.screen.draw_at(i, line)?;
+
+        let original_lines = self
+            .wraps
+            .original_lines_iter(self.row_screen_start, row_screen_end);
+        let mut i = 0;
+        for view in original_lines {
+            self.screen.draw_at(i, view.line)?;
+            i += view.n_rows;
         }
         self.screen.flush()?;
         Ok(())
     }
 
     fn scroll_forward_oneline(&mut self) -> Result<bool, AnyError> {
-        if self.row_screen_end() >= self.lines.len() {
+        if self.row_screen_end() >= self.wraps.rows_len() {
             return Ok(false);
         }
         self.screen.scroll_forward(1)?;
-        let next_line = &self.lines[self.row_screen_end()];
-        self.screen.draw_at(self.n_screen_rows - 1, next_line)?;
         self.row_screen_start += 1;
+
+        // If the previous last row was the end of the original line,
+        // just append the first row of the next line.
+        // But if the previous last row was the middle of the original line,
+        // it overwrites that line until the new end row.
+        // This way, we can let the terminal know that
+        // the newly appended row is a continuation of the previous row.
+        let new_row = self.wraps.row_at(self.row_screen_end() - 1);
+        let line_start_row_idx = new_row.index - new_row.line_slice_index;
+        let start_row_idx = cmp::max(line_start_row_idx, self.row_screen_start);
+        let visible_line = self.wraps.slice_line(start_row_idx, new_row.index + 1);
+        let idx_in_screen = start_row_idx - self.row_screen_start;
+        self.screen.draw_at(idx_in_screen, visible_line)?;
+
         Ok(true)
     }
 
@@ -150,7 +171,16 @@ impl<'s, S: Screen> App<'s, S> {
         }
         self.screen.scroll_backward(1)?;
         self.row_screen_start -= 1;
-        self.screen.draw_at(0, &self.lines[self.row_screen_start])?;
+
+        // Scroll up with consideration of line continuations.
+        // See the comment of scroll_forward_oneline for details.
+        let new_row = self.wraps.row_at(self.row_screen_start);
+        let n_remaining_line_slices = new_row.n_line_slices - new_row.line_slice_index - 1;
+        let line_end_row_idx = new_row.index + n_remaining_line_slices + 1;
+        let end_row_idx = cmp::min(line_end_row_idx, self.row_screen_end());
+        let visible_line = self.wraps.slice_line(new_row.index, end_row_idx);
+        self.screen.draw_at(0, visible_line)?;
+
         Ok(true)
     }
 
