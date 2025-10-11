@@ -1,5 +1,6 @@
 use std::cmp;
 
+use ansi_control_codes::parser::{Token, TokenStream};
 use unicode_width::UnicodeWidthChar;
 
 // About line wrapping
@@ -74,16 +75,27 @@ impl LineWraps {
                 });
             };
 
-            for c in line.chars() {
-                let cell_width = c.width().unwrap_or(0);
-                n_cells += cell_width;
-                if n_cells > n_cols {
-                    push_slice(last_line_byte_idx, byte_idx);
-                    n_cells = cell_width;
-                    last_line_byte_idx = byte_idx;
+            for token in TokenStream::from(&line) {
+                match token {
+                    Token::ControlFunction(c) => {
+                        // Allocate a string just to get the byte length of control codes.
+                        byte_idx += String::from(c).len();
+                    }
+                    Token::String(s) => {
+                        for c in s.chars() {
+                            let cell_width = c.width().unwrap_or(0);
+                            n_cells += cell_width;
+                            if n_cells > n_cols {
+                                push_slice(last_line_byte_idx, byte_idx);
+                                n_cells = cell_width;
+                                last_line_byte_idx = byte_idx;
+                            }
+                            byte_idx += c.len_utf8();
+                        }
+                    }
                 }
-                byte_idx += c.len_utf8();
             }
+
             if last_line_byte_idx < byte_idx || line.is_empty() {
                 push_slice(last_line_byte_idx, byte_idx);
             }
