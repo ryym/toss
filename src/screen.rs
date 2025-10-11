@@ -18,6 +18,7 @@ pub(crate) trait Screen {
     fn clear(&mut self) -> io::Result<()>;
     fn scroll_forward(&mut self, n_steps: u16) -> io::Result<()>;
     fn scroll_backward(&mut self, n_steps: u16) -> io::Result<()>;
+    /// Draw a line at the given row. The row is 0-based.
     fn draw_at(&mut self, row: usize, line: &str) -> io::Result<()>;
     fn flush(&mut self) -> io::Result<()>;
 }

@@ -75,8 +75,21 @@ impl super::Screen for MockScreen {
         Ok(())
     }
 
-    fn draw_at(&mut self, row: usize, line: &str) -> io::Result<()> {
-        self.draft[row] = line.to_string();
+    fn draw_at(&mut self, mut row: usize, mut line: &str) -> io::Result<()> {
+        // Draw a given line with automatically wrapping it based on the column size.
+        while line.len() > 0 {
+            let n_cols = self.size.n_cols();
+            if line.len() <= n_cols {
+                self.draft[row] = line.to_string();
+                break;
+            }
+            self.draft[row] = format!("{}>", &line[..n_cols]);
+            line = &line[n_cols..];
+            row += 1;
+            if row >= self.size.n_rows() {
+                return Err(io::Error::new(io::ErrorKind::Other, "row exceed max"));
+            }
+        }
         Ok(())
     }
 
