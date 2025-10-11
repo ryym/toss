@@ -199,7 +199,7 @@ impl<'s, S: Screen> App<'s, S> {
     fn smooth_scroll(&mut self, dest: usize) -> Result<(), AnyError> {
         let total_steps = dest.abs_diff(self.row_screen_start);
         let go_down = dest > self.row_screen_start;
-        let base_delay = 240.0 / (total_steps as f64 + 2.0);
+        let base_delay = 420.0 / (total_steps as f64 + 2.0);
 
         for step in 0..total_steps {
             if go_down {
