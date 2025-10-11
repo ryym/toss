@@ -4,6 +4,18 @@ use pretty_assertions::assert_eq;
 use crate::screen::mock::MockScreen;
 use crate::screen::{Event, Key, ScreenSize};
 
+fn tmpfile(content: &str) -> Result<(String, tempfile::NamedTempFile), crate::app::AnyError> {
+    use std::io::{Seek, SeekFrom, Write};
+    let mut tmpfile = tempfile::NamedTempFile::new()?;
+    tmpfile.write_all(content.as_bytes())?;
+    tmpfile.seek(SeekFrom::Start(0))?;
+    let path = tmpfile.path().to_str();
+    match path {
+        None => Err("invalid file path".into()),
+        Some(path) => Ok((path.to_string(), tmpfile)),
+    }
+}
+
 #[test]
 fn open_and_quit() -> Result<(), super::AnyError> {
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
@@ -115,6 +127,76 @@ fn smooth_scroll_up_down() -> Result<(), super::AnyError> {
         line 2
         line 3
         line 4
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(&screen.out, want);
+
+    Ok(())
+}
+
+#[test]
+fn navigate_up_down_wrapped_lines() -> Result<(), super::AnyError> {
+    let (path, _file) = tmpfile(indoc! {"
+        0
+        01234567
+        0123456789abcd
+    "})?;
+
+    let mut screen = MockScreen::new(ScreenSize::new(5, 4));
+    screen.set_events(vec![
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('G')),
+        Event::Key(Key::Char('g')),
+        Event::Key(Key::Char('q')),
+    ]);
+    let args = vec![path];
+    super::run_with(&mut screen, args)?;
+
+    let want = indoc! {"
+        0
+        01234>
+        567
+        01234
+        -----
+        [EVENT]:char:j
+        01234>
+        567
+        01234>
+        56789
+        -----
+        [EVENT]:char:j
+        567
+        01234>
+        56789>
+        abcd
+        -----
+        [EVENT]:char:k
+        01234>
+        567
+        01234>
+        56789>
+        -----
+        [EVENT]:char:k
+        0
+        01234>
+        567
+        01234>
+        -----
+        [EVENT]:char:G
+        567
+        01234>
+        56789>
+        abcd
+        -----
+        [EVENT]:char:g
+        0
+        01234>
+        567
+        01234
         -----
         [EVENT]:char:q
     "};
