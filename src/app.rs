@@ -26,6 +26,7 @@ fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError
 
 struct App<'s, S: Screen> {
     screen: &'s mut S,
+    lines: Vec<String>,
     wraps: LineWraps,
     /// The index of row which is at the top of the screen.
     row_screen_start: usize,
@@ -39,7 +40,8 @@ impl<'s, S: Screen> App<'s, S> {
     fn new(screen: &'s mut S) -> Self {
         Self {
             screen,
-            wraps: LineWraps::new(vec![], 0),
+            lines: Vec::new(),
+            wraps: LineWraps::new(&[], 0),
             row_screen_start: 0,
             n_screen_rows: 0,
             log: String::new(),
@@ -68,7 +70,8 @@ impl<'s, S: Screen> App<'s, S> {
         self.row_screen_start = 0;
 
         let size = self.screen.size()?;
-        self.wraps = LineWraps::new(lines, size.n_cols());
+        self.lines = lines;
+        self.wraps = LineWraps::new(&self.lines, size.n_cols());
         self.n_screen_rows = size.n_rows();
         self.draw_lines()?;
 
@@ -142,14 +145,14 @@ impl<'s, S: Screen> App<'s, S> {
         let row_screen_end = cmp::min(self.wraps.rows_len(), self.row_screen_end());
         self.screen.clear()?;
 
-        let original_lines = self
-            .wraps
-            .original_lines_iter(self.row_screen_start, row_screen_end);
+        let wraps = self.wraps.iter(self.row_screen_start, row_screen_end);
         let mut i = 0;
-        for view in original_lines {
-            self.screen.draw_at(i, view.line)?;
-            i += view.n_rows;
+        for wrap in wraps {
+            let line = wrap.slice_line(&self.lines);
+            self.screen.draw_at(i, line)?;
+            i += wrap.n_rows();
         }
+
         self.screen.flush()?;
         Ok(())
     }
@@ -170,7 +173,10 @@ impl<'s, S: Screen> App<'s, S> {
         let new_row = self.wraps.row_at(self.row_screen_end() - 1);
         let line_start_row_idx = new_row.index - new_row.line_slice_index;
         let start_row_idx = cmp::max(line_start_row_idx, self.row_screen_start);
-        let visible_line = self.wraps.slice_line(start_row_idx, new_row.index + 1);
+        let visible_line = self
+            .wraps
+            .slice_wrap(start_row_idx, new_row.index + 1)
+            .slice_line(&self.lines);
         let idx_in_screen = start_row_idx - self.row_screen_start;
         self.screen.draw_at(idx_in_screen, visible_line)?;
 
@@ -190,7 +196,10 @@ impl<'s, S: Screen> App<'s, S> {
         let n_remaining_line_slices = new_row.n_line_slices - new_row.line_slice_index - 1;
         let line_end_row_idx = new_row.index + n_remaining_line_slices + 1;
         let end_row_idx = cmp::min(line_end_row_idx, self.row_screen_end());
-        let visible_line = self.wraps.slice_line(new_row.index, end_row_idx);
+        let visible_line = self
+            .wraps
+            .slice_wrap(new_row.index, end_row_idx)
+            .slice_line(&self.lines);
         self.screen.draw_at(0, visible_line)?;
 
         Ok(true)
