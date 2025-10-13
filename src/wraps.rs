@@ -3,49 +3,55 @@ use std::cmp;
 use ansi_control_codes::parser::{Token, TokenStream};
 use unicode_width::UnicodeWidthChar;
 
-// About line wrapping
-//
-// Modern terminal emulators can wrap a long line automatically if it overflows the width.
-// But it requires extra consideration when we communicate with a terminal in the raw mode.
-// For example, if you write a long line at row 1 (`termion::cursor::Goto(1, 1)`),
-// the line continues to row 2 or more until it ends. In this case, we need to
-// write the next line after the last row of the first line, not simply `Goto(1, 2)`.
-//
-// Alternatively, it is also possible to wrap lines by ourselves and keep all lines
-// always fit in the terminal width so that a terminal doesn't automatically wrap lines.
-// This is simpler than the first approach which lets a terminal wrap lines while
-// tracking how lines are wrapped. But in the second approach, a terminal cannot know
-// whether each line actually continues. This affects a behavior of copying.
-//
-// If a line is automatically wrapped by a terminal, you can copy it as if it is not wrapped:
-//   │Let's say this line is au│
-//   │tomatically wrapped.     │
-// Copied text:
-//   Let's say this line is automatically wrapped.
-// But if it is wrapped by ourselves, it is copied with a line break:
-//   │If this line is wrapped manually by th│
-//   │e program, it is copied as two lines. │
-//
-// Toss implements the former behavior.
-// It lets a terminal wrap lines while keeping which point a line is wrapped at.
-
-// Terminology
-//           Lorem ipsum dolor sit amet, consectetur elit.  ───┬─ (original) line
-//           A finibus massa ultricies nec.                 ───┘
-//
-//           ┌ wrap
-//           ├ - - - - - - - - - - - ┐
-//  row ─┬── ❘ Lorem ipsum dolor si  ❘ ──┬─ line slice (per wrap)
-//       ├── ❘ t amet, consectetur   ❘ ──┤
-//       ├── ❘ elit.                 ❘ ──┘
-//       │   └ - - - - - - - - - - - ┘
-//       │   ┌ - - - - - - - - - - - ┐
-//       ├── ❘ A finibus massa ultr  ❘ ──┬─ line slice (per wrap)
-//       └── ❘ icies nec.            ❘ ──┘
-//           └ - - - - - - - - - - - ┘
-//
-
 /// Manage line wrappings. This class does not know about a terminal.
+///
+/// ## About line wrapping on terminal
+/// Modern terminal emulators can wrap a long line automatically if it overflows the width.
+/// But it requires extra consideration when we communicate with a terminal in the raw mode.
+/// For example, if you write a long line at row 1 (`termion::cursor::Goto(1, 1)`),
+/// the line continues to row 2 or more until it ends. In this case, we need to
+/// write the next line after the last row of the first line, not simply `Goto(1, 2)`.
+///
+/// Alternatively, it is also possible to wrap lines by ourselves and keep all lines
+/// always fit in the terminal width so that a terminal doesn't automatically wrap lines.
+/// This is simpler than the first approach which lets a terminal wrap lines while
+/// tracking how lines are wrapped. But in the second approach, a terminal cannot know
+/// whether each line actually continues. This affects a behavior of copying.
+///
+/// If a line is automatically wrapped by a terminal, you can copy it as if it is not wrapped:
+/// ```text
+///  │Let's say this line is au│
+///  │tomatically wrapped.     │
+/// ```
+/// Copied text:
+/// ```text
+///  Let's say this line is automatically wrapped.
+/// ```
+/// But if it is wrapped by ourselves, it is copied with a line break:
+/// ```text
+///  │If this line is wrapped manually by th│
+///  │e program, it is copied as two lines. │
+/// ```
+///
+/// Toss implements the former behavior.
+/// It lets a terminal wrap lines while keeping which point a line is wrapped at.
+///
+/// ## Terminology
+/// ```text
+///           Lorem ipsum dolor sit amet, consectetur elit.  ───┬─ (original) line
+///           A finibus massa ultricies nec.                 ───┘
+///
+///           ┌ wrap
+///           ├ - - - - - - - - - - - ┐
+///  row ─┬── ❘ Lorem ipsum dolor si  ❘ ──┬─ line slice (per wrap)
+///       ├── ❘ t amet, consectetur   ❘ ──┤
+///       ├── ❘ elit.                 ❘ ──┘
+///       │   └ - - - - - - - - - - - ┘
+///       │   ┌ - - - - - - - - - - - ┐
+///       ├── ❘ A finibus massa ultr  ❘ ──┬─ line slice (per wrap)
+///       └── ❘ icies nec.            ❘ ──┘
+///           └ - - - - - - - - - - - ┘
+/// ```
 #[derive(Debug)]
 pub(crate) struct LineWraps {
     rows: Vec<Row>,
