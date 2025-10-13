@@ -1,7 +1,8 @@
 use std::cmp;
 
-use ansi_control_codes::parser::{Token, TokenStream};
 use unicode_width::UnicodeWidthChar;
+
+use crate::lines::Line;
 
 /// Manage line wrappings. This class does not know about a terminal.
 ///
@@ -59,16 +60,12 @@ pub(crate) struct LineWraps {
 }
 
 impl LineWraps {
-    pub(crate) fn new(lines: &[String], n_cols: usize) -> Self {
+    pub(crate) fn new(lines: &[Line], n_cols: usize) -> Self {
         let mut rows = Vec::with_capacity(lines.len());
         let mut wraps = Vec::with_capacity(lines.len());
 
         for (i, line) in lines.iter().enumerate() {
             let mut line_slices = Vec::new();
-            let mut n_cells = 0;
-            let mut byte_idx = 0;
-            let mut last_line_byte_idx = 0;
-
             let mut push_slice = |start_byte: usize, end_byte: usize| {
                 rows.push(Row {
                     index: rows.len(),
@@ -81,30 +78,22 @@ impl LineWraps {
                 });
             };
 
-            for token in TokenStream::from(line) {
-                match token {
-                    Token::ControlFunction(c) => {
-                        // Allocate a string just to get the byte length of control codes.
-                        byte_idx += String::from(c).len();
-                    }
-                    Token::String(s) => {
-                        for c in s.chars() {
-                            let cell_width = c.width().unwrap_or(0);
-                            n_cells += cell_width;
-                            if n_cells > n_cols {
-                                push_slice(last_line_byte_idx, byte_idx);
-                                n_cells = cell_width;
-                                last_line_byte_idx = byte_idx;
-                            }
-                            byte_idx += c.len_utf8();
-                        }
-                    }
+            let mut n_cells = 0;
+            let mut i_plain_char = 0;
+            let mut i_raw_last_line_end = 0;
+            for c in line.plain.chars() {
+                let i_raw = line.plain_to_raw[i_plain_char];
+                let cell_width = c.width().unwrap_or(0);
+                n_cells += cell_width;
+                if n_cells > n_cols {
+                    push_slice(i_raw_last_line_end, i_raw);
+                    n_cells = cell_width;
+                    i_raw_last_line_end = i_raw;
                 }
+                i_plain_char += c.len_utf8();
             }
+            push_slice(i_raw_last_line_end, line.raw.len());
 
-            if last_line_byte_idx < byte_idx || line.is_empty() {
-                push_slice(last_line_byte_idx, byte_idx);
-            }
             wraps.push(Wrap {
                 index: i,
                 slices: line_slices,
@@ -152,7 +141,7 @@ impl LineWraps {
         let slice_start = &wrap.slices[start_row.line_slice_index];
         let slice_end = &wrap.slices[end_row.line_slice_index];
         WrapSlice {
-            line_index: start_row.wrap_index,
+            index: wrap.index,
             start_byte: slice_start.start_byte,
             end_byte: slice_end.end_byte,
             n_rows: row_end_inclusive - row_start + 1,
@@ -181,7 +170,7 @@ struct LineSlice {
 
 #[derive(Debug)]
 pub(crate) struct WrapSlice {
-    line_index: usize,
+    pub index: usize,
     start_byte: usize,
     end_byte: usize,
     n_rows: usize,
@@ -189,8 +178,8 @@ pub(crate) struct WrapSlice {
 
 impl WrapSlice {
     #[inline]
-    pub(crate) fn slice_line<'l>(&self, lines: &'l [String]) -> &'l str {
-        &lines[self.line_index][self.start_byte..self.end_byte]
+    pub(crate) fn slice_line<'l>(&self, line: &'l str) -> &'l str {
+        &line[self.start_byte..self.end_byte]
     }
 
     #[inline]
@@ -227,7 +216,7 @@ impl<'w> Iterator for WrapIter<'w> {
                 let slice_start = &wrap.slices[slice_start_idx];
                 let slice_end = &wrap.slices[slice_end_idx];
                 Some(WrapSlice {
-                    line_index: wrap.index,
+                    index: wrap.index,
                     start_byte: slice_start.start_byte,
                     end_byte: slice_end.end_byte,
                     n_rows: slice_end_idx - slice_start_idx + 1,
@@ -241,7 +230,7 @@ impl<'w> Iterator for WrapIter<'w> {
 
 pub(crate) struct RowView<'s> {
     line_slice: &'s LineSlice,
-    line_index: usize,
+    pub line_index: usize,
     pub index: usize,
     pub line_slice_index: usize,
     pub n_line_slices: usize,
@@ -250,8 +239,8 @@ pub(crate) struct RowView<'s> {
 impl RowView<'_> {
     // Used in tests.
     #[allow(dead_code)]
-    pub(crate) fn slice_line<'l>(&self, lines: &'l [String]) -> &'l str {
-        &lines[self.line_index][self.line_slice.start_byte..self.line_slice.end_byte]
+    pub(crate) fn slice_line<'l>(&self, line: &'l str) -> &'l str {
+        &line[self.line_slice.start_byte..self.line_slice.end_byte]
     }
 }
 
@@ -259,23 +248,29 @@ impl RowView<'_> {
 mod tests_line_wrapping {
     use pretty_assertions::assert_eq;
 
-    fn wrapped_lines(wraps: super::LineWraps, lines: &[String]) -> Vec<String> {
+    use crate::lines::Line;
+
+    fn make_lines(lines: Vec<String>) -> Vec<Line> {
+        lines.into_iter().map(Line::new).collect()
+    }
+
+    fn wrapped_lines(wraps: super::LineWraps, lines: &[Line]) -> Vec<String> {
         let mut v = Vec::with_capacity(wraps.rows_len());
         for i in 0..wraps.rows_len() {
             let row = wraps.row_at(i);
-            v.push(row.slice_line(lines).to_string());
+            v.push(row.slice_line(&lines[row.line_index].raw).to_string());
         }
         v
     }
 
     #[test]
     fn dont_wrap_lines_if_width_is_enough() {
-        let lines = vec![
+        let lines = make_lines(vec![
             "abc".to_string(),
             "あいう".to_string(),
             "".to_string(),
             " ".to_string(),
-        ];
+        ]);
         let wraps = super::LineWraps::new(&lines, 10);
         assert_eq!(
             wrapped_lines(wraps, &lines),
@@ -289,12 +284,24 @@ mod tests_line_wrapping {
     }
 
     #[test]
+    fn wrap_lines_without_caring_escape_sequences() {
+        let raw_lines = vec![
+            "ab\u{1b}[31mc\u{1b}[0md".to_string(),
+            "\u{1b}[31mabc\u{1b}[0md".to_string(),
+            "\u{1b}[31mabcd\u{1b}[0m".to_string(),
+        ];
+        let lines = make_lines(raw_lines.clone());
+        let wraps = super::LineWraps::new(&lines, 4);
+        assert_eq!(wrapped_lines(wraps, &lines), raw_lines);
+    }
+
+    #[test]
     fn wrap_overflowed_lines() {
-        let lines = vec![
+        let lines = make_lines(vec![
             "abc".to_string(),
             "abcd".to_string(),
             "abcdefghijk".to_string(),
-        ];
+        ]);
         let wraps = super::LineWraps::new(&lines, 3);
         assert_eq!(
             wrapped_lines(wraps, &lines),
@@ -315,14 +322,15 @@ mod tests_line_wrapping {
 
     #[test]
     fn wrap_overflowed_non_ascii_lines() {
-        let lines = vec![
+        #[rustfmt::skip]
+        let lines = make_lines(vec![
             "abcde".to_string(),
             "abcdef".to_string(),
             "あい".to_string(),
             "あいう".to_string(),
             "あいうえ".to_string(),
             "😀😇😎".to_string(),
-        ];
+        ]);
         let wraps = super::LineWraps::new(&lines, 5);
         assert_eq!(
             wrapped_lines(wraps, &lines),

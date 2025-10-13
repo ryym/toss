@@ -8,6 +8,7 @@ use std::io::{self, BufRead, BufReader};
 use std::time::Duration;
 use std::{cmp, env, panic, thread};
 
+use crate::lines::Line;
 use crate::screen::Screen;
 use crate::screen::{Event, Key};
 use crate::wraps::LineWraps;
@@ -26,7 +27,7 @@ fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError
 
 struct App<'s, S: Screen> {
     screen: &'s mut S,
-    lines: Vec<String>,
+    lines: Vec<Line>,
     wraps: LineWraps,
     /// The index of row which is at the top of the screen.
     row_screen_start: usize,
@@ -70,7 +71,7 @@ impl<'s, S: Screen> App<'s, S> {
         self.row_screen_start = 0;
 
         let size = self.screen.size()?;
-        self.lines = lines;
+        self.lines = lines.into_iter().map(Line::new).collect();
         self.wraps = LineWraps::new(&self.lines, size.n_cols());
         self.n_screen_rows = size.n_rows();
         self.draw_lines()?;
@@ -146,11 +147,11 @@ impl<'s, S: Screen> App<'s, S> {
         self.screen.clear()?;
 
         let wraps = self.wraps.iter(self.row_screen_start, row_screen_end);
-        let mut i = 0;
+        let mut i_row = 0;
         for wrap in wraps {
-            let line = wrap.slice_line(&self.lines);
-            self.screen.draw_at(i, line)?;
-            i += wrap.n_rows();
+            let line = wrap.slice_line(&self.lines[wrap.index].raw);
+            self.screen.draw_at(i_row, line)?;
+            i_row += wrap.n_rows();
         }
 
         self.screen.flush()?;
@@ -176,7 +177,7 @@ impl<'s, S: Screen> App<'s, S> {
         let visible_line = self
             .wraps
             .slice_wrap(start_row_idx, new_row.index + 1)
-            .slice_line(&self.lines);
+            .slice_line(&self.lines[new_row.line_index].raw);
         let idx_in_screen = start_row_idx - self.row_screen_start;
         self.screen.draw_at(idx_in_screen, visible_line)?;
 
@@ -199,7 +200,7 @@ impl<'s, S: Screen> App<'s, S> {
         let visible_line = self
             .wraps
             .slice_wrap(new_row.index, end_row_idx)
-            .slice_line(&self.lines);
+            .slice_line(&self.lines[new_row.line_index].raw);
         self.screen.draw_at(0, visible_line)?;
 
         Ok(true)
