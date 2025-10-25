@@ -1,19 +1,17 @@
 #[cfg(test)]
 mod tests;
 
-use std::error::Error;
 use std::fs::{self, File};
 use std::io::IsTerminal;
 use std::io::{self, BufRead, BufReader};
 use std::time::Duration;
 use std::{env, panic, thread};
 
+use crate::error::AnyError;
 use crate::lines::Line;
 use crate::screen::Screen;
 use crate::screen::{Event, Key};
 use crate::window::Window;
-
-type AnyError = Box<dyn Error>;
 
 pub fn run() -> Result<(), AnyError> {
     let mut screen = crate::screen::for_terminal()?;
