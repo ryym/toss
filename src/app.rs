@@ -6,12 +6,12 @@ use std::fs::{self, File};
 use std::io::IsTerminal;
 use std::io::{self, BufRead, BufReader};
 use std::time::Duration;
-use std::{cmp, env, panic, thread};
+use std::{env, panic, thread};
 
 use crate::lines::Line;
 use crate::screen::Screen;
 use crate::screen::{Event, Key};
-use crate::wraps::LineWraps;
+use crate::window::Window;
 
 type AnyError = Box<dyn Error>;
 
@@ -27,11 +27,7 @@ fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError
 
 struct App<'s, S: Screen> {
     screen: &'s mut S,
-    lines: Vec<Line>,
-    wraps: LineWraps,
-    /// The index of row which is at the top of the screen.
-    row_screen_start: usize,
-    n_screen_rows: usize,
+    window: Window,
     // Log for debug. Since the app interacts with the terminal in raw mode,
     // we cannot print debug logs to stdout as usual.
     log: String,
@@ -41,10 +37,7 @@ impl<'s, S: Screen> App<'s, S> {
     fn new(screen: &'s mut S) -> Self {
         Self {
             screen,
-            lines: Vec::new(),
-            wraps: LineWraps::new(&[], 0),
-            row_screen_start: 0,
-            n_screen_rows: 0,
+            window: Window::default(),
             log: String::new(),
         }
     }
@@ -68,18 +61,14 @@ impl<'s, S: Screen> App<'s, S> {
             let reader = BufReader::new(stdin);
             reader.lines().map(|l| l.unwrap()).collect()
         };
-        self.row_screen_start = 0;
 
         let size = self.screen.size()?;
-        self.lines = lines.into_iter().map(Line::new).collect();
-        self.wraps = LineWraps::new(&self.lines, size.n_cols());
-        self.n_screen_rows = size.n_rows();
-        self.draw_lines()?;
+        let lines = lines.into_iter().map(Line::new).collect();
+        self.window = Window::new(size.n_cols(), size.n_rows(), lines);
+        self.draw_rows()?;
 
         loop {
             let event = self.screen.next_event()?;
-            let size = self.screen.size()?;
-            self.n_screen_rows = size.n_rows();
             match event {
                 Event::Key(key) => match key {
                     Key::Esc => return Ok(()),
@@ -96,33 +85,24 @@ impl<'s, S: Screen> App<'s, S> {
                             }
                         }
                         'g' => {
-                            self.row_screen_start = 0;
-                            self.draw_lines()?;
+                            self.window.seek_to_start();
+                            self.draw_rows()?;
                         }
                         'G' => {
-                            self.row_screen_start = self.wraps.rows_len() - self.n_screen_rows;
-                            self.draw_lines()?;
+                            self.window.seek_to_end();
+                            self.draw_rows()?;
                         }
                         'd' => {
-                            let half_page = self.n_screen_rows / 2;
-                            let dest = cmp::min(
-                                self.row_screen_start + half_page,
-                                self.wraps.rows_len() - 1,
-                            );
-                            self.smooth_scroll(dest)?;
+                            self.smooth_scroll(self.window.n_rows() / 2, true)?;
                         }
                         'u' => {
-                            let half_page = self.n_screen_rows / 2;
-                            let dest = self.row_screen_start.saturating_sub(half_page);
-                            self.smooth_scroll(dest)?;
+                            self.smooth_scroll(self.window.n_rows() / 2, false)?;
                         }
                         'f' | ' ' => {
-                            let dest = cmp::min(self.row_screen_end(), self.wraps.rows_len() - 1);
-                            self.smooth_scroll(dest)?;
+                            self.smooth_scroll(self.window.n_rows(), true)?;
                         }
                         'b' => {
-                            let dest = self.row_screen_start.saturating_sub(self.n_screen_rows);
-                            self.smooth_scroll(dest)?;
+                            self.smooth_scroll(self.window.n_rows(), false)?;
                         }
                         _ => continue,
                     },
@@ -137,21 +117,13 @@ impl<'s, S: Screen> App<'s, S> {
         }
     }
 
-    /// The index of row which is next at the bottom of the screen (exclusive).
-    fn row_screen_end(&self) -> usize {
-        self.row_screen_start + self.n_screen_rows
-    }
-
-    fn draw_lines(&mut self) -> Result<(), AnyError> {
-        let row_screen_end = cmp::min(self.wraps.rows_len(), self.row_screen_end());
+    fn draw_rows(&mut self) -> Result<(), AnyError> {
         self.screen.clear()?;
 
-        let wraps = self.wraps.iter(self.row_screen_start, row_screen_end);
         let mut i_row = 0;
-        for wrap in wraps {
-            let line = wrap.slice_line(&self.lines[wrap.index].raw);
-            self.screen.draw_at(i_row, line)?;
-            i_row += wrap.n_rows();
+        for row_span in self.window.row_spans() {
+            self.screen.draw_at(i_row, row_span.line())?;
+            i_row += row_span.size();
         }
 
         self.screen.flush()?;
@@ -159,59 +131,29 @@ impl<'s, S: Screen> App<'s, S> {
     }
 
     fn scroll_forward_oneline(&mut self) -> Result<bool, AnyError> {
-        if self.row_screen_end() >= self.wraps.rows_len() {
+        if !self.window.scroll_down_one_row() {
             return Ok(false);
         }
         self.screen.scroll_forward(1)?;
-        self.row_screen_start += 1;
-
-        // If the previous last row was the end of the original line,
-        // just append the first row of the next line.
-        // But if the previous last row was the middle of the original line,
-        // it overwrites that line until the new end row.
-        // This way, we can let the terminal know that
-        // the newly appended row is a continuation of the previous row.
-        let new_row = self.wraps.row_at(self.row_screen_end() - 1);
-        let line_start_row_idx = new_row.index - new_row.line_slice_index;
-        let start_row_idx = cmp::max(line_start_row_idx, self.row_screen_start);
-        let visible_line = self
-            .wraps
-            .slice_wrap(start_row_idx, new_row.index + 1)
-            .slice_line(&self.lines[new_row.line_index].raw);
-        let idx_in_screen = start_row_idx - self.row_screen_start;
-        self.screen.draw_at(idx_in_screen, visible_line)?;
-
+        let new_row_span = self.window.end_row_span();
+        let row_span_start = self.window.n_rows() - new_row_span.size();
+        self.screen.draw_at(row_span_start, new_row_span.line())?;
         Ok(true)
     }
 
     fn scroll_backword_oneline(&mut self) -> Result<bool, AnyError> {
-        if self.row_screen_start == 0 {
+        if !self.window.scroll_up_one_row() {
             return Ok(false);
         }
         self.screen.scroll_backward(1)?;
-        self.row_screen_start -= 1;
-
-        // Scroll up with consideration of line continuations.
-        // See the comment of scroll_forward_oneline for details.
-        let new_row = self.wraps.row_at(self.row_screen_start);
-        let n_remaining_line_slices = new_row.n_line_slices - new_row.line_slice_index - 1;
-        let line_end_row_idx = new_row.index + n_remaining_line_slices + 1;
-        let end_row_idx = cmp::min(line_end_row_idx, self.row_screen_end());
-        let visible_line = self
-            .wraps
-            .slice_wrap(new_row.index, end_row_idx)
-            .slice_line(&self.lines[new_row.line_index].raw);
-        self.screen.draw_at(0, visible_line)?;
-
+        let new_row_span = self.window.start_row_span();
+        self.screen.draw_at(0, new_row_span.line())?;
         Ok(true)
     }
 
-    fn smooth_scroll(&mut self, dest: usize) -> Result<(), AnyError> {
-        let total_steps = dest.abs_diff(self.row_screen_start);
-        let go_down = dest > self.row_screen_start;
-        let base_delay = 420.0 / (total_steps as f64 + 2.0);
-
-        for step in 0..total_steps {
+    fn smooth_scroll(&mut self, n_rows: usize, go_down: bool) -> Result<(), AnyError> {
+        let base_delay = 420.0 / (n_rows as f64 + 2.0);
+        for step in 0..n_rows {
             if go_down {
                 if !self.scroll_forward_oneline()? {
                     break;
@@ -220,7 +162,7 @@ impl<'s, S: Screen> App<'s, S> {
                 break;
             }
             self.screen.flush()?;
-            let progress = step as f64 / total_steps as f64;
+            let progress = step as f64 / n_rows as f64;
             let eased_progress = progress.powi(3);
             let delay = (1.0 + base_delay * eased_progress) as u64;
             thread::sleep(Duration::from_millis(delay));
