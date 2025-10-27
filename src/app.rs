@@ -22,7 +22,21 @@ pub fn run() -> Result<(), AnyError> {
 }
 
 fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError> {
-    App::new(screen).run(args)
+    let stdin = io::stdin().lock();
+    let lines: Vec<String> = if stdin.is_terminal() {
+        let file_path = args.first().unwrap();
+        let file = File::open(file_path)?;
+        let reader = BufReader::new(file);
+        reader.lines().map(|l| l.unwrap()).collect()
+    } else {
+        let reader = BufReader::new(stdin);
+        reader.lines().map(|l| l.unwrap()).collect()
+    };
+
+    let size = screen.size()?;
+    let lines = lines.into_iter().map(Line::new).collect();
+    let window = Window::new(size.n_cols(), size.n_rows(), lines);
+    App::new(screen, window).run()
 }
 
 struct App<'s, S: Screen> {
@@ -31,30 +45,12 @@ struct App<'s, S: Screen> {
 }
 
 impl<'s, S: Screen> App<'s, S> {
-    fn new(screen: &'s mut S) -> Self {
-        Self {
-            screen,
-            window: Window::default(),
-        }
+    fn new(screen: &'s mut S, window: Window) -> Self {
+        Self { screen, window }
     }
 
-    fn run(&mut self, args: Vec<String>) -> Result<(), AnyError> {
-        let stdin = io::stdin().lock();
-        let lines: Vec<String> = if stdin.is_terminal() {
-            let file_path = args.first().unwrap();
-            let file = File::open(file_path)?;
-            let reader = BufReader::new(file);
-            reader.lines().map(|l| l.unwrap()).collect()
-        } else {
-            let reader = BufReader::new(stdin);
-            reader.lines().map(|l| l.unwrap()).collect()
-        };
-
-        let size = self.screen.size()?;
-        let lines = lines.into_iter().map(Line::new).collect();
-        self.window = Window::new(size.n_cols(), size.n_rows(), lines);
+    fn run(&mut self) -> Result<(), AnyError> {
         self.draw_rows()?;
-
         loop {
             let event = self.screen.next_event()?;
             match event {
