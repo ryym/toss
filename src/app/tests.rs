@@ -204,6 +204,62 @@ fn navigate_up_down_wrapped_lines() -> Result<(), super::AnyError> {
         Event::Key(Key::Char('j')),
         Event::Key(Key::Char('k')),
         Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('q')),
+    ]);
+    let args = vec![path];
+    super::run_with2(&mut screen, args)?;
+
+    let want = indoc! {"
+        0
+        01234>
+        567
+        01234
+        -----
+        [EVENT]:char:j
+        01234>
+        567
+        01234>
+        56789
+        -----
+        [EVENT]:char:j
+        567
+        01234>
+        56789>
+        abcd
+        -----
+        [EVENT]:char:k
+        01234>
+        567
+        01234>
+        56789>
+        -----
+        [EVENT]:char:k
+        0
+        01234>
+        567
+        01234>
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(&screen.out, want);
+
+    Ok(())
+}
+
+#[test]
+fn navigate_top_bottom_wrapped_lines() -> Result<(), super::AnyError> {
+    let (path, _file) = tmpfile(indoc! {"
+        0
+        01234567
+        0123456789abcd
+    "})?;
+
+    let mut screen = MockScreen::new(ScreenSize::new(5, 4));
+    screen.set_events(vec![
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
         Event::Key(Key::Char('G')),
         Event::Key(Key::Char('g')),
         Event::Key(Key::Char('q')),

@@ -285,14 +285,14 @@ impl<'s, S: Screen, R, Src: Source<R>> App2<'s, S, R, Src> {
     }
 
     fn scroll_backword_oneline(&mut self) -> Result<bool, AnyError> {
-        todo!()
-        // if !self.window.scroll_up_one_row() {
-        //     return Ok(false);
-        // }
-        // self.screen.scroll_backward(1)?;
-        // let new_row_span = self.window.start_row_span();
-        // self.screen.draw_at(0, new_row_span.line())?;
-        // Ok(true)
+        match self.pager.scroll_up_one_row()? {
+            None => Ok(false),
+            Some(new_row_span) => {
+                self.screen.scroll_backward(1)?;
+                self.screen.draw_at(0, new_row_span.line())?;
+                Ok(true)
+            }
+        }
     }
 
     fn smooth_scroll(&mut self, n_rows: usize, go_down: bool) -> Result<(), AnyError> {
