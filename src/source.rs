@@ -1,5 +1,3 @@
-mod block;
-
 use std::{
     cmp,
     collections::hash_map::Entry,
@@ -11,6 +9,8 @@ use crate::{
     error::AnyError,
     source::block::{read_block_from, Block, BlockKey, BlockPool, BLOCK_SIZE},
 };
+
+mod block;
 
 pub(crate) fn as_readable<R: Read>(reader: R) -> impl Source<R> {
     OneDirectionalSource::new(reader)

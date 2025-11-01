@@ -20,7 +20,7 @@ pub(crate) struct Block {
 impl Block {
     pub(super) fn new(end_byte: u64, buffer: BlockBuffer) -> Self {
         Self {
-            start_byte: BLOCK_SIZE * (end_byte / BLOCK_SIZE),
+            start_byte: BLOCK_SIZE * ((end_byte - 1) / BLOCK_SIZE),
             end_byte,
             buffer,
         }

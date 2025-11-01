@@ -34,7 +34,7 @@ fn open_and_quit() -> Result<(), super::AnyError> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![Event::Key(Key::Char('q'))]);
-    super::run_with(&mut screen, vec![path])?;
+    super::run_with2(&mut screen, vec![path])?;
 
     let want = indoc! {"
         line 1
@@ -48,10 +48,55 @@ fn open_and_quit() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn navigate_up_down_top_bottom() -> Result<(), super::AnyError> {
+fn navigate_up_down() -> Result<(), super::AnyError> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with2(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:j
+        line 2
+        line 3
+        line 4
+        -----
+        [EVENT]:char:j
+        line 3
+        line 4
+        line 5
+        -----
+        [EVENT]:char:k
+        line 2
+        line 3
+        line 4
+        -----
+        [EVENT]:char:k
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(&screen.out, want);
+    Ok(())
+}
+
+#[test]
+fn navigate_top_bottom() -> Result<(), super::AnyError> {
+    let (path, _file) = tmpfile(TEXT_SMALL)?;
+    let mut screen = MockScreen::new(ScreenSize::new(10, 3));
+    screen.set_events(vec![
+        // xxx: top bottom main に
         Event::Key(Key::Char('j')),
         Event::Key(Key::Char('j')),
         Event::Key(Key::Char('k')),
@@ -214,3 +259,26 @@ fn navigate_up_down_wrapped_lines() -> Result<(), super::AnyError> {
 
     Ok(())
 }
+
+// XXX: tmp or regression
+
+// #[test]
+// fn regression_20251101() -> Result<(), super::AnyError> {
+//     // let (path, _file) = tmpfile(indoc! {"
+//     //     0
+//     //     01234567
+//     //     0123456789abcd
+//     // "})?;
+
+//     let path = "_work/tmp.txt".to_string();
+
+//     let mut screen = MockScreen::new(ScreenSize::new(98, 30));
+//     screen.set_events(vec![Event::Key(Key::Char('q'))]);
+//     let args = vec![path];
+//     super::run_with2(&mut screen, args)?;
+
+//     let lines = screen.out.lines().collect::<Vec<_>>();
+//     dbg!(lines);
+
+//     Ok(())
+// }

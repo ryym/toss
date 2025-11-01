@@ -15,7 +15,18 @@ pub(crate) struct LinePos {
     end_byte: u64,
 }
 
-type LineAndPos = (LinePos, String);
+pub(crate) type Line = (LinePos, String);
+
+// #[derive(Debug, PartialEq)]
+// pub(crate) struct Line {
+//     pos: LinePos,
+//     text: String,
+// }
+// impl Line {
+//     fn new(pos: LinePos, text: String) -> Self {
+//         Self { pos, text }
+//     }
+// }
 
 impl LinePos {
     /// The `end_byte` is exclusive and doesn't contain a line break.
@@ -30,6 +41,11 @@ impl LinePos {
             end_byte,
         }
     }
+
+    // #[cfg(test)]
+    // pub fn mock(start_byte: u64, end_byte: u64) -> Self {
+    //     Self::new(start_byte, end_byte)
+    // }
 }
 
 #[derive(Debug)]
@@ -60,7 +76,7 @@ impl<R, S: Source<R>> Reader<R, S> {
     // 普通に個別にメソッドを提供するだけの方がシンプルかもしれない。
     // read_block は trait method だからあまり増やさない方が楽だったけど。
     // あと String を受け取るかどうか。
-    pub(crate) fn read_line(&mut self, query: QueryLine) -> Result<Option<LineAndPos>, AnyError> {
+    pub(crate) fn read_line(&mut self, query: QueryLine) -> Result<Option<Line>, AnyError> {
         match query {
             QueryLine::AtStart => self.read_line_forward(0),
             QueryLine::AtEnd => self.read_line_backward(QueryBlock::AtEnd),
@@ -76,7 +92,7 @@ impl<R, S: Source<R>> Reader<R, S> {
         }
     }
 
-    fn read_line_forward(&mut self, start_byte: u64) -> Result<Option<LineAndPos>, AnyError> {
+    fn read_line_forward(&mut self, start_byte: u64) -> Result<Option<Line>, AnyError> {
         let mut cursor = SourceCursor::forward(&mut self.source, QueryBlock::Having(start_byte));
         if !cursor.has_next()? {
             return Ok(None);
@@ -92,15 +108,12 @@ impl<R, S: Source<R>> Reader<R, S> {
             }
         }
 
-        let s = String::from_utf8_lossy(&buf).to_string();
         let pos = LinePos::new(start_byte, start_byte + buf.len() as u64);
-        Ok(Some((pos, s)))
+        let text = String::from_utf8_lossy(&buf).to_string();
+        Ok(Some((pos, text)))
     }
 
-    fn read_line_ending_at(
-        &mut self,
-        line_break_byte: u64,
-    ) -> Result<Option<LineAndPos>, AnyError> {
+    fn read_line_ending_at(&mut self, line_break_byte: u64) -> Result<Option<Line>, AnyError> {
         if line_break_byte == 0 {
             return Ok(None);
         }
@@ -108,7 +121,7 @@ impl<R, S: Source<R>> Reader<R, S> {
         self.read_line_backward(QueryBlock::Having(line_end_byte))
     }
 
-    fn read_line_backward(&mut self, from: QueryBlock) -> Result<Option<LineAndPos>, AnyError> {
+    fn read_line_backward(&mut self, from: QueryBlock) -> Result<Option<Line>, AnyError> {
         let mut cursor = SourceCursor::backward(&mut self.source, from);
         let end_byte = match cursor.cursor_pos()? {
             None => return Ok(None),
@@ -125,9 +138,9 @@ impl<R, S: Source<R>> Reader<R, S> {
         }
         buf.reverse();
 
-        let s = String::from_utf8_lossy(&buf).to_string();
         let pos = LinePos::new(end_byte - buf.len() as u64, end_byte);
-        Ok(Some((pos, s)))
+        let text = String::from_utf8_lossy(&buf).to_string();
+        Ok(Some((pos, text)))
     }
 }
 
@@ -163,44 +176,37 @@ mod tests {
 
         // Read forward
         {
-            let result = reader.read_line(QueryLine::AtStart)?;
-            let (pos, out) = result.unwrap();
-            assert_eq!(out, "abcde");
+            let (pos, text) = reader.read_line(QueryLine::AtStart)?.unwrap();
+            assert_eq!(text, "abcde");
             assert_eq!(pos, LinePos::new(0, 5));
 
-            let result = reader.read_line(QueryLine::NextOf(pos))?;
-            let (pos, out) = result.unwrap();
-            assert_eq!(out, "1234567");
+            let (pos, text) = reader.read_line(QueryLine::NextOf(pos))?.unwrap();
+            assert_eq!(text, "1234567");
             assert_eq!(pos, LinePos::new(6, 13));
 
-            let result = reader.read_line(QueryLine::NextOf(pos))?;
-            let (pos, out) = result.unwrap();
-            assert_eq!(out, "890");
+            let (pos, text) = reader.read_line(QueryLine::NextOf(pos))?.unwrap();
+            assert_eq!(text, "890");
             assert_eq!(pos, LinePos::new(14, 17));
 
             let result = reader.read_line(QueryLine::NextOf(pos))?;
             assert_eq!(result, None);
 
-            let result = reader.read_line(QueryLine::AtStart)?;
-            let (_, out) = result.unwrap();
-            assert_eq!(out, "abcde");
+            let (_pos, text) = reader.read_line(QueryLine::AtStart)?.unwrap();
+            assert_eq!(text, "abcde");
         }
 
         // Read backward
         {
-            let result = reader.read_line(QueryLine::AtEnd)?;
-            let (pos, out) = result.unwrap();
-            assert_eq!(out, "890");
+            let (pos, text) = reader.read_line(QueryLine::AtEnd)?.unwrap();
+            assert_eq!(text, "890");
             assert_eq!(pos, LinePos::new(14, 17));
 
-            let result = reader.read_line(QueryLine::PrevOf(pos))?;
-            let (pos, out) = result.unwrap();
-            assert_eq!(out, "1234567");
+            let (pos, text) = reader.read_line(QueryLine::PrevOf(pos))?.unwrap();
+            assert_eq!(text, "1234567");
             assert_eq!(pos, LinePos::new(6, 13));
 
-            let result = reader.read_line(QueryLine::PrevOf(pos))?;
-            let (pos, out) = result.unwrap();
-            assert_eq!(out, "abcde");
+            let (pos, text) = reader.read_line(QueryLine::PrevOf(pos))?.unwrap();
+            assert_eq!(text, "abcde");
             assert_eq!(pos, LinePos::new(0, 5));
 
             let result = reader.read_line(QueryLine::PrevOf(pos))?;
