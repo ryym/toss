@@ -55,7 +55,10 @@ impl Drop for FileLoggerGuard {
 /// Set up a [`FileLogger`] as a global logger.
 pub(crate) fn setup_file_logger() -> Result<Option<FileLoggerGuard>, AnyError> {
     let env_var = match env::var("RUST_LOG").ok() {
-        None => return Ok(None),
+        None => {
+            store_logs_on_panic(None);
+            return Ok(None);
+        }
         Some(var) => var,
     };
     // For now, enable the logger if the environment variable exists regardless of its value.
@@ -71,7 +74,7 @@ pub(crate) fn setup_file_logger() -> Result<Option<FileLoggerGuard>, AnyError> {
     log::set_boxed_logger(Box::new(logger))?;
     log::set_max_level(log::LevelFilter::Info);
 
-    store_logs_on_panic(log_file_handle.clone());
+    store_logs_on_panic(Some(log_file_handle.clone()));
 
     // Sinc the global logger becomes static and never drops, we manually need to flush logs.
     // This guard object handles that.
@@ -80,13 +83,15 @@ pub(crate) fn setup_file_logger() -> Result<Option<FileLoggerGuard>, AnyError> {
     }))
 }
 
-fn store_logs_on_panic(log_file_handle: SharedFile) {
+fn store_logs_on_panic(log_file_handle: Option<SharedFile>) {
     // On a panic, try to store information in a file instead of stdout.
     // This is because stdout is heavily used by the application and cannot capture logs.
     let original_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {
         // Flush logs.
-        if let Ok(mut file) = log_file_handle.lock() {
+        if let Some(handle) = &log_file_handle
+            && let Ok(mut file) = handle.lock()
+        {
             file.flush().ok();
         }
 

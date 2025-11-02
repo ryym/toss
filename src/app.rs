@@ -1,36 +1,21 @@
 #[cfg(test)]
 mod tests;
 
-use std::fs::{self, File};
+use std::fs::File;
+use std::io::IsTerminal;
 use std::io::{self, BufRead, BufReader};
-use std::io::{IsTerminal, Write};
 use std::time::Duration;
 use std::{env, panic, thread};
 
 use crate::error::AnyError;
 use crate::lines::Line;
+use crate::logger;
 use crate::screen::Screen;
 use crate::screen::{Event, Key};
 use crate::window::Window;
 
 pub fn run() -> Result<(), AnyError> {
-    // Set a custom panic hook which writes to information to a file.
-    // This is because stdin is heavily used by the application and cannot capture logs.
-    let original_hook = panic::take_hook();
-    panic::set_hook(Box::new(move |panic_info| {
-        let message = if let Some(s) = panic_info.payload().downcast_ref::<String>() {
-            s.as_str()
-        } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-            s
-        } else {
-            "Unknown panic message"
-        };
-        let info = format!("{}\n{:?}", message, panic_info);
-        let mut log_file = std::fs::File::create("toss-panic.log").unwrap();
-        let _ = log_file.write_all(info.as_bytes());
-        original_hook(panic_info);
-    }));
-
+    let _guard = logger::setup_file_logger()?;
     let mut screen = crate::screen::for_terminal()?;
     let args = env::args().skip(1).collect::<Vec<_>>();
     run_with(&mut screen, args)
@@ -43,9 +28,6 @@ fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError
 struct App<'s, S: Screen> {
     screen: &'s mut S,
     window: Window,
-    // Log for debug. Since the app interacts with the terminal in raw mode,
-    // we cannot print debug logs to stdout as usual.
-    log: String,
 }
 
 impl<'s, S: Screen> App<'s, S> {
@@ -53,19 +35,10 @@ impl<'s, S: Screen> App<'s, S> {
         Self {
             screen,
             window: Window::default(),
-            log: String::new(),
         }
     }
 
     fn run(&mut self, args: Vec<String>) -> Result<(), AnyError> {
-        let result = self._run(args);
-        if !self.log.is_empty() {
-            let _ = fs::write("toss-debug.log", &self.log);
-        }
-        result
-    }
-
-    fn _run(&mut self, args: Vec<String>) -> Result<(), AnyError> {
         let stdin = io::stdin().lock();
         let lines: Vec<String> = if stdin.is_terminal() {
             let file_path = args.first().unwrap();
