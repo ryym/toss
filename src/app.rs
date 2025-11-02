@@ -2,8 +2,7 @@
 mod tests;
 
 use std::fs::File;
-use std::io::IsTerminal;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, IsTerminal};
 use std::time::Duration;
 use std::{env, panic, thread};
 

@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     error::AnyError,
-    source::block::{read_block_from, Block, BlockKey, BlockPool, BLOCK_SIZE},
+    source::block::{BLOCK_SIZE, Block, BlockKey, BlockPool, read_block_from},
 };
 
 mod block;

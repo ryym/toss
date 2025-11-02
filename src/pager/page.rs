@@ -1,9 +1,6 @@
 use std::{collections::VecDeque, mem};
 
-use crate::pager::{
-    line::{PageLine, RowSpan},
-    LineMeta,
-};
+use crate::pager::line::{PageLine, RowSpan};
 
 #[derive(Debug, Default)]
 struct Row {
@@ -177,7 +174,7 @@ impl<'page, LineMeta> EndPageWriter<'page, LineMeta> {
             slice_index: self.page.deque[self.page.deque.len() - 1].row_len() - 1,
         };
         // The start row is not set when lines are less than the page size.
-        let start_row = self.start_row.unwrap_or_else(|| Row {
+        let start_row = self.start_row.unwrap_or(Row {
             deque_index: 0,
             slice_index: 0,
         });
@@ -393,7 +390,7 @@ impl<'page, LineMeta> Iterator for RowSpanIter<'page, LineMeta> {
 mod tests {
     use pretty_assertions::assert_eq;
 
-    use crate::pager::{line::RowSpan, page::Page, PageLine};
+    use crate::pager::{PageLine, line::RowSpan, page::Page};
 
     #[test]
     fn hold_lines_less_than_page_size() {

@@ -210,7 +210,7 @@ mod tests {
 
     use crate::{
         error::AnyError,
-        pager::{line::RowSpan, PageSize, Pager},
+        pager::{PageSize, Pager, line::RowSpan},
         reader::Reader,
         source,
     };

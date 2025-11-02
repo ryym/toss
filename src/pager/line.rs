@@ -3,8 +3,6 @@ use std::ops::{Bound, RangeBounds};
 use ansi_control_codes::parser::{Token, TokenStream};
 use unicode_width::UnicodeWidthChar;
 
-use crate::reader::LinePos;
-
 /// A line in a page.
 #[derive(Debug)]
 pub(super) struct PageLine<Meta> {
