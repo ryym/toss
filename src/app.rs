@@ -225,26 +225,26 @@ impl<'s, S: Screen, R, Src: Source<R>> App2<'s, S, R, Src> {
                                 self.screen.flush()?;
                             }
                         }
-                        // 'g' => {
-                        //     self.window.seek_to_start();
-                        //     self.draw_rows()?;
-                        // }
-                        // 'G' => {
-                        //     self.window.seek_to_end();
-                        //     self.draw_rows()?;
-                        // }
-                        // 'd' => {
-                        //     self.smooth_scroll(self.window.n_rows() / 2, true)?;
-                        // }
-                        // 'u' => {
-                        //     self.smooth_scroll(self.window.n_rows() / 2, false)?;
-                        // }
-                        // 'f' | ' ' => {
-                        //     self.smooth_scroll(self.window.n_rows(), true)?;
-                        // }
-                        // 'b' => {
-                        //     self.smooth_scroll(self.window.n_rows(), false)?;
-                        // }
+                        'g' => {
+                            self.pager.scroll_to_start()?;
+                            self.draw_rows()?;
+                        }
+                        'G' => {
+                            self.pager.scroll_to_end()?;
+                            self.draw_rows()?;
+                        }
+                        'd' => {
+                            self.smooth_scroll(self.pager.size().rows() / 2, true)?;
+                        }
+                        'u' => {
+                            self.smooth_scroll(self.pager.size().rows() / 2, false)?;
+                        }
+                        'f' | ' ' => {
+                            self.smooth_scroll(self.pager.size().rows(), true)?;
+                        }
+                        'b' => {
+                            self.smooth_scroll(self.pager.size().rows(), false)?;
+                        }
                         _ => continue,
                     },
                     _ => {

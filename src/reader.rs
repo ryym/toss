@@ -5,6 +5,9 @@ use crate::{
     source::{QueryBlock, Source, SourceCursor},
 };
 
+// XXX: 空ファイルの場合は結局どうなるんだっけ？
+// その場合も read_line は空行を返せる方がいい？　今は None?
+
 /// Byte length of a Line Break.
 const BLB: u64 = 1;
 
@@ -58,9 +61,17 @@ pub(crate) enum QueryLine {
 }
 
 #[derive(Debug)]
+enum SourceEnd {
+    Unknown,
+    LineBreak(u64),
+    NonLineBreak,
+}
+
+#[derive(Debug)]
 pub(crate) struct Reader<R, S> {
     _phantom: PhantomData<R>,
     source: S,
+    source_end: SourceEnd,
 }
 
 impl<R, S: Source<R>> Reader<R, S> {
@@ -68,6 +79,7 @@ impl<R, S: Source<R>> Reader<R, S> {
         Self {
             _phantom: PhantomData,
             source,
+            source_end: SourceEnd::Unknown,
         }
     }
 
@@ -79,7 +91,7 @@ impl<R, S: Source<R>> Reader<R, S> {
     pub(crate) fn read_line(&mut self, query: QueryLine) -> Result<Option<Line>, AnyError> {
         match query {
             QueryLine::AtStart => self.read_line_forward(0),
-            QueryLine::AtEnd => self.read_line_backward(QueryBlock::AtEnd),
+            QueryLine::AtEnd => self.read_end_line(),
             QueryLine::At(pos) => self.read_line_forward(pos.start_byte),
             QueryLine::NextOf(pos) => self.read_line_forward(pos.end_byte + BLB),
             QueryLine::PrevOf(pos) => {
@@ -119,6 +131,25 @@ impl<R, S: Source<R>> Reader<R, S> {
         }
         let line_end_byte = line_break_byte - 1;
         self.read_line_backward(QueryBlock::Having(line_end_byte))
+    }
+
+    fn read_end_line(&mut self) -> Result<Option<Line>, AnyError> {
+        match self.source_end {
+            SourceEnd::NonLineBreak => self.read_line_backward(QueryBlock::AtEnd),
+            SourceEnd::LineBreak(line_end_byte) => {
+                self.read_line_backward(QueryBlock::Having(line_end_byte))
+            }
+            SourceEnd::Unknown => {
+                self.source_end = match self.read_line_backward(QueryBlock::AtEnd)? {
+                    Some((pos, text)) if text.is_empty() => {
+                        SourceEnd::LineBreak(pos.end_byte - BLB - 1)
+                    }
+                    _ => SourceEnd::NonLineBreak,
+                };
+                dbg!(&self.source_end);
+                self.read_end_line()
+            }
+        }
     }
 
     fn read_line_backward(&mut self, from: QueryBlock) -> Result<Option<Line>, AnyError> {

@@ -1,8 +1,11 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, mem};
 
-use crate::pager::line::{PageLine, RowSpan};
+use crate::pager::{
+    line::{PageLine, RowSpan},
+    LineMeta,
+};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Row {
     deque_index: usize,
     slice_index: usize,
@@ -14,14 +17,14 @@ impl PartialEq for Row {
     }
 }
 
-pub(super) struct PageBuilder<LineMeta> {
+pub(super) struct NewPageBuilder<LineMeta> {
     deque: VecDeque<PageLine<LineMeta>>,
     end_row: Option<Row>,
     row_size: usize,
     read_rows: usize,
 }
 
-impl<LineMeta> PageBuilder<LineMeta> {
+impl<LineMeta> NewPageBuilder<LineMeta> {
     fn new(row_size: usize) -> Self {
         debug_assert!(row_size > 0);
         Self {
@@ -34,41 +37,152 @@ impl<LineMeta> PageBuilder<LineMeta> {
 
     pub fn push_back(&mut self, line: PageLine<LineMeta>) -> bool {
         debug_assert!(self.read_rows < self.row_size);
-
-        self.read_rows += line.row_len();
-        if self.read_rows < self.row_size {
-            self.deque.push_back(line);
-            return true;
+        match push_back_line(line, &mut self.deque, &mut self.read_rows, self.row_size) {
+            None => true,
+            Some(end_row) => {
+                self.end_row = Some(end_row);
+                false
+            }
         }
-
-        let end_slice_idx = line.row_len() - 1 - (self.read_rows - self.row_size);
-        self.end_row = Some(Row {
-            deque_index: self.deque.len(),
-            slice_index: end_slice_idx,
-        });
-        self.deque.push_back(line);
-        false
     }
 
-    pub fn to_page(self) -> Option<Page<LineMeta>> {
+    pub fn to_page(mut self) -> Option<Page<LineMeta>> {
         if self.deque.is_empty() {
             return None;
         }
-        let start_row = Row {
-            deque_index: 0,
-            slice_index: 0,
-        };
-        // The end row is not set when lines are less than the page size.
-        let end_row = self.end_row.unwrap_or_else(|| Row {
-            deque_index: self.deque.len() - 1,
-            slice_index: self.deque[self.deque.len() - 1].row_len() - 1,
-        });
+        let (start_row, end_row) = finalize_start_page_rows(&self.deque, self.end_row.take());
         Some(Page {
             deque: self.deque,
             row_size: self.row_size,
             start_row,
             end_row,
         })
+    }
+}
+
+pub(super) struct StartPageWriter<'page, LineMeta> {
+    page: &'page mut Page<LineMeta>,
+    end_row: Option<Row>,
+    read_rows: usize,
+}
+
+impl<'page, LineMeta> StartPageWriter<'page, LineMeta> {
+    fn for_page(page: &'page mut Page<LineMeta>) -> Self {
+        page.deque.clear();
+        Self {
+            page,
+            end_row: None,
+            read_rows: 0,
+        }
+    }
+
+    pub fn push_back(&mut self, line: PageLine<LineMeta>) -> bool {
+        debug_assert!(self.read_rows < self.page.row_size);
+
+        match push_back_line(
+            line,
+            &mut self.page.deque,
+            &mut self.read_rows,
+            self.page.row_size,
+        ) {
+            None => true,
+            Some(end_row) => {
+                self.end_row = Some(end_row);
+                false
+            }
+        }
+    }
+
+    pub fn write_to_page(mut self) {
+        let (start_row, end_row) = finalize_start_page_rows(&self.page.deque, self.end_row.take());
+        self.page.start_row = start_row;
+        self.page.end_row = end_row;
+    }
+}
+
+fn push_back_line<LineMeta>(
+    line: PageLine<LineMeta>,
+    deque: &mut VecDeque<PageLine<LineMeta>>,
+    read_rows: &mut usize,
+    row_size: usize,
+) -> Option<Row> {
+    *read_rows += line.row_len();
+    if *read_rows < row_size {
+        deque.push_back(line);
+        return None;
+    }
+
+    let end_slice_idx = line.row_len() - 1 - (*read_rows - row_size);
+    let end_row = Row {
+        deque_index: deque.len(),
+        slice_index: end_slice_idx,
+    };
+    deque.push_back(line);
+    Some(end_row)
+}
+
+fn finalize_start_page_rows<LineMeta>(
+    deque: &VecDeque<PageLine<LineMeta>>,
+    end_row: Option<Row>,
+) -> (Row, Row) {
+    let start_row = Row {
+        deque_index: 0,
+        slice_index: 0,
+    };
+    // The end row is not set when lines are less than the page size.
+    let end_row = end_row.unwrap_or_else(|| Row {
+        deque_index: deque.len() - 1,
+        slice_index: deque[deque.len() - 1].row_len() - 1,
+    });
+    (start_row, end_row)
+}
+
+pub(super) struct EndPageWriter<'page, LineMeta> {
+    page: &'page mut Page<LineMeta>,
+    start_row: Option<Row>,
+    read_rows: usize,
+}
+
+impl<'page, LineMeta> EndPageWriter<'page, LineMeta> {
+    fn for_page(page: &'page mut Page<LineMeta>) -> Self {
+        page.deque.clear();
+        Self {
+            page,
+            start_row: None,
+            read_rows: 0,
+        }
+    }
+
+    pub fn push_front(&mut self, line: PageLine<LineMeta>) -> bool {
+        debug_assert!(self.read_rows < self.page.row_size);
+
+        self.read_rows += line.row_len();
+        if self.read_rows < self.page.row_size {
+            self.page.deque.push_front(line);
+            return true;
+        }
+
+        let start_slice_idx = self.read_rows - self.page.row_size;
+        self.start_row = Some(Row {
+            deque_index: 0,
+            slice_index: start_slice_idx,
+        });
+        self.page.deque.push_front(line);
+        false
+    }
+
+    pub fn write_to_page(self) {
+        let end_row = Row {
+            deque_index: self.page.deque.len() - 1,
+            slice_index: self.page.deque[self.page.deque.len() - 1].row_len() - 1,
+        };
+        // The start row is not set when lines are less than the page size.
+        let start_row = self.start_row.unwrap_or_else(|| Row {
+            deque_index: 0,
+            slice_index: 0,
+        });
+        self.page.start_row = start_row;
+        self.page.end_row = end_row;
     }
 }
 
@@ -81,8 +195,8 @@ pub(super) struct Page<LineMeta> {
 }
 
 impl<LineMeta> Page<LineMeta> {
-    pub fn builder(row_size: usize) -> PageBuilder<LineMeta> {
-        PageBuilder::new(row_size)
+    pub fn builder(row_size: usize) -> NewPageBuilder<LineMeta> {
+        NewPageBuilder::new(row_size)
     }
 
     pub fn start_line(&self) -> &PageLine<LineMeta> {
@@ -186,6 +300,24 @@ impl<LineMeta> Page<LineMeta> {
             move_up_row(&mut self.end_row);
         }
         true
+    }
+
+    pub(super) fn replace_temporary(&mut self) -> Self {
+        let invalid_page = Page {
+            deque: VecDeque::new(),
+            row_size: 0,
+            start_row: Row::default(),
+            end_row: Row::default(),
+        };
+        mem::replace(self, invalid_page)
+    }
+
+    pub fn start_page_writer(&mut self) -> StartPageWriter<'_, LineMeta> {
+        StartPageWriter::for_page(self)
+    }
+
+    pub fn end_page_writer(&mut self) -> EndPageWriter<'_, LineMeta> {
+        EndPageWriter::for_page(self)
     }
 }
 

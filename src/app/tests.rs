@@ -17,16 +17,16 @@ fn tmpfile(content: &str) -> Result<(String, tempfile::NamedTempFile), crate::ap
 }
 
 const TEXT_SMALL: &str = indoc! {"
-        line 1
-        line 2
-        line 3
-        line 4
-        line 5
-        line 6
-        line 7
-        line 8
-        line 9
-        line 10
+line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10
 "};
 
 #[test]
@@ -93,38 +93,22 @@ fn navigate_up_down() -> Result<(), super::AnyError> {
 
 #[test]
 fn navigate_top_bottom() -> Result<(), super::AnyError> {
+    dbg!(&TEXT_SMALL);
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![
-        // xxx: top bottom main に
-        Event::Key(Key::Char('j')),
-        Event::Key(Key::Char('j')),
-        Event::Key(Key::Char('k')),
         Event::Key(Key::Char('G')),
         Event::Key(Key::Char('g')),
+        Event::Key(Key::Char('g')),
+        Event::Key(Key::Char('G')),
         Event::Key(Key::Char('q')),
     ]);
-    super::run_with(&mut screen, vec![path])?;
+    super::run_with2(&mut screen, vec![path])?;
 
     let want = indoc! {"
         line 1
         line 2
         line 3
-        -----
-        [EVENT]:char:j
-        line 2
-        line 3
-        line 4
-        -----
-        [EVENT]:char:j
-        line 3
-        line 4
-        line 5
-        -----
-        [EVENT]:char:k
-        line 2
-        line 3
-        line 4
         -----
         [EVENT]:char:G
         line 8
@@ -135,6 +119,16 @@ fn navigate_top_bottom() -> Result<(), super::AnyError> {
         line 1
         line 2
         line 3
+        -----
+        [EVENT]:char:g
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:G
+        line 8
+        line 9
+        line 10
         -----
         [EVENT]:char:q
     "};
@@ -152,7 +146,7 @@ fn smooth_scroll_up_down() -> Result<(), super::AnyError> {
         Event::Key(Key::Char('u')),
         Event::Key(Key::Char('q')),
     ]);
-    super::run_with(&mut screen, vec![path])?;
+    super::run_with2(&mut screen, vec![path])?;
 
     // Animate navigations by rendering each step rather than jumping to the destination at once.
     let want = indoc! {"
@@ -265,7 +259,7 @@ fn navigate_top_bottom_wrapped_lines() -> Result<(), super::AnyError> {
         Event::Key(Key::Char('q')),
     ]);
     let args = vec![path];
-    super::run_with(&mut screen, args)?;
+    super::run_with2(&mut screen, args)?;
 
     let want = indoc! {"
         0
@@ -315,26 +309,3 @@ fn navigate_top_bottom_wrapped_lines() -> Result<(), super::AnyError> {
 
     Ok(())
 }
-
-// XXX: tmp or regression
-
-// #[test]
-// fn regression_20251101() -> Result<(), super::AnyError> {
-//     // let (path, _file) = tmpfile(indoc! {"
-//     //     0
-//     //     01234567
-//     //     0123456789abcd
-//     // "})?;
-
-//     let path = "_work/tmp.txt".to_string();
-
-//     let mut screen = MockScreen::new(ScreenSize::new(98, 30));
-//     screen.set_events(vec![Event::Key(Key::Char('q'))]);
-//     let args = vec![path];
-//     super::run_with2(&mut screen, args)?;
-
-//     let lines = screen.out.lines().collect::<Vec<_>>();
-//     dbg!(lines);
-
-//     Ok(())
-// }

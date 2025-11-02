@@ -72,7 +72,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
     pub fn new(mut reader: Reader<R, Src>, size: PageSize) -> Result<Option<Self>, AnyError> {
         match build_page(&mut reader, &size)? {
             None => Ok(None),
-            Some((start_pos, page, end_pos)) => Ok(Some(Self {
+            Some(page) => Ok(Some(Self {
                 reader,
                 size,
                 page,
@@ -120,25 +120,28 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         }
         Ok(Some(self.page.start_row_span()))
     }
+
+    pub fn scroll_to_start(&mut self) -> Result<(), AnyError> {
+        write_start_page(&mut self.reader, &self.size, &mut self.page)?;
+        Ok(())
+    }
+
+    pub fn scroll_to_end(&mut self) -> Result<(), AnyError> {
+        write_end_page(&mut self.reader, &self.size, &mut self.page)?;
+        Ok(())
+    }
 }
 
 fn build_page<R, Src: Source<R>>(
     reader: &mut Reader<R, Src>,
     size: &PageSize,
-) -> Result<Option<(LinePos, Page<LineMeta>, LinePos)>, AnyError> {
+) -> Result<Option<Page<LineMeta>>, AnyError> {
     let mut builder = Page::builder(size.rows);
     let mut query = QueryLine::AtStart;
-    let mut start_pos = None;
-    let mut end_pos = None;
     loop {
         match reader.read_line(query)? {
             None => break,
             Some((pos, text)) => {
-                // dbg!((pos, &text));
-                end_pos = Some(pos);
-                if start_pos.is_none() {
-                    start_pos.replace(pos);
-                }
                 let line = PageLine::new(LineMeta { pos }, text, size.cols);
                 if !builder.push_back(line) {
                     break;
@@ -147,10 +150,56 @@ fn build_page<R, Src: Source<R>>(
             }
         }
     }
-    match (start_pos, builder.to_page(), end_pos) {
-        (Some(start_pos), Some(page), Some(end_pos)) => Ok(Some((start_pos, page, end_pos))),
+    match builder.to_page() {
+        Some(page) => Ok(Some(page)),
         _ => Ok(None),
     }
+}
+
+fn write_start_page<R, Src: Source<R>>(
+    reader: &mut Reader<R, Src>,
+    size: &PageSize,
+    page: &mut Page<LineMeta>,
+) -> Result<(), AnyError> {
+    let mut writer = page.start_page_writer();
+    let mut query = QueryLine::AtStart;
+    loop {
+        match reader.read_line(query)? {
+            None => break,
+            Some((pos, text)) => {
+                let line = PageLine::new(LineMeta { pos }, text, size.cols);
+                if !writer.push_back(line) {
+                    break;
+                }
+                query = QueryLine::NextOf(pos);
+            }
+        }
+    }
+    writer.write_to_page();
+    Ok(())
+}
+
+fn write_end_page<R, Src: Source<R>>(
+    reader: &mut Reader<R, Src>,
+    size: &PageSize,
+    page: &mut Page<LineMeta>,
+) -> Result<(), AnyError> {
+    let mut writer = page.end_page_writer();
+    let mut query = QueryLine::AtEnd;
+    loop {
+        match reader.read_line(query)? {
+            None => break,
+            Some((pos, text)) => {
+                let line = PageLine::new(LineMeta { pos }, text, size.cols);
+                if !writer.push_front(line) {
+                    break;
+                }
+                query = QueryLine::PrevOf(pos);
+            }
+        }
+    }
+    writer.write_to_page();
+    Ok(())
 }
 
 #[cfg(test)]
