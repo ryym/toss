@@ -43,7 +43,7 @@ impl<LineMeta> NewPageBuilder<LineMeta> {
         }
     }
 
-    pub fn to_page(mut self) -> Option<Page<LineMeta>> {
+    pub fn into_page(mut self) -> Option<Page<LineMeta>> {
         if self.deque.is_empty() {
             return None;
         }
@@ -387,7 +387,7 @@ mod tests {
         let mut builder = Page::builder(3);
         builder.push_back(PageLine::new((), "abc".to_string(), 3));
         builder.push_back(PageLine::new((), "def".to_string(), 3));
-        let page = builder.to_page().expect("build page");
+        let page = builder.into_page().expect("build page");
         assert_eq!(
             page.row_spans().collect::<Vec<_>>(),
             vec![RowSpan::new("abc", 1), RowSpan::new("def", 1)]
@@ -400,7 +400,7 @@ mod tests {
         for chr in 'a'..='c' {
             builder.push_back(PageLine::new((), chr.to_string(), 3));
         }
-        let mut page = builder.to_page().expect("build page");
+        let mut page = builder.into_page().expect("build page");
         let initial = vec![
             RowSpan::new("a", 1),
             RowSpan::new("b", 1),

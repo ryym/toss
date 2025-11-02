@@ -143,7 +143,7 @@ fn build_page<R, Src: Source<R>>(
             }
         }
     }
-    match builder.to_page() {
+    match builder.into_page() {
         Some(page) => Ok(Some(page)),
         _ => Ok(None),
     }
