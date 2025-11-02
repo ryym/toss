@@ -45,19 +45,12 @@ impl PageSize {
     pub fn rows(&self) -> usize {
         self.rows
     }
-
-    #[inline]
-    pub fn cols(&self) -> usize {
-        self.cols
-    }
 }
 
 #[derive(Debug)]
 pub(crate) struct LineMeta {
     pos: LinePos,
 }
-
-type Line = PageLine<LineMeta>;
 
 #[derive(Debug)]
 pub(crate) struct Pager<R, Src> {
@@ -210,7 +203,7 @@ mod tests {
 
     use crate::{
         error::AnyError,
-        pager::{PageSize, Pager, line::RowSpan},
+        pager::{line::RowSpan, PageSize, Pager},
         reader::Reader,
         source,
     };

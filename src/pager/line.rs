@@ -64,10 +64,6 @@ impl<Meta> PageLine<Meta> {
         let size = end_slice_idx - start_slice_idx + 1;
         RowSpan::new(s, size)
     }
-
-    pub fn wrap_in(&mut self, n_cols: usize) {
-        self.wrap = Wrap::new(&self.sentence, n_cols);
-    }
 }
 
 #[derive(Debug, Default)]

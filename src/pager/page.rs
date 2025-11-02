@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, mem};
+use std::collections::VecDeque;
 
 use crate::pager::line::{PageLine, RowSpan};
 
@@ -299,16 +299,6 @@ impl<LineMeta> Page<LineMeta> {
         true
     }
 
-    pub(super) fn replace_temporary(&mut self) -> Self {
-        let invalid_page = Page {
-            deque: VecDeque::new(),
-            row_size: 0,
-            start_row: Row::default(),
-            end_row: Row::default(),
-        };
-        mem::replace(self, invalid_page)
-    }
-
     pub fn start_page_writer(&mut self) -> StartPageWriter<'_, LineMeta> {
         StartPageWriter::for_page(self)
     }
@@ -390,7 +380,7 @@ impl<'page, LineMeta> Iterator for RowSpanIter<'page, LineMeta> {
 mod tests {
     use pretty_assertions::assert_eq;
 
-    use crate::pager::{PageLine, line::RowSpan, page::Page};
+    use crate::pager::{line::RowSpan, page::Page, PageLine};
 
     #[test]
     fn hold_lines_less_than_page_size() {

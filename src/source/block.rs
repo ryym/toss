@@ -36,14 +36,6 @@ impl Block {
         self.end_byte
     }
 
-    pub(super) fn prev_start_byte(&self) -> Option<u64> {
-        if self.start_byte == 0 {
-            None
-        } else {
-            Some(self.start_byte - BLOCK_SIZE)
-        }
-    }
-
     pub(super) fn slice_from(&self, abs_byte: u64) -> &[u8] {
         let from = (abs_byte - self.start_byte) as usize;
         let to = (self.end_byte - self.start_byte) as usize;
