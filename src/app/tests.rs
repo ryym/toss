@@ -34,7 +34,7 @@ fn open_and_quit() -> Result<(), super::AnyError> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![Event::Key(Key::Char('q'))]);
-    super::run_with2(&mut screen, vec![path])?;
+    super::run_with(&mut screen, vec![path])?;
 
     let want = indoc! {"
         line 1
@@ -58,7 +58,7 @@ fn navigate_up_down() -> Result<(), super::AnyError> {
         Event::Key(Key::Char('k')),
         Event::Key(Key::Char('q')),
     ]);
-    super::run_with2(&mut screen, vec![path])?;
+    super::run_with(&mut screen, vec![path])?;
 
     let want = indoc! {"
         line 1
@@ -103,7 +103,7 @@ fn navigate_top_bottom() -> Result<(), super::AnyError> {
         Event::Key(Key::Char('G')),
         Event::Key(Key::Char('q')),
     ]);
-    super::run_with2(&mut screen, vec![path])?;
+    super::run_with(&mut screen, vec![path])?;
 
     let want = indoc! {"
         line 1
@@ -146,7 +146,7 @@ fn smooth_scroll_up_down() -> Result<(), super::AnyError> {
         Event::Key(Key::Char('u')),
         Event::Key(Key::Char('q')),
     ]);
-    super::run_with2(&mut screen, vec![path])?;
+    super::run_with(&mut screen, vec![path])?;
 
     // Animate navigations by rendering each step rather than jumping to the destination at once.
     let want = indoc! {"
@@ -201,7 +201,7 @@ fn navigate_up_down_wrapped_lines() -> Result<(), super::AnyError> {
         Event::Key(Key::Char('q')),
     ]);
     let args = vec![path];
-    super::run_with2(&mut screen, args)?;
+    super::run_with(&mut screen, args)?;
 
     let want = indoc! {"
         0
@@ -259,7 +259,7 @@ fn navigate_top_bottom_wrapped_lines() -> Result<(), super::AnyError> {
         Event::Key(Key::Char('q')),
     ]);
     let args = vec![path];
-    super::run_with2(&mut screen, args)?;
+    super::run_with(&mut screen, args)?;
 
     let want = indoc! {"
         0
