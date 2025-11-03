@@ -84,22 +84,10 @@ impl<Meta> PageLine<Meta> {
         self.wrap.slices.len()
     }
 
-    pub fn slice(&self, range: impl RangeBounds<usize>) -> RowSpan<'_> {
-        let start_slice_idx = match range.start_bound() {
-            Bound::Unbounded => 0,
-            Bound::Included(start) => *start,
-            Bound::Excluded(_) => panic!("unexpected excluded bound for slice start"),
-        };
-        let end_slice_idx = match range.end_bound() {
-            Bound::Unbounded => self.wrap.slices.len() - 1,
-            Bound::Included(end) => *end,
-            Bound::Excluded(end) => *end - 1,
-        };
-        let slice_start = &self.wrap.slices[start_slice_idx];
-        let slice_end = &self.wrap.slices[end_slice_idx];
-        let s = &self.sentence.raw[slice_start.start_byte..slice_end.end_byte];
-        let size = end_slice_idx - start_slice_idx + 1;
-        RowSpan::new(s, size)
+    pub fn slice(&self, slice_range: impl RangeBounds<usize>) -> RowSpan<'_> {
+        let (start_byte, end_byte, row_len) = self.wrap.row_span_ends(slice_range);
+        let s = &self.sentence.raw[start_byte..end_byte];
+        RowSpan::new(s, row_len)
     }
 }
 
@@ -170,38 +158,52 @@ impl Wrap {
 
         let mut n_cells = 0;
         let mut i_plain_char = 0;
-        let mut i_raw_last_line_end = 0;
         for c in sentence.plain.chars() {
             let i_raw = sentence.plain_to_raw[i_plain_char];
             let cell_width = c.width().unwrap_or(0);
             n_cells += cell_width;
             if n_cells > n_cols {
-                slices.push(LineSlice::new(i_raw_last_line_end, i_raw));
+                slices.push(LineSlice::new(i_raw));
                 n_cells = cell_width;
-                i_raw_last_line_end = i_raw;
             }
             i_plain_char += c.len_utf8();
         }
-        slices.push(LineSlice::new(i_raw_last_line_end, sentence.raw.len()));
+        slices.push(LineSlice::new(sentence.raw.len()));
 
         Self { slices }
+    }
+
+    fn row_span_ends(&self, slice_range: impl RangeBounds<usize>) -> (usize, usize, usize) {
+        let start_slice_idx = match slice_range.start_bound() {
+            Bound::Unbounded => 0,
+            Bound::Included(start) => *start,
+            Bound::Excluded(_) => panic!("unexpected excluded bound for slice start"),
+        };
+        let end_slice_idx = match slice_range.end_bound() {
+            Bound::Unbounded => self.slices.len() - 1,
+            Bound::Included(end) => *end,
+            Bound::Excluded(end) => *end - 1,
+        };
+        let start_byte = if start_slice_idx == 0 {
+            0
+        } else {
+            self.slices[start_slice_idx - 1].end_byte
+        };
+        let slice_end = &self.slices[end_slice_idx];
+        let row_len = end_slice_idx - start_slice_idx + 1;
+        (start_byte, slice_end.end_byte, row_len)
     }
 }
 
 #[derive(Debug)]
 struct LineSlice {
-    /// A start position in the original raw line.
-    pub start_byte: usize,
     /// An end position in the original raw line (exclusive).
-    pub end_byte: usize,
+    end_byte: usize,
 }
 
 impl LineSlice {
-    fn new(start_byte: usize, end_byte: usize) -> Self {
-        Self {
-            start_byte,
-            end_byte,
-        }
+    fn new(end_byte: usize) -> Self {
+        Self { end_byte }
     }
 }
 
