@@ -1,3 +1,5 @@
+use std::fs::read;
+
 use crate::{
     error::AnyError,
     pager::{
@@ -89,21 +91,23 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         Ok(row_span)
     }
 
-    pub fn scroll_to_start(&mut self) -> PageLoader<'_, R, Src> {
-        PageLoader::forward(self, QueryLine::AtStart)
+    pub fn scroll_to_start(&mut self) -> Result<(), AnyError> {
+        self.start_row = None;
+        self.end_row = None;
+        Ok(())
     }
 
-    pub fn scroll_to_end(&mut self) -> PageLoader<'_, R, Src> {
-        PageLoader::backward(self, QueryLine::AtEnd)
+    // XXX: これやって page() でいけるかと思ったが、 query 基準だと必ず
+    // start_row の先頭から始めちゃう。 start_row が line の中間のケースで正しく動かない。
+    // そもそも page() のように読むだけなら start/end row を更新する必要がない問題もある。
+    pub fn scroll_to_end(&mut self) -> Result<(), AnyError> {
+        PageLoader::backward(self, QueryLine::AtEnd).run()
     }
 
-    #[cfg(test)]
-    pub fn reload(&mut self) -> PageLoader<'_, R, Src> {
-        let query = match &self.start_row {
-            None => QueryLine::AtStart,
-            Some(row) => QueryLine::At(row.line_pos),
-        };
-        PageLoader::forward(self, query)
+    // 現状を見るだけなら本来は start/end_row の初期化は不要なんだが、
+    // そこを変えないバージョンを作るにはコピペしか思いつかず、面倒。
+    pub fn page(&mut self) -> PageLoader<'_, R, Src> {
+        PageLoader::forward_from_current(self)
     }
 }
 
@@ -149,30 +153,63 @@ pub(crate) struct PageLoader<'p, R, Src> {
     pager: &'p mut Pager<R, Src>,
     read_rows: usize,
     query: QueryLine,
+    first_line_slice_index: Option<usize>,
     go_forward: bool,
 }
 
 impl<'p, R, Src: Source<R>> PageLoader<'p, R, Src> {
     fn forward(pager: &'p mut Pager<R, Src>, from: QueryLine) -> Self {
-        Self::new(pager, from, true)
-    }
-
-    fn backward(pager: &'p mut Pager<R, Src>, from: QueryLine) -> Self {
-        Self::new(pager, from, false)
-    }
-
-    fn new(pager: &'p mut Pager<R, Src>, from: QueryLine, go_forward: bool) -> Self {
         pager.start_row = None;
         pager.end_row = None;
         Self {
             pager,
             read_rows: 0,
             query: from,
-            go_forward,
+            first_line_slice_index: None,
+            go_forward: true,
         }
     }
 
-    fn next(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
+    fn forward_from_current(pager: &'p mut Pager<R, Src>) -> Self {
+        let (query, first_line_slice_index) = match &pager.start_row {
+            None => (QueryLine::AtStart, None),
+            Some(row) => (QueryLine::At(row.line_pos), Some(row.slice_index)),
+        };
+        pager.start_row = None;
+        pager.end_row = None;
+        Self {
+            pager,
+            read_rows: 0,
+            query,
+            first_line_slice_index,
+            go_forward: true,
+        }
+    }
+
+    fn backward(pager: &'p mut Pager<R, Src>, from: QueryLine) -> Self {
+        pager.start_row = None;
+        pager.end_row = None;
+        Self {
+            pager,
+            read_rows: 0,
+            query: from,
+            first_line_slice_index: None,
+            go_forward: false,
+        }
+    }
+
+    // fn new(pager: &'p mut Pager<R, Src>, from: QueryLine, go_forward: bool) -> Self {
+    //     pager.start_row = None;
+    //     pager.end_row = None;
+    //     Self {
+    //         pager,
+    //         read_rows: 0,
+    //         query: from,
+    //         go_forward,
+    //     }
+    // }
+
+    pub fn next_row_span(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
         if self.go_forward {
             self.next_forward()
         } else {
@@ -180,7 +217,7 @@ impl<'p, R, Src: Source<R>> PageLoader<'p, R, Src> {
         }
     }
 
-    fn next_forward(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
+    pub fn next_forward(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
         let row_size = self.pager.size().rows();
         if self.read_rows >= row_size {
             return Ok(None);
@@ -188,23 +225,26 @@ impl<'p, R, Src: Source<R>> PageLoader<'p, R, Src> {
         match self.pager.line_reader.read_line(self.query)? {
             None => Ok(None),
             Some(line) => {
+                let start_slice_idx = self.first_line_slice_index.take().unwrap_or(0);
                 if self.pager.start_row.is_none() {
-                    self.pager.start_row = Some(Row::from_line(&line, 0));
+                    self.pager.start_row = Some(Row::from_line(&line, start_slice_idx));
                 }
-                self.read_rows += line.row_len();
+                self.read_rows += line.row_len() - start_slice_idx;
                 let (end_slice_idx, line) = if self.read_rows <= row_size {
-                    (line.row_len(), line)
+                    (line.row_len() - 1, line)
                 } else {
                     let end_slice_idx = line.row_len() - 1 - (self.read_rows - row_size);
+                    // dbg!((end_slice_idx, line.slice(..)));
                     (end_slice_idx, line)
                 };
-                self.pager.end_row = Some(Row::from_line(&line, line.row_len() - 1));
+                self.pager.end_row = Some(Row::from_line(&line, end_slice_idx));
                 self.query = QueryLine::NextOf(*line.meta());
-                Ok(Some(line.slice(..end_slice_idx)))
+                Ok(Some(line.slice(start_slice_idx..=end_slice_idx)))
             }
         }
     }
 
+    // XXX: first_line_slice_index
     fn next_backward(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
         let row_size = self.pager.size().rows();
         if self.read_rows >= row_size {
@@ -214,7 +254,7 @@ impl<'p, R, Src: Source<R>> PageLoader<'p, R, Src> {
             None => Ok(None),
             Some(line) => {
                 if self.pager.end_row.is_none() {
-                    self.pager.end_row = Some(Row::from_line(&line, 0));
+                    self.pager.end_row = Some(Row::from_line(&line, line.row_len() - 1));
                 }
                 self.read_rows += line.row_len();
                 let (start_slice_idx, line) = if self.read_rows <= row_size {
@@ -228,6 +268,11 @@ impl<'p, R, Src: Source<R>> PageLoader<'p, R, Src> {
                 Ok(Some(line.slice(start_slice_idx..)))
             }
         }
+    }
+
+    fn run(mut self) -> Result<(), AnyError> {
+        while self.next_row_span()?.is_some() {}
+        Ok(())
     }
 }
 
@@ -252,7 +297,7 @@ mod tests {
         loader: &mut PageLoader<'p, R, Src>,
     ) -> Result<Vec<(String, usize)>, AnyError> {
         let mut vec = Vec::new();
-        while let Some(row_span) = loader.next()? {
+        while let Some(row_span) = loader.next_row_span()? {
             vec.push((row_span.line().to_string(), row_span.size()));
         }
         Ok(vec)
@@ -267,7 +312,7 @@ mod tests {
 
         let mut pager = Pager::new(reader, PageSize { rows: 3, cols: 8 });
         assert_eq!(
-            page_to_vec(&mut pager.scroll_to_start())?,
+            page_to_vec(&mut pager.page())?,
             vec![
                 ("abcde".to_string(), 1),
                 ("1234567".to_string(), 1),
@@ -278,7 +323,7 @@ mod tests {
         let new_row_span = pager.scroll_down_one_row()?;
         assert_eq!(new_row_span, Some(RowSpan::new("bar", 1)));
         assert_eq!(
-            page_to_vec(&mut pager.reload())?,
+            page_to_vec(&mut pager.page())?,
             vec![
                 ("1234567".to_string(), 1),
                 ("foo".to_string(), 1),
@@ -289,7 +334,7 @@ mod tests {
         let new_row_span = pager.scroll_up_one_row()?;
         assert_eq!(new_row_span, Some(RowSpan::new("abcde", 1)));
         assert_eq!(
-            page_to_vec(&mut pager.reload())?,
+            page_to_vec(&mut pager.page())?,
             vec![
                 ("abcde".to_string(), 1),
                 ("1234567".to_string(), 1),
@@ -297,12 +342,13 @@ mod tests {
             ]
         );
 
+        pager.scroll_to_end()?;
         assert_eq!(
-            page_to_vec(&mut pager.scroll_to_end())?,
+            page_to_vec(&mut pager.page())?,
             vec![
-                // 3 rows (= wrapped 2 lines) are returned in the revsered order.
-                ("123456789".to_string(), 2),
+                // wrapped 2 lines == 3 rows
                 ("bar".to_string(), 1),
+                ("123456789".to_string(), 2),
             ]
         );
 

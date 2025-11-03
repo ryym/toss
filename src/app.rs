@@ -8,7 +8,9 @@ use std::{env, panic, thread};
 
 use crate::error::AnyError;
 use crate::logger;
-use crate::pager::{PageSize, Pager};
+use crate::pager::pager2::PageLoader;
+// use crate::pager::{PageSize, Pager};
+use crate::pager::{PageSize, pager2::Pager};
 use crate::reader::Reader;
 use crate::screen::Screen;
 use crate::screen::{Event, Key};
@@ -29,17 +31,21 @@ fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError
         let file = File::open(file_path)?;
         let source = source::as_seekable(file);
         let reader = Reader::new(source);
-        let pager = Pager::new(reader, PageSize::new(size.n_rows(), size.n_cols()))?;
-        if let Some(pager) = pager {
-            return App::new(screen, pager).run();
-        }
+        let pager = Pager::new(reader, PageSize::new(size.n_rows(), size.n_cols()));
+        App::new(screen, pager).run()?;
+        // let pager = Pager::new(reader, PageSize::new(size.n_rows(), size.n_cols()))?;
+        // if let Some(pager) = pager {
+        //     return App::new(screen, pager).run();
+        // }
     } else {
         let source = source::as_readable(stdin);
         let reader = Reader::new(source);
-        let pager = Pager::new(reader, PageSize::new(size.n_rows(), size.n_cols()))?;
-        if let Some(pager) = pager {
-            return App::new(screen, pager).run();
-        }
+        let pager = Pager::new(reader, PageSize::new(size.n_rows(), size.n_cols()));
+        App::new(screen, pager).run()?;
+        // let pager = Pager::new(reader, PageSize::new(size.n_rows(), size.n_cols()))?;
+        // if let Some(pager) = pager {
+        //     return App::new(screen, pager).run();
+        // }
     }
     Ok(())
 }
@@ -74,10 +80,13 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
                             }
                         }
                         'g' => {
+                            // self.pager.scroll_to_start();
+                            // draw_rows(self.screen, self.pager.scroll_to_start())?;
                             self.pager.scroll_to_start()?;
                             self.draw_rows()?;
                         }
                         'G' => {
+                            // draw_rows(self.screen, self.pager.scroll_to_end())?;
                             self.pager.scroll_to_end()?;
                             self.draw_rows()?;
                         }
@@ -110,11 +119,16 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         self.screen.clear()?;
 
         let mut i_row = 0;
-        for row_span in self.pager.row_spans() {
+        // for row_span in self.pager.row_spans() {
+        //     self.screen.draw_at(i_row, row_span.line())?;
+        //     i_row += row_span.size();
+        // }
+
+        let mut page = self.pager.page();
+        while let Some(row_span) = page.next_row_span()? {
             self.screen.draw_at(i_row, row_span.line())?;
             i_row += row_span.size();
         }
-
         self.screen.flush()?;
         Ok(())
     }
@@ -161,4 +175,26 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         }
         Ok(())
     }
+
+    // fn search(&mut self) -> Result<(), AnyError> {
+    //     // self.pager.search(&query)?;
+    //     // self.draw_rows()?;
+    //     Ok(())
+    // }
 }
+
+// fn draw_rows<S: Screen, R, Src: Source<R>>(
+//     screen: &mut S,
+//     mut loader: PageLoader<'_, R, Src>,
+// ) -> Result<(), AnyError> {
+//     screen.clear()?;
+
+//     let mut i_row = 0;
+//     while let Some(row_span) = loader.next()? {
+//         screen.draw_at(i_row, row_span.line())?;
+//         i_row += row_span.size();
+//     }
+
+//     screen.flush()?;
+//     Ok(())
+// }

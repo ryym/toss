@@ -153,7 +153,6 @@ impl<R, Src: Source<R>> Reader<R, Src> {
                     }
                     _ => SourceEnd::NonLineBreak,
                 };
-                dbg!(&self.source_end);
                 self.read_end_line()
             }
         }

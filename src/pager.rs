@@ -11,7 +11,9 @@ use crate::{
 mod line;
 mod line_reader;
 mod page;
-mod pager2;
+
+// XXX
+pub(crate) mod pager2;
 
 #[derive(Debug)]
 pub(crate) struct PageSize {
