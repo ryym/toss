@@ -17,16 +17,16 @@ fn tmpfile(content: &str) -> Result<(String, tempfile::NamedTempFile), crate::ap
 }
 
 const TEXT_SMALL: &str = indoc! {"
-        line 1
-        line 2
-        line 3
-        line 4
-        line 5
-        line 6
-        line 7
-        line 8
-        line 9
-        line 10
+    line 1
+    line 2
+    line 3
+    line 4
+    line 5
+    line 6
+    line 7
+    line 8
+    line 9
+    line 10
 "};
 
 #[test]
@@ -48,15 +48,14 @@ fn open_and_quit() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn navigate_up_down_top_bottom() -> Result<(), super::AnyError> {
+fn navigate_up_down() -> Result<(), super::AnyError> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![
         Event::Key(Key::Char('j')),
         Event::Key(Key::Char('j')),
         Event::Key(Key::Char('k')),
-        Event::Key(Key::Char('G')),
-        Event::Key(Key::Char('g')),
+        Event::Key(Key::Char('k')),
         Event::Key(Key::Char('q')),
     ]);
     super::run_with(&mut screen, vec![path])?;
@@ -81,6 +80,36 @@ fn navigate_up_down_top_bottom() -> Result<(), super::AnyError> {
         line 3
         line 4
         -----
+        [EVENT]:char:k
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(&screen.out, want);
+    Ok(())
+}
+
+#[test]
+fn navigate_top_bottom() -> Result<(), super::AnyError> {
+    dbg!(&TEXT_SMALL);
+    let (path, _file) = tmpfile(TEXT_SMALL)?;
+    let mut screen = MockScreen::new(ScreenSize::new(10, 3));
+    screen.set_events(vec![
+        Event::Key(Key::Char('G')),
+        Event::Key(Key::Char('g')),
+        Event::Key(Key::Char('g')),
+        Event::Key(Key::Char('G')),
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        line 1
+        line 2
+        line 3
+        -----
         [EVENT]:char:G
         line 8
         line 9
@@ -90,6 +119,16 @@ fn navigate_up_down_top_bottom() -> Result<(), super::AnyError> {
         line 1
         line 2
         line 3
+        -----
+        [EVENT]:char:g
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:G
+        line 8
+        line 9
+        line 10
         -----
         [EVENT]:char:q
     "};
@@ -147,6 +186,62 @@ fn smooth_scroll_up_down() -> Result<(), super::AnyError> {
 
 #[test]
 fn navigate_up_down_wrapped_lines() -> Result<(), super::AnyError> {
+    let (path, _file) = tmpfile(indoc! {"
+        0
+        01234567
+        0123456789abcd
+    "})?;
+
+    let mut screen = MockScreen::new(ScreenSize::new(5, 4));
+    screen.set_events(vec![
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('q')),
+    ]);
+    let args = vec![path];
+    super::run_with(&mut screen, args)?;
+
+    let want = indoc! {"
+        0
+        01234>
+        567
+        01234
+        -----
+        [EVENT]:char:j
+        01234>
+        567
+        01234>
+        56789
+        -----
+        [EVENT]:char:j
+        567
+        01234>
+        56789>
+        abcd
+        -----
+        [EVENT]:char:k
+        01234>
+        567
+        01234>
+        56789>
+        -----
+        [EVENT]:char:k
+        0
+        01234>
+        567
+        01234>
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(&screen.out, want);
+
+    Ok(())
+}
+
+#[test]
+fn navigate_top_bottom_wrapped_lines() -> Result<(), super::AnyError> {
     let (path, _file) = tmpfile(indoc! {"
         0
         01234567
