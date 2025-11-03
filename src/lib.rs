@@ -3,4 +3,5 @@ mod error;
 mod lines;
 mod logger;
 mod screen;
+mod source;
 mod window;
