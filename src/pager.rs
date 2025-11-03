@@ -9,7 +9,9 @@ use crate::{
 };
 
 mod line;
+mod line_reader;
 mod page;
+mod pager2;
 
 #[derive(Debug)]
 pub(crate) struct PageSize {
@@ -26,12 +28,23 @@ impl PageSize {
     pub fn rows(&self) -> usize {
         self.rows
     }
+
+    #[inline]
+    pub fn cols(&self) -> usize {
+        self.cols
+    }
 }
 
 #[derive(Debug)]
 pub(crate) struct LineMeta {
     pos: LinePos,
 }
+
+// #[derive(Debug)]
+// pub(crate) struct Query {
+//     search_id: usize,
+//     // query: regex,
+// }
 
 /// Pager clips text lines to fit them in the fixed size frame. The frame is called a page.
 /// Its responsibilites are:
@@ -101,6 +114,37 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         write_end_page(&mut self.reader, &self.size, &mut self.page)?;
         Ok(())
     }
+
+    // pub fn search(&mut self, query: &Query) -> Result<(), AnyError> {
+    //     // let pos = match self.page.find_first_match(&query) {
+    //     //     Some(line) => line.meta().pos,
+    //     //     None => self.reader.find_first_match(&query)?,
+    //     // };
+
+    //     // XXX: ここで行を描画しようとした時、 page と reader が別れてるとやりづらいな。
+    //     // page にある部分までは page から (?) で、他は reader からみたいな。
+    //     // やはり reader へのアクセスを抽象化してくれるやつがいる方が、汎用的だし使いやすいか？
+
+    //     // 仮に line reader 相当のやつを作ったらどうなる？
+    //     // Pager は start, end row を管理して、 App 側でのループは？
+    //     // line (row span) cursor っぽいのを app 側で使う形に？
+    //     // highlight 処理は pager？ line_reader はキャッシュに専念してほしいが。
+    //     // app 側がループする際に highlight する感じかなぁ。
+    //     // &mut なアイテムを iterator-like に返せるっけ...？
+
+    //     let pos = self.line_reader.find_first_match(&query)?;
+    //     let lines = self.line_reader.lines_from(pos);
+    //     // while let Some(line) = lines.next() {
+    //     //     // highlight??
+    //     // }
+
+    //     // 検索後の n/N はどうしよう。
+    //     // 別途 next_match() がたぶんいて、enum を返しそう。
+    //     // InPage { n_scrolls, row_spans }
+    //     // Jump { row_spans }
+
+    //     todo!()
+    // }
 }
 
 fn build_page<R, Src: Source<R>>(

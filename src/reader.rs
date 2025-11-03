@@ -9,6 +9,12 @@ use crate::{
 const BLB: u64 = 1;
 
 /// A range of the line in the source text.
+/// The `end_byte` is exclusive and doesn't contain a line break.
+/// ```text
+/// abc\n  : start=0, end=3
+/// defg\n : start=4, end=8
+/// hi     : start=9, end=11
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LinePos {
     start_byte: u64,
@@ -18,16 +24,32 @@ pub(crate) struct LinePos {
 pub(crate) type Line = (LinePos, String);
 
 impl LinePos {
-    /// The `end_byte` is exclusive and doesn't contain a line break.
-    /// ```text
-    /// abc\n  : start=0, end=3
-    /// defg\n : start=4, end=8
-    /// hi     : start=9, end=11
-    /// ```
     fn new(start_byte: u64, end_byte: u64) -> Self {
         Self {
             start_byte,
             end_byte,
+        }
+    }
+
+    #[inline]
+    pub fn start_byte(&self) -> u64 {
+        self.start_byte
+    }
+
+    #[inline]
+    pub fn end_byte(&self) -> u64 {
+        self.end_byte
+    }
+
+    pub fn next_start_byte(&self) -> u64 {
+        self.end_byte + BLB
+    }
+
+    pub fn prev_end_byte(&self) -> Option<u64> {
+        if self.start_byte == 0 {
+            None
+        } else {
+            Some(self.start_byte - BLB)
         }
     }
 }
@@ -36,6 +58,7 @@ impl LinePos {
 pub(crate) enum QueryLine {
     AtStart,
     AtEnd,
+    At(LinePos),
     NextOf(LinePos),
     PrevOf(LinePos),
 }
@@ -76,6 +99,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         match query {
             QueryLine::AtStart => self.read_line_forward(0),
             QueryLine::AtEnd => self.read_end_line(),
+            QueryLine::At(pos) => self.read_line_forward(pos.start_byte),
             QueryLine::NextOf(pos) => self.read_line_forward(pos.end_byte + BLB),
             QueryLine::PrevOf(pos) => {
                 if pos.start_byte == 0 {
