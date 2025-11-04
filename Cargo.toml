@@ -6,10 +6,10 @@ edition = "2024"
 [dependencies]
 ansi-control-codes = { version = "1.0.1", features = ["parser"] }
 log = { version = "0.4.28", features = ["std"] }
-tempfile = "3.23.0"
 termion = "4.0.5"
 unicode-width = "0.2.1"
 
 [dev-dependencies]
 indoc = "2.0.6"
 pretty_assertions = "1.4.1"
+tempfile = "3.23.0"
