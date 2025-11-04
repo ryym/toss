@@ -1,5 +1,3 @@
-use std::fs::read;
-
 use crate::{
     error::AnyError,
     pager::{
@@ -11,7 +9,7 @@ use crate::{
     source::Source,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct Row {
     line_pos: LinePos,
     slice_index: usize,
@@ -97,15 +95,10 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         Ok(())
     }
 
-    // XXX: これやって page() でいけるかと思ったが、 query 基準だと必ず
-    // start_row の先頭から始めちゃう。 start_row が line の中間のケースで正しく動かない。
-    // そもそも page() のように読むだけなら start/end row を更新する必要がない問題もある。
     pub fn scroll_to_end(&mut self) -> Result<(), AnyError> {
         PageLoader::backward(self, QueryLine::AtEnd).run()
     }
 
-    // 現状を見るだけなら本来は start/end_row の初期化は不要なんだが、
-    // そこを変えないバージョンを作るにはコピペしか思いつかず、面倒。
     pub fn page(&mut self) -> PageLoader<'_, R, Src> {
         PageLoader::forward_from_current(self)
     }
@@ -150,64 +143,61 @@ fn move_up_row<'r, R, Src: Source<R>>(
 }
 
 pub(crate) struct PageLoader<'p, R, Src> {
-    pager: &'p mut Pager<R, Src>,
+    start_row: Option<Row>,
+    end_row: Option<Row>,
     read_rows: usize,
     query: QueryLine,
-    first_line_slice_index: Option<usize>,
     go_forward: bool,
+    pager: &'p mut Pager<R, Src>,
+}
+
+impl<'p, R, Src> Drop for PageLoader<'p, R, Src> {
+    fn drop(&mut self) {
+        // Update the page position of the pager if PageLoader has completed loading lines.
+        if self.start_row.is_some() && self.end_row.is_some() {
+            self.pager.start_row = self.start_row.take();
+            self.pager.end_row = self.end_row.take();
+        }
+    }
 }
 
 impl<'p, R, Src: Source<R>> PageLoader<'p, R, Src> {
     fn forward(pager: &'p mut Pager<R, Src>, from: QueryLine) -> Self {
-        pager.start_row = None;
-        pager.end_row = None;
         Self {
-            pager,
             read_rows: 0,
             query: from,
-            first_line_slice_index: None,
+            start_row: None,
+            end_row: None,
             go_forward: true,
+            pager,
         }
     }
 
     fn forward_from_current(pager: &'p mut Pager<R, Src>) -> Self {
-        let (query, first_line_slice_index) = match &pager.start_row {
-            None => (QueryLine::AtStart, None),
-            Some(row) => (QueryLine::At(row.line_pos), Some(row.slice_index)),
+        let query = match &pager.start_row {
+            None => QueryLine::AtStart,
+            Some(row) => QueryLine::At(row.line_pos),
         };
-        pager.start_row = None;
-        pager.end_row = None;
         Self {
-            pager,
             read_rows: 0,
+            start_row: pager.start_row.clone(),
+            end_row: None,
             query,
-            first_line_slice_index,
             go_forward: true,
+            pager,
         }
     }
 
     fn backward(pager: &'p mut Pager<R, Src>, from: QueryLine) -> Self {
-        pager.start_row = None;
-        pager.end_row = None;
         Self {
-            pager,
             read_rows: 0,
             query: from,
-            first_line_slice_index: None,
+            start_row: None,
+            end_row: None,
             go_forward: false,
+            pager,
         }
     }
-
-    // fn new(pager: &'p mut Pager<R, Src>, from: QueryLine, go_forward: bool) -> Self {
-    //     pager.start_row = None;
-    //     pager.end_row = None;
-    //     Self {
-    //         pager,
-    //         read_rows: 0,
-    //         query: from,
-    //         go_forward,
-    //     }
-    // }
 
     pub fn next_row_span(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
         if self.go_forward {
@@ -225,19 +215,22 @@ impl<'p, R, Src: Source<R>> PageLoader<'p, R, Src> {
         match self.pager.line_reader.read_line(self.query)? {
             None => Ok(None),
             Some(line) => {
-                let start_slice_idx = self.first_line_slice_index.take().unwrap_or(0);
-                if self.pager.start_row.is_none() {
-                    self.pager.start_row = Some(Row::from_line(&line, start_slice_idx));
+                if self.start_row.is_none() {
+                    self.start_row = Some(Row::from_line(&line, 0));
                 }
+                let start_slice_idx = if self.read_rows == 0 {
+                    self.start_row.as_ref().unwrap().slice_index
+                } else {
+                    0
+                };
                 self.read_rows += line.row_len() - start_slice_idx;
-                let (end_slice_idx, line) = if self.read_rows <= row_size {
+                let (end_slice_idx, line) = if self.read_rows < row_size {
                     (line.row_len() - 1, line)
                 } else {
                     let end_slice_idx = line.row_len() - 1 - (self.read_rows - row_size);
-                    // dbg!((end_slice_idx, line.slice(..)));
+                    self.end_row = Some(Row::from_line(&line, end_slice_idx));
                     (end_slice_idx, line)
                 };
-                self.pager.end_row = Some(Row::from_line(&line, end_slice_idx));
                 self.query = QueryLine::NextOf(*line.meta());
                 Ok(Some(line.slice(start_slice_idx..=end_slice_idx)))
             }
@@ -253,19 +246,24 @@ impl<'p, R, Src: Source<R>> PageLoader<'p, R, Src> {
         match self.pager.line_reader.read_line(self.query)? {
             None => Ok(None),
             Some(line) => {
-                if self.pager.end_row.is_none() {
-                    self.pager.end_row = Some(Row::from_line(&line, line.row_len() - 1));
+                if self.end_row.is_none() {
+                    self.end_row = Some(Row::from_line(&line, line.row_len() - 1));
                 }
+                let end_slice_idx = if self.read_rows == 0 {
+                    self.end_row.as_ref().unwrap().slice_index
+                } else {
+                    line.row_len() - 1
+                };
                 self.read_rows += line.row_len();
-                let (start_slice_idx, line) = if self.read_rows <= row_size {
+                let (start_slice_idx, line) = if self.read_rows < row_size {
                     (0, line)
                 } else {
                     let start_slice_idx = self.read_rows - row_size;
+                    self.start_row = Some(Row::from_line(&line, start_slice_idx));
                     (start_slice_idx, line)
                 };
-                self.pager.start_row = Some(Row::from_line(&line, start_slice_idx));
                 self.query = QueryLine::PrevOf(*line.meta());
-                Ok(Some(line.slice(start_slice_idx..)))
+                Ok(Some(line.slice(start_slice_idx..=end_slice_idx)))
             }
         }
     }
@@ -350,6 +348,28 @@ mod tests {
                 ("bar".to_string(), 1),
                 ("123456789".to_string(), 2),
             ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn display_lines_less_than_page() -> Result<(), AnyError> {
+        let s = "abc\n123".to_string();
+        let cursor = Cursor::new(s);
+        let source = source::as_readable(cursor);
+        let reader = Reader::new(source);
+
+        let mut pager = Pager::new(reader, PageSize { rows: 5, cols: 5 });
+        assert_eq!(
+            page_to_vec(&mut pager.page())?,
+            vec![("abc".to_string(), 1), ("123".to_string(), 1)],
+        );
+
+        pager.scroll_to_end()?;
+        assert_eq!(
+            page_to_vec(&mut pager.page())?,
+            vec![("abc".to_string(), 1), ("123".to_string(), 1)],
         );
 
         Ok(())
