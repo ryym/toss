@@ -143,6 +143,7 @@ impl<R: Read> OneDirectionalSource<R> {
 }
 
 impl<R: Read> Source<R> for OneDirectionalSource<R> {
+    // XXX: これに限らんかもだが、参照ですむ引数は参照で受け取るようにしたい
     fn read_block(&mut self, query: QueryBlock) -> Result<Option<&Block>, AnyError> {
         match query {
             QueryBlock::Having(byte_index) => {

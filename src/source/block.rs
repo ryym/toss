@@ -77,6 +77,7 @@ impl BlockKey {
     }
 }
 
+// XXX: これここ？
 pub(super) type BlockPool = HashMap<BlockKey, Block>;
 
 pub(super) fn read_block_from<R: Read>(

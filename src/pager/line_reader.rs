@@ -111,3 +111,67 @@ impl<R, Src: Source<R>> LineReader<R, Src> {
     //     }
     // }
 }
+
+// mod lru {
+//     use std::{
+//         collections::{
+//             HashMap, LinkedList,
+//             hash_map::{Entry, VacantEntry},
+//         },
+//         hash::Hash,
+//         rc::Rc,
+//     };
+
+//     // XXX: 作るのは難しくないと思ってたが、アクセスするたびに order を更新するなら、
+//     // どんなアクセスも &mut になっちゃうのか。現状は問題ないかもだが、避けたければ Cell とか使わないといかんのか？
+//     struct LruCache<K, V> {
+//         map: HashMap<K, V>,
+//         head: Option<Rc<Node<K>>>,
+//         tail: Option<Rc<Node<K>>>,
+//         // access_order: LinkedList<K>,
+//         capacity: usize,
+//     }
+
+//     impl<K: Eq, V> LruCache<K, V> {
+//         fn update_order(&mut self, key: &K) {
+//             let mut current = &mut self.head;
+//             while let Some(node) = current {
+//                 if &node.key == key {
+//                     // how to
+//                 } else {
+//                     current = &mut node.next
+//                 }
+//             }
+//         }
+
+//         fn entry(&mut self, key: K) {
+//             // match self.map.entry(key) {
+//             //     Entry::Occupied(entry) => {}
+//             //     Entry::Vacant(entry) => entry.insert(value),
+//             // }
+//         }
+//     }
+
+//     struct Node<K> {
+//         key: K,
+//         next: Option<Rc<Node<K>>>,
+//     }
+
+//     struct MyEnteryVacant<'c, K, V> {
+//         entry: VacantEntry<'c, K, V>,
+//         order: &'c LinkedList<K>,
+//     }
+
+//     impl<'c, K, V> MyEnteryVacant<'c, K, V> {
+//         fn insert(self, value: V) -> &'c mut V {
+//             // self.order
+//             self.entry.insert(value)
+//         }
+//     }
+
+//     struct MyEnteryOccupied {}
+
+//     // enum MyEntry {
+//     //     Occupied(MyEnteryVacant),
+//     // }
+// }
