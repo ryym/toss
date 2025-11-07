@@ -23,6 +23,7 @@ impl<R, Src: Source<R>> LineReader<R, Src> {
     pub fn new(reader: Reader<R, Src>, size: &PageSize) -> Self {
         Self {
             reader,
+            // xxx: default capacity
             line_cache: HashMap::with_capacity(size.rows()),
             end_to_start: HashMap::with_capacity(size.rows()),
             end_line_start_byte: None,
@@ -51,6 +52,21 @@ impl<R, Src: Source<R>> LineReader<R, Src> {
         start_byte: u64,
         query: QueryLine,
     ) -> Result<Option<&mut PageLine>, AnyError> {
+        // match self.line_cache.get_mut(&start_byte) {
+        //     Some(line) => Ok(Some(line)),
+        //     None => match self.reader.read_line(query)? {
+        //         None => Ok(None),
+        //         Some((pos, text)) => {
+        //             let line = PageLine::new(pos, text, self.col_size);
+        //             self.end_to_start.insert(pos.end_byte(), pos.start_byte());
+        //             // Ok(Some(entry.insert(line)))
+
+        //             // XXX: entry なしだと insert して更に get_mut?
+
+        //             todo!()
+        //         }
+        //     },
+        // }
         match self.line_cache.entry(start_byte) {
             Entry::Occupied(entry) => Ok(Some(entry.into_mut())),
             Entry::Vacant(entry) => match self.reader.read_line(query)? {
@@ -92,6 +108,7 @@ impl<R, Src: Source<R>> LineReader<R, Src> {
                 None => return Ok(None),
                 Some((pos, text)) => {
                     let line = PageLine::new(pos, text, self.col_size);
+                    self.end_line_start_byte = Some(pos.start_byte());
                     self.line_cache.insert(pos.start_byte(), line);
                     self.end_to_start.insert(pos.end_byte(), pos.start_byte());
                     pos.start_byte()
@@ -111,67 +128,3 @@ impl<R, Src: Source<R>> LineReader<R, Src> {
     //     }
     // }
 }
-
-// mod lru {
-//     use std::{
-//         collections::{
-//             HashMap, LinkedList,
-//             hash_map::{Entry, VacantEntry},
-//         },
-//         hash::Hash,
-//         rc::Rc,
-//     };
-
-//     // XXX: 作るのは難しくないと思ってたが、アクセスするたびに order を更新するなら、
-//     // どんなアクセスも &mut になっちゃうのか。現状は問題ないかもだが、避けたければ Cell とか使わないといかんのか？
-//     struct LruCache<K, V> {
-//         map: HashMap<K, V>,
-//         head: Option<Rc<Node<K>>>,
-//         tail: Option<Rc<Node<K>>>,
-//         // access_order: LinkedList<K>,
-//         capacity: usize,
-//     }
-
-//     impl<K: Eq, V> LruCache<K, V> {
-//         fn update_order(&mut self, key: &K) {
-//             let mut current = &mut self.head;
-//             while let Some(node) = current {
-//                 if &node.key == key {
-//                     // how to
-//                 } else {
-//                     current = &mut node.next
-//                 }
-//             }
-//         }
-
-//         fn entry(&mut self, key: K) {
-//             // match self.map.entry(key) {
-//             //     Entry::Occupied(entry) => {}
-//             //     Entry::Vacant(entry) => entry.insert(value),
-//             // }
-//         }
-//     }
-
-//     struct Node<K> {
-//         key: K,
-//         next: Option<Rc<Node<K>>>,
-//     }
-
-//     struct MyEnteryVacant<'c, K, V> {
-//         entry: VacantEntry<'c, K, V>,
-//         order: &'c LinkedList<K>,
-//     }
-
-//     impl<'c, K, V> MyEnteryVacant<'c, K, V> {
-//         fn insert(self, value: V) -> &'c mut V {
-//             // self.order
-//             self.entry.insert(value)
-//         }
-//     }
-
-//     struct MyEnteryOccupied {}
-
-//     // enum MyEntry {
-//     //     Occupied(MyEnteryVacant),
-//     // }
-// }

@@ -233,3 +233,41 @@ impl<'line> RowSpan<'line> {
         self.size
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+
+    use crate::pager::line::Sentence;
+
+    #[test]
+    fn parse_sentence_with_escape_seqs_and_multi_byte_chars() {
+        let s = "\u{1b}[1mHi\u{1b}[0m, 😀".to_string();
+        let sentence = Sentence::new(s.clone());
+        assert_eq!(&sentence.raw, &s);
+        assert_eq!(&sentence.plain, "Hi, 😀");
+        assert_eq!(
+            &sentence.plain_to_raw,
+            &[
+                // (escape sequences)
+                4, 5, // "Hi"
+                // (escape sequences)
+                10, 11, // ", "
+                12, 13, 14, 15, // smile emoji
+            ]
+        );
+    }
+}
+
+#[cfg(all(feature = "bench", test))]
+mod bench {
+    extern crate test;
+    use test::Bencher;
+
+    use crate::pager::line::Sentence;
+
+    #[bench]
+    fn a_bench(b: &mut Bencher) {
+        b.iter(|| Sentence::new("The quick brown fox jumps over the lazy dog".to_string()))
+    }
+}
