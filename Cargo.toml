@@ -3,6 +3,9 @@ name = "toss"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+bench = []
+
 [dependencies]
 ansi-control-codes = { version = "1.0.1", features = ["parser"] }
 log = { version = "0.4.28", features = ["std"] }

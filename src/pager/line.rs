@@ -258,3 +258,21 @@ mod tests {
         );
     }
 }
+
+#[cfg(all(feature = "bench", test))]
+mod bench {
+    extern crate test;
+
+    use test::Bencher;
+
+    use crate::pager::PageLine;
+
+    // A string with ASCI escape sequences. The plain content is below:
+    // 77   │                 let start_byte = cmp::max(block.start_byte(), self.content_start_byte.unwrap_or(0));
+    const S: &str = "[38;2;116;115;105m  77[0m   [38;2;116;115;105m│[0m [38;2;171;178;191m                [0m[38;2;198;120;221mlet[0m[38;2;171;178;191m start_byte [0m[38;2;171;178;191m=[0m[38;2;171;178;191m [0m[38;2;171;178;191mcmp[0m[38;2;171;178;191m::[0m[38;2;171;178;191mmax[0m[38;2;171;178;191m([0m[38;2;171;178;191mblock[0m[38;2;171;178;191m.[0m[38;2;86;182;194mstart_byte[0m[38;2;171;178;191m([0m[38;2;171;178;191m)[0m[38;2;171;178;191m,[0m[38;2;171;178;191m [0m[38;2;224;108;117mself[0m[38;2;171;178;191m.[0m[38;2;171;178;191mcontent_start_byte[0m[38;2;171;178;191m.[0m[38;2;86;182;194munwrap_or[0m[38;2;171;178;191m([0m[38;2;209;154;102m0[0m[38;2;171;178;191m)[0m[38;2;171;178;191m)[0m[38;2;171;178;191m;[0m";
+
+    #[bench]
+    fn make_line(b: &mut Bencher) {
+        b.iter(|| PageLine::new((), S.to_string(), 17))
+    }
+}
