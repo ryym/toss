@@ -36,6 +36,7 @@ impl LinePos {
 pub(crate) enum QueryLine {
     AtStart,
     AtEnd,
+    At(LinePos),
     NextOf(LinePos),
     PrevOf(LinePos),
 }
@@ -76,6 +77,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         match query {
             QueryLine::AtStart => self.read_line_forward(0),
             QueryLine::AtEnd => self.read_end_line(),
+            QueryLine::At(pos) => self.read_line_forward(pos.start_byte),
             QueryLine::NextOf(pos) => self.read_line_forward(pos.end_byte + BLB),
             QueryLine::PrevOf(pos) => {
                 if pos.start_byte == 0 {
