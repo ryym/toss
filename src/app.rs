@@ -70,12 +70,14 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
                             }
                         }
                         'g' => {
-                            self.pager.scroll_to_start()?;
-                            self.draw_rows()?;
+                            if self.pager.scroll_to_start()? {
+                                self.draw_rows()?;
+                            }
                         }
                         'G' => {
-                            self.pager.scroll_to_end()?;
-                            self.draw_rows()?;
+                            if self.pager.scroll_to_end()? {
+                                self.draw_rows()?;
+                            }
                         }
                         'd' => {
                             self.smooth_scroll(self.pager.size().rows() / 2, true)?;

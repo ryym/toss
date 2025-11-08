@@ -130,14 +130,21 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         Ok(row_span)
     }
 
-    pub fn scroll_to_start(&mut self) -> Result<(), AnyError> {
+    pub fn scroll_to_start(&mut self) -> Result<bool, AnyError> {
+        if let Some(start_row) = &self.start_row
+            && start_row.line_pos.start_byte() == 0
+        {
+            return Ok(false);
+        }
         self.start_row = None;
         self.end_row = None;
-        Ok(())
+        Ok(true)
     }
 
-    pub fn scroll_to_end(&mut self) -> Result<(), AnyError> {
-        PageLoader::backward(self, QueryLine::AtEnd).run()
+    pub fn scroll_to_end(&mut self) -> Result<bool, AnyError> {
+        let end_row = self.end_row.clone();
+        PageLoader::backward(self, QueryLine::AtEnd).run()?;
+        Ok(self.end_row != end_row)
     }
 
     pub fn page(&mut self) -> PageLoader<'_, R, Src> {

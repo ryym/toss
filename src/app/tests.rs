@@ -98,7 +98,6 @@ fn navigate_top_bottom() -> Result<(), super::AnyError> {
     screen.set_events(vec![
         Event::Key(Key::Char('G')),
         Event::Key(Key::Char('g')),
-        Event::Key(Key::Char('g')),
         Event::Key(Key::Char('G')),
         Event::Key(Key::Char('q')),
     ]);
@@ -113,11 +112,6 @@ fn navigate_top_bottom() -> Result<(), super::AnyError> {
         line 8
         line 9
         line 10
-        -----
-        [EVENT]:char:g
-        line 1
-        line 2
-        line 3
         -----
         [EVENT]:char:g
         line 1
@@ -166,10 +160,6 @@ fn cannot_go_beyond_top() -> Result<(), super::AnyError> {
         -----
         [EVENT]:char:k
         [EVENT]:char:g
-        line 1
-        line 2
-        line 3
-        -----
         [EVENT]:char:q
     "};
     assert_eq!(&screen.out, want);
