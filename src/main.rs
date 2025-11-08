@@ -1,6 +1,7 @@
 use toss::app;
 
 fn main() {
-    let result = app::run();
-    println!("result {:?}", result);
+    if let Err(error) = app::run() {
+        eprintln!("{}", error);
+    }
 }
