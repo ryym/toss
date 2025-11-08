@@ -137,6 +137,88 @@ fn navigate_top_bottom() -> Result<(), super::AnyError> {
 }
 
 #[test]
+fn cannot_go_beyond_top() -> Result<(), super::AnyError> {
+    let (path, _file) = tmpfile(TEXT_SMALL)?;
+    let mut screen = MockScreen::new(ScreenSize::new(10, 3));
+    screen.set_events(vec![
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('g')),
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:j
+        line 2
+        line 3
+        line 4
+        -----
+        [EVENT]:char:k
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:k
+        [EVENT]:char:g
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(&screen.out, want);
+    Ok(())
+}
+
+#[test]
+fn cannot_go_beyond_bottom() -> Result<(), super::AnyError> {
+    let (path, _file) = tmpfile(TEXT_SMALL)?;
+    let mut screen = MockScreen::new(ScreenSize::new(10, 3));
+    screen.set_events(vec![
+        Event::Key(Key::Char('G')),
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:G
+        line 8
+        line 9
+        line 10
+        -----
+        [EVENT]:char:j
+        [EVENT]:char:k
+        line 7
+        line 8
+        line 9
+        -----
+        [EVENT]:char:j
+        line 8
+        line 9
+        line 10
+        -----
+        [EVENT]:char:j
+        [EVENT]:char:q
+    "};
+    assert_eq!(&screen.out, want);
+    Ok(())
+}
+
+#[test]
 fn smooth_scroll_up_down() -> Result<(), super::AnyError> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 4));
