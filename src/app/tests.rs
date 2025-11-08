@@ -93,7 +93,6 @@ fn navigate_up_down() -> Result<(), super::AnyError> {
 
 #[test]
 fn navigate_top_bottom() -> Result<(), super::AnyError> {
-    dbg!(&TEXT_SMALL);
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![
