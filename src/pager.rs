@@ -208,3 +208,37 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(all(feature = "bench", test))]
+mod bench {
+    extern crate test;
+
+    use std::fs::File;
+    use test::Bencher;
+
+    use crate::{
+        error::AnyError,
+        pager::{PageSize, Pager},
+        reader::Reader,
+        source,
+    };
+
+    #[bench]
+    fn paging(b: &mut Bencher) -> Result<(), AnyError> {
+        let file_path = "Cargo.lock";
+        let file = File::open(file_path)?;
+        let source = source::as_seekable(file);
+        let reader = Reader::new(source);
+        let mut pager = Pager::new(reader, PageSize::new(20, 80))?.unwrap();
+        b.iter(|| {
+            let mut total = 0;
+            while let Some(row_span) = pager.scroll_down_one_row().unwrap() {
+                total += row_span.line().len();
+            }
+            pager.scroll_to_start().unwrap();
+            pager.scroll_to_end().unwrap();
+            total
+        });
+        Ok(())
+    }
+}
