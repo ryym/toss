@@ -4,6 +4,7 @@
 // Clippy configuration. https://rust-lang.github.io/rust-clippy/master/index.html
 #![deny(clippy::dbg_macro)]
 #![deny(clippy::todo)]
+#![deny(clippy::print_stdout)]
 
 pub mod app;
 mod error;
