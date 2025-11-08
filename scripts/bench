@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# Run benchmarks using nighlty Rust.
+# https://doc.rust-lang.org/cargo/commands/cargo-bench.html
+cargo +nightly bench --features bench "$@"
