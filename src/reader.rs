@@ -34,35 +34,12 @@ impl LinePos {
     pub fn is_first_line(&self) -> bool {
         self.start_byte == 0
     }
-
-    #[inline]
-    pub fn start_byte(&self) -> u64 {
-        self.start_byte
-    }
-
-    #[inline]
-    pub fn end_byte(&self) -> u64 {
-        self.end_byte
-    }
-
-    pub fn next_start_byte(&self) -> u64 {
-        self.end_byte + BLB
-    }
-
-    pub fn prev_end_byte(&self) -> Option<u64> {
-        if self.start_byte == 0 {
-            None
-        } else {
-            Some(self.start_byte - BLB)
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum QueryLine {
     AtStart,
     AtEnd,
-    At(LinePos),
     NextOf(LinePos),
     PrevOf(LinePos),
 }
@@ -103,7 +80,6 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         match query {
             QueryLine::AtStart => self.read_line_forward(0),
             QueryLine::AtEnd => self.read_end_line(),
-            QueryLine::At(pos) => self.read_line_forward(pos.start_byte),
             QueryLine::NextOf(pos) => self.read_line_forward(pos.end_byte + BLB),
             QueryLine::PrevOf(pos) => {
                 if pos.start_byte == 0 {
