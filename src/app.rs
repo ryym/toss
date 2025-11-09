@@ -24,7 +24,7 @@ pub fn run() -> Result<(), AnyError> {
 fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError> {
     let size = screen.size()?;
     let stdin = io::stdin().lock();
-    if stdin.is_terminal() {
+    if stdin.is_terminal() || !args.is_empty() {
         let file_path = args.first().unwrap();
         let file = File::open(file_path)?;
         let source = source::as_seekable(file);
