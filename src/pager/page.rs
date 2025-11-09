@@ -85,11 +85,11 @@ impl<LineMeta> FilledPage<LineMeta> {
         self.deque.push_front(line);
     }
 
-    pub fn start_page_writer(&mut self) -> ForwardPageWriter<'_, LineMeta> {
+    pub fn forward_page_writer(&mut self) -> ForwardPageWriter<'_, LineMeta> {
         ForwardPageWriter::for_page(self)
     }
 
-    pub fn end_page_writer(&mut self) -> BackwardPageWriter<'_, LineMeta> {
+    pub fn backward_page_writer(&mut self) -> BackwardPageWriter<'_, LineMeta> {
         BackwardPageWriter::for_page(self)
     }
 }

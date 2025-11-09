@@ -116,7 +116,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         if page.start_line().meta().pos.is_first_line() {
             return Ok(false);
         }
-        write_start_page(&mut self.reader, &self.size, page)?;
+        write_page_from(QueryLine::AtStart, &mut self.reader, &self.size, page)?;
         Ok(true)
     }
 
@@ -126,7 +126,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Filled(page) => page,
         };
         let end_pos_before = page.end_line().meta().pos;
-        write_end_page(&mut self.reader, &self.size, page)?;
+        write_page_ending_at(QueryLine::AtEnd, &mut self.reader, &self.size, page)?;
         Ok(page.end_line().meta().pos != end_pos_before)
     }
 }
@@ -149,13 +149,14 @@ fn build_page<R, Src: Source<R>>(
     }
 }
 
-fn write_start_page<R, Src: Source<R>>(
+fn write_page_from<R, Src: Source<R>>(
+    query: QueryLine,
     reader: &mut Reader<R, Src>,
     size: &PageSize,
     page: &mut FilledPage<LineMeta>,
 ) -> Result<(), AnyError> {
-    let mut writer = page.start_page_writer();
-    let mut lines = reader.lines_from(QueryLine::AtStart);
+    let mut writer = page.forward_page_writer();
+    let mut lines = reader.lines_from(query);
     while let Some((pos, text)) = lines.next()? {
         let line = PageLine::new(LineMeta { pos }, text, size.cols);
         if !writer.push_back(line) {
@@ -166,13 +167,14 @@ fn write_start_page<R, Src: Source<R>>(
     Ok(())
 }
 
-fn write_end_page<R, Src: Source<R>>(
+fn write_page_ending_at<R, Src: Source<R>>(
+    query: QueryLine,
     reader: &mut Reader<R, Src>,
     size: &PageSize,
     page: &mut FilledPage<LineMeta>,
 ) -> Result<(), AnyError> {
-    let mut writer = page.end_page_writer();
-    let mut lines = reader.lines_rev_from(QueryLine::AtEnd);
+    let mut writer = page.backward_page_writer();
+    let mut lines = reader.lines_rev_from(query);
     while let Some((pos, text)) = lines.next()? {
         let line = PageLine::new(LineMeta { pos }, text, size.cols);
         if !writer.push_front(line) {
