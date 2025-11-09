@@ -9,6 +9,7 @@
 pub mod app;
 mod error;
 mod logger;
+mod minilib;
 mod pager;
 mod reader;
 mod screen;
