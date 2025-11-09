@@ -46,6 +46,7 @@ struct App<'s, S, R, Src> {
     screen: &'s mut S,
     pager: Pager<R, Src>,
     mode: Mode,
+    search_state: SearchState,
 }
 
 impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
@@ -54,6 +55,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
             screen,
             pager,
             mode: Mode::View,
+            search_state: SearchState { input: Vec::new() },
         }
     }
 
@@ -111,6 +113,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
                         self.smooth_scroll(self.pager.size().rows(), false)?;
                     }
                     '/' => {
+                        self.search_state = SearchState { input: Vec::new() };
                         self.mode = Mode::Search;
                     }
                     _ => return Ok(EventResult::Continue),
@@ -129,13 +132,21 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
     fn handle_event_on_search(&mut self, event: Event) -> Result<EventResult, AnyError> {
         match event {
             Event::Key(key) => match key {
-                Key::Esc => return Ok(EventResult::Exit),
+                Key::Esc => {
+                    self.mode = Mode::View;
+                }
                 Key::Char(chr) => match chr {
                     '\n' => {
-                        self.search("search")?;
+                        let input = self.search_state.input.iter().collect::<String>();
+                        self.search(&input)?;
                         self.mode = Mode::View;
                     }
-                    _ => return Ok(EventResult::Exit),
+                    c => {
+                        self.search_state.input.push(c);
+                        // interactive search
+                        // let input = self.search_state.input.iter().collect::<String>();
+                        // self.search(&input)?;
+                    }
                 },
                 _ => {
                     panic!("unexpected key")
@@ -221,4 +232,8 @@ enum Mode {
 enum EventResult {
     Continue,
     Exit,
+}
+
+struct SearchState {
+    input: Vec<char>,
 }
