@@ -21,7 +21,7 @@ pub(crate) struct LinePos {
     end_byte: u64,
 }
 
-pub(crate) type Line = (LinePos, String);
+pub(crate) type RawLine = (LinePos, String);
 
 impl LinePos {
     fn new(start_byte: u64, end_byte: u64) -> Self {
@@ -76,7 +76,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         LineCursor::new(self, query, false)
     }
 
-    pub(crate) fn read_line(&mut self, query: &QueryLine) -> Result<Option<Line>, AnyError> {
+    pub(crate) fn read_line(&mut self, query: &QueryLine) -> Result<Option<RawLine>, AnyError> {
         match query {
             QueryLine::AtStart => self.read_line_forward(0),
             QueryLine::AtEnd => self.read_end_line(),
@@ -91,7 +91,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         }
     }
 
-    fn read_line_forward(&mut self, start_byte: u64) -> Result<Option<Line>, AnyError> {
+    fn read_line_forward(&mut self, start_byte: u64) -> Result<Option<RawLine>, AnyError> {
         let mut cursor = SourceCursor::forward(&mut self.source, QueryBlock::Having(start_byte));
         if !cursor.has_next()? {
             return Ok(None);
@@ -112,7 +112,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         Ok(Some((pos, text)))
     }
 
-    fn read_line_ending_at(&mut self, line_break_byte: u64) -> Result<Option<Line>, AnyError> {
+    fn read_line_ending_at(&mut self, line_break_byte: u64) -> Result<Option<RawLine>, AnyError> {
         if line_break_byte == 0 {
             return Ok(None);
         }
@@ -120,7 +120,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         self.read_line_backward(QueryBlock::Having(line_end_byte))
     }
 
-    fn read_end_line(&mut self) -> Result<Option<Line>, AnyError> {
+    fn read_end_line(&mut self) -> Result<Option<RawLine>, AnyError> {
         match self.source_end {
             SourceEnd::NonLineBreak => self.read_line_backward(QueryBlock::AtEnd),
             SourceEnd::LineBreak(line_end_byte) => {
@@ -138,7 +138,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         }
     }
 
-    fn read_line_backward(&mut self, from: QueryBlock) -> Result<Option<Line>, AnyError> {
+    fn read_line_backward(&mut self, from: QueryBlock) -> Result<Option<RawLine>, AnyError> {
         let mut cursor = SourceCursor::backward(&mut self.source, from);
         let end_byte = match cursor.cursor_pos()? {
             None => return Ok(None),
@@ -177,7 +177,7 @@ impl<'r, R, Src: Source<R>> LineCursor<'r, R, Src> {
         }
     }
 
-    pub fn next(&mut self) -> Result<Option<Line>, AnyError> {
+    pub fn next(&mut self) -> Result<Option<RawLine>, AnyError> {
         match self.reader.read_line(&self.query)? {
             None => Ok(None),
             Some((pos, text)) => {
