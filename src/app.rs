@@ -45,68 +45,107 @@ fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError
 struct App<'s, S, R, Src> {
     screen: &'s mut S,
     pager: Pager<R, Src>,
+    mode: Mode,
 }
 
 impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
     fn new(screen: &'s mut S, pager: Pager<R, Src>) -> Self {
-        Self { screen, pager }
+        Self {
+            screen,
+            pager,
+            mode: Mode::View,
+        }
     }
 
     fn run(&mut self) -> Result<(), AnyError> {
         self.draw_rows()?;
         loop {
             let event = self.screen.next_event()?;
-            match event {
-                Event::Key(key) => match key {
-                    Key::Esc => return Ok(()),
-                    Key::Char(chr) => match chr {
-                        'q' => return Ok(()),
-                        'j' => {
-                            if self.scroll_forward_oneline()? {
-                                self.screen.flush()?;
-                            }
-                        }
-                        'k' => {
-                            if self.scroll_backword_oneline()? {
-                                self.screen.flush()?;
-                            }
-                        }
-                        'g' => {
-                            if self.pager.scroll_to_start()? {
-                                self.draw_rows()?;
-                            }
-                        }
-                        'G' => {
-                            if self.pager.scroll_to_end()? {
-                                self.draw_rows()?;
-                            }
-                        }
-                        'd' => {
-                            self.smooth_scroll(self.pager.size().rows() / 2, true)?;
-                        }
-                        'u' => {
-                            self.smooth_scroll(self.pager.size().rows() / 2, false)?;
-                        }
-                        'f' | ' ' => {
-                            self.smooth_scroll(self.pager.size().rows(), true)?;
-                        }
-                        'b' => {
-                            self.smooth_scroll(self.pager.size().rows(), false)?;
-                        }
-                        '/' => {
-                            self.search("search")?;
-                        }
-                        _ => continue,
-                    },
-                    _ => {
-                        panic!("unexpected key")
-                    }
-                },
-                _ => {
-                    panic!("unexpected event")
-                }
+            let event_result = match &self.mode {
+                Mode::View => self.handle_event_on_view(event)?,
+                Mode::Search => self.handle_event_on_search(event)?,
+            };
+            match event_result {
+                EventResult::Continue => {}
+                EventResult::Exit => return Ok(()),
             }
         }
+    }
+
+    fn handle_event_on_view(&mut self, event: Event) -> Result<EventResult, AnyError> {
+        match event {
+            Event::Key(key) => match key {
+                Key::Esc => return Ok(EventResult::Exit),
+                Key::Char(chr) => match chr {
+                    'q' => return Ok(EventResult::Exit),
+                    'j' => {
+                        if self.scroll_forward_oneline()? {
+                            self.screen.flush()?;
+                        }
+                    }
+                    'k' => {
+                        if self.scroll_backword_oneline()? {
+                            self.screen.flush()?;
+                        }
+                    }
+                    'g' => {
+                        if self.pager.scroll_to_start()? {
+                            self.draw_rows()?;
+                        }
+                    }
+                    'G' => {
+                        if self.pager.scroll_to_end()? {
+                            self.draw_rows()?;
+                        }
+                    }
+                    'd' => {
+                        self.smooth_scroll(self.pager.size().rows() / 2, true)?;
+                    }
+                    'u' => {
+                        self.smooth_scroll(self.pager.size().rows() / 2, false)?;
+                    }
+                    'f' | ' ' => {
+                        self.smooth_scroll(self.pager.size().rows(), true)?;
+                    }
+                    'b' => {
+                        self.smooth_scroll(self.pager.size().rows(), false)?;
+                    }
+                    '/' => {
+                        self.mode = Mode::Search;
+                    }
+                    _ => return Ok(EventResult::Continue),
+                },
+                _ => {
+                    panic!("unexpected key")
+                }
+            },
+            _ => {
+                panic!("unexpected event")
+            }
+        }
+        Ok(EventResult::Continue)
+    }
+
+    fn handle_event_on_search(&mut self, event: Event) -> Result<EventResult, AnyError> {
+        match event {
+            Event::Key(key) => match key {
+                Key::Esc => return Ok(EventResult::Exit),
+                Key::Char(chr) => match chr {
+                    '\n' => {
+                        self.search("search")?;
+                        self.mode = Mode::View;
+                    }
+                    _ => return Ok(EventResult::Exit),
+                },
+                _ => {
+                    panic!("unexpected key")
+                }
+            },
+            _ => {
+                panic!("unexpected event")
+            }
+        }
+        Ok(EventResult::Continue)
     }
 
     fn draw_rows(&mut self) -> Result<(), AnyError> {
@@ -172,4 +211,14 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         }
         Ok(())
     }
+}
+
+enum Mode {
+    View,
+    Search,
+}
+
+enum EventResult {
+    Continue,
+    Exit,
 }
