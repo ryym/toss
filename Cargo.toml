@@ -9,6 +9,7 @@ bench = []
 [dependencies]
 ansi-control-codes = { version = "1.0.1", features = ["parser"] }
 log = { version = "0.4.28", features = ["std"] }
+regex = "1.12.2"
 termion = "4.0.5"
 unicode-width = "0.2.1"
 
