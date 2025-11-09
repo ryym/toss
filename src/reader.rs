@@ -87,6 +87,14 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         }
     }
 
+    pub(crate) fn lines_from(&mut self, query: QueryLine) -> LineCursor<'_, R, Src> {
+        LineCursor::new(self, query, true)
+    }
+
+    pub(crate) fn lines_rev_from(&mut self, query: QueryLine) -> LineCursor<'_, R, Src> {
+        LineCursor::new(self, query, false)
+    }
+
     pub(crate) fn read_line(&mut self, query: &QueryLine) -> Result<Option<Line>, AnyError> {
         match query {
             QueryLine::AtStart => self.read_line_forward(0),
@@ -170,6 +178,37 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         let pos = LinePos::new(end_byte - buf.len() as u64, end_byte);
         let text = String::from_utf8_lossy(&buf).to_string();
         Ok(Some((pos, text)))
+    }
+}
+
+/// LineCursor provides an iterator-like interface to read lines one by one.
+pub(crate) struct LineCursor<'r, R, Src: Source<R>> {
+    reader: &'r mut Reader<R, Src>,
+    query: QueryLine,
+    go_forward: bool,
+}
+
+impl<'r, R, Src: Source<R>> LineCursor<'r, R, Src> {
+    fn new(reader: &'r mut Reader<R, Src>, query: QueryLine, go_forward: bool) -> Self {
+        Self {
+            reader,
+            query,
+            go_forward,
+        }
+    }
+
+    pub fn next(&mut self) -> Result<Option<Line>, AnyError> {
+        match self.reader.read_line(self.query)? {
+            None => Ok(None),
+            Some((pos, text)) => {
+                self.query = if self.go_forward {
+                    QueryLine::NextOf(pos)
+                } else {
+                    QueryLine::PrevOf(pos)
+                };
+                Ok(Some((pos, text)))
+            }
+        }
     }
 }
 
