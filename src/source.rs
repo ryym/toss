@@ -1,17 +1,19 @@
 use std::{
-    collections::hash_map::Entry,
+    collections::{HashMap, hash_map::Entry},
     io::{BufReader, Read, Seek, SeekFrom},
 };
 
 use crate::{
     error::AnyError,
-    source::block::{BLOCK_SIZE, Block, BlockKey, BlockPool, read_block_from},
+    source::block::{BLOCK_SIZE, Block, BlockKey, read_block_from},
 };
 
 mod block;
 mod cursor;
 
 pub(crate) use cursor::SourceCursor;
+
+type BlockPool = HashMap<BlockKey, Block>;
 
 /// Source is a source text and provide a convenient way of reading content on demand.
 /// It caches loaded content per "block" with a fixed byte size. Disk accesses occur sparsely.

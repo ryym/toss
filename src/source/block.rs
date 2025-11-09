@@ -1,6 +1,5 @@
 use std::{
     cmp,
-    collections::HashMap,
     io::{BufReader, Read},
 };
 
@@ -76,8 +75,6 @@ impl BlockKey {
         self.start_byte
     }
 }
-
-pub(super) type BlockPool = HashMap<BlockKey, Block>;
 
 pub(super) fn read_block_from<R: Read>(
     reader: &mut BufReader<R>,
