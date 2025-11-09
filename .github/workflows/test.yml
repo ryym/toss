@@ -1,0 +1,17 @@
+name: Test
+
+on:
+- push
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - run: cargo version --verbose
+    - uses: actions/checkout@v4
+    - run: cargo build
+    - run: cargo test -- --no-capture
+    - run: scripts/bench
