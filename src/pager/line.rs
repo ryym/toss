@@ -1,7 +1,8 @@
 use std::ops::{Bound, RangeBounds};
 
-use ansi_control_codes::parser::{Token, TokenStream};
 use unicode_width::UnicodeWidthChar;
+
+use crate::line::Line;
 
 /// A line in a page.
 ///
@@ -37,17 +38,17 @@ use unicode_width::UnicodeWidthChar;
 ///
 /// ## Terminology
 /// ```text
-///           Lorem ipsum dolor sit amet, consectetur elit.  ───┬─ sentence
+///           Lorem ipsum dolor sit amet, consectetur elit.  ───┬─ line
 ///           A finibus massa ultricies nec.                 ───┘
 ///
 ///           ┌ wrap
 ///           ├ - - - - - - - - - - - ┐
-///  row ─┬── ❘ Lorem ipsum dolor si  ❘ ──┬─ line slice (per wrap)
+///  row ─┬── ❘ Lorem ipsum dolor si  ❘ ──┬─ wrap row
 ///       ├── ❘ t amet, consectetur   ❘ ──┤
 ///       ├── ❘ elit.                 ❘ ──┘
 ///       │   └ - - - - - - - - - - - ┘
 ///       │   ┌ - - - - - - - - - - - ┐
-///       ├── ❘ A finibus massa ultr  ❘ ──┬─ line slice (per wrap)
+///       ├── ❘ A finibus massa ultr  ❘ ──┬─ wrap row
 ///       └── ❘ icies nec.            ❘ ──┘
 ///           └ - - - - - - - - - - - ┘
 /// ```
@@ -56,22 +57,18 @@ pub(super) struct PageLine<Meta> {
     /// Any metadata related to this line.
     meta: Meta,
 
-    /// A original sentence this struct refers to.
-    sentence: Sentence,
+    /// An original line.
+    line: Line,
 
-    /// Wrapping information based on the window width.
+    /// Applied wrapping based on the page's column size.
     wrap: Wrap,
 }
 
 impl<Meta> PageLine<Meta> {
     pub fn new(meta: Meta, text: String, n_cols: usize) -> Self {
-        let sentence = Sentence::new(text);
-        let wrap = Wrap::new(&sentence, n_cols);
-        Self {
-            meta,
-            sentence,
-            wrap,
-        }
+        let line = Line::new(text);
+        let wrap = Wrap::new(&line, n_cols);
+        Self { meta, line, wrap }
     }
 
     #[inline]
@@ -81,127 +78,72 @@ impl<Meta> PageLine<Meta> {
 
     #[inline]
     pub fn row_len(&self) -> usize {
-        self.wrap.slices.len()
+        self.wrap.rows.len()
     }
 
-    pub fn slice(&self, slice_range: impl RangeBounds<usize>) -> RowSpan<'_> {
-        let (start_byte, end_byte, row_len) = self.wrap.row_span_ends(slice_range);
-        let s = &self.sentence.raw[start_byte..end_byte];
+    pub fn slice(&self, wrap_row_range: impl RangeBounds<usize>) -> RowSpan<'_> {
+        let (start_byte, end_byte, row_len) = self.wrap.row_span_ends(wrap_row_range);
+        let s = &self.line.raw()[start_byte..end_byte];
         RowSpan::new(s, row_len)
     }
 }
 
 #[derive(Debug, Default)]
-struct Sentence {
-    /// An original line including ANSI escape sequences.
-    pub raw: String,
-
-    /// A plain text line without escape sequences.
-    pub plain: String,
-
-    /// A byte index mapping from each character in `plain` to `raw`. Example:
-    /// - raw: `\xb[1mHi\xb[0m, 😀` ("Hi" is bold)
-    /// - plain: `Hi, 😀`
-    /// - plain_to_raw:
-    ///   ```text
-    ///   (escape sequences: bold start)
-    ///   0:  4 ──── H
-    ///   1:  5 ──── i
-    ///   (escape sequences: reset)
-    ///   2: 10 ──── ,
-    ///   3: 11 ──── (space)
-    ///   4: 12 ──┬─ 😀
-    ///   5: 13 ──┤
-    ///   6: 14 ──┤
-    ///   7: 15 ──┘
-    ///   ```
-    pub plain_to_raw: Vec<usize>,
-}
-
-impl Sentence {
-    fn new(raw_line: String) -> Self {
-        let mut plain = String::with_capacity(raw_line.len());
-        let mut plain_to_raw = Vec::new();
-        let mut i_raw = 0;
-        for token in TokenStream::from(&raw_line) {
-            match token {
-                Token::ControlFunction(c) => {
-                    // Allocate a string just to get the byte length of escape sequences :(
-                    i_raw += String::from(c).len();
-                }
-                Token::String(s) => {
-                    plain.push_str(s);
-                    for _ in s.as_bytes() {
-                        plain_to_raw.push(i_raw);
-                        i_raw += 1;
-                    }
-                }
-            }
-        }
-        Self {
-            raw: raw_line,
-            plain,
-            plain_to_raw,
-        }
-    }
-}
-
-#[derive(Debug, Default)]
 struct Wrap {
-    /// Slices to fit the original line in the window width.
-    pub slices: Vec<LineSlice>,
+    /// Rows are a list of cut-off text of the original line to fit in the page width.
+    rows: Vec<WrapRow>,
 }
 
 impl Wrap {
-    fn new(sentence: &Sentence, n_cols: usize) -> Self {
-        let mut slices = Vec::new();
+    fn new(line: &Line, n_cols: usize) -> Self {
+        let mut rows = Vec::new();
 
         let mut n_cells = 0;
         let mut i_plain_char = 0;
-        for c in sentence.plain.chars() {
-            let i_raw = sentence.plain_to_raw[i_plain_char];
+        for c in line.plain().chars() {
+            let i_raw = line.plain_to_raw()[i_plain_char];
             let cell_width = c.width().unwrap_or(0);
             n_cells += cell_width;
             if n_cells > n_cols {
-                slices.push(LineSlice::new(i_raw));
+                rows.push(WrapRow::new(i_raw));
                 n_cells = cell_width;
             }
             i_plain_char += c.len_utf8();
         }
-        slices.push(LineSlice::new(sentence.raw.len()));
+        rows.push(WrapRow::new(line.raw().len()));
 
-        Self { slices }
+        Self { rows }
     }
 
-    fn row_span_ends(&self, slice_range: impl RangeBounds<usize>) -> (usize, usize, usize) {
-        let start_slice_idx = match slice_range.start_bound() {
+    fn row_span_ends(&self, wrap_row_range: impl RangeBounds<usize>) -> (usize, usize, usize) {
+        let start_row_idx = match wrap_row_range.start_bound() {
             Bound::Unbounded => 0,
             Bound::Included(start) => *start,
-            Bound::Excluded(_) => panic!("unexpected excluded bound for slice start"),
+            Bound::Excluded(_) => panic!("unexpected excluded bound for wrap row start"),
         };
-        let end_slice_idx = match slice_range.end_bound() {
-            Bound::Unbounded => self.slices.len() - 1,
+        let end_row_idx = match wrap_row_range.end_bound() {
+            Bound::Unbounded => self.rows.len() - 1,
             Bound::Included(end) => *end,
             Bound::Excluded(end) => *end - 1,
         };
-        let start_byte = if start_slice_idx == 0 {
+        let start_byte = if start_row_idx == 0 {
             0
         } else {
-            self.slices[start_slice_idx - 1].end_byte
+            self.rows[start_row_idx - 1].end_byte
         };
-        let slice_end = &self.slices[end_slice_idx];
-        let row_len = end_slice_idx - start_slice_idx + 1;
-        (start_byte, slice_end.end_byte, row_len)
+        let end_row = &self.rows[end_row_idx];
+        let row_len = end_row_idx - start_row_idx + 1;
+        (start_byte, end_row.end_byte, row_len)
     }
 }
 
 #[derive(Debug)]
-struct LineSlice {
+struct WrapRow {
     /// An end position in the original raw line (exclusive).
     end_byte: usize,
 }
 
-impl LineSlice {
+impl WrapRow {
     fn new(end_byte: usize) -> Self {
         Self { end_byte }
     }
@@ -209,9 +151,9 @@ impl LineSlice {
 
 /// Iterator of row spans of the current page.
 /// A row span is neither a row nor a line. It is a wrapped line possibly cut off in the middle
-/// to fit in the page. For example, if the first sentence of the source text is "aabbcc" and the
-/// page column size is 2, the sentence will be broken into 3 rows: "aa", "bb", "cc". If the page
-/// is scrolled down one row, the page will start with "bb" and "cc". This "bbcc" is a row span.
+/// to fit in the page. For example, if the first line of the source text is "aabbcc" and the
+/// page column size is 2, the line will be broken into 3 rows: "aa", "bb", "cc". If the page
+/// is scrolled down one row, the first two rows will be "bb" and "cc". This is a row span.
 #[derive(Debug, PartialEq)]
 pub(crate) struct RowSpan<'l> {
     line: &'l str,
@@ -231,31 +173,6 @@ impl<'line> RowSpan<'line> {
     #[inline]
     pub(crate) fn size(&self) -> usize {
         self.size
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use pretty_assertions::assert_eq;
-
-    use crate::pager::line::Sentence;
-
-    #[test]
-    fn parse_sentence_with_escape_seqs_and_multi_byte_chars() {
-        let s = "\u{1b}[1mHi\u{1b}[0m, 😀".to_string();
-        let sentence = Sentence::new(s.clone());
-        assert_eq!(&sentence.raw, &s);
-        assert_eq!(&sentence.plain, "Hi, 😀");
-        assert_eq!(
-            &sentence.plain_to_raw,
-            &[
-                // (escape sequences)
-                4, 5, // "Hi"
-                // (escape sequences)
-                10, 11, // ", "
-                12, 13, 14, 15, // smile emoji
-            ]
-        );
     }
 }
 

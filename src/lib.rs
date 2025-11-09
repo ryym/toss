@@ -8,6 +8,7 @@
 
 pub mod app;
 mod error;
+mod line;
 mod logger;
 mod pager;
 mod reader;
