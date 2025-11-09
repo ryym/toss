@@ -19,7 +19,9 @@ jobs:
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-    - run: cargo version --verbose
-    - run: cargo build
-    - run: cargo test -- --no-capture
+    - run: cargo +stable version --verbose
+    - run: cargo +nightly version --verbose
+
+    - run: cargo +stable build
+    - run: cargo +stable test -- --no-capture
     - run: scripts/bench

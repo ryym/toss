@@ -1,0 +1,4 @@
+[toolchain]
+# Use a nightly version to run benchmarks with `cargo bench`.
+channel = "nightly-2025-10-31"
+components = ["rust-analyzer"]
