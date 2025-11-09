@@ -87,7 +87,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         }
     }
 
-    pub(crate) fn read_line(&mut self, query: QueryLine) -> Result<Option<Line>, AnyError> {
+    pub(crate) fn read_line(&mut self, query: &QueryLine) -> Result<Option<Line>, AnyError> {
         match query {
             QueryLine::AtStart => self.read_line_forward(0),
             QueryLine::AtEnd => self.read_end_line(),
@@ -205,40 +205,40 @@ mod tests {
 
         // Read forward
         {
-            let (pos, text) = reader.read_line(QueryLine::AtStart)?.unwrap();
+            let (pos, text) = reader.read_line(&QueryLine::AtStart)?.unwrap();
             assert_eq!(text, "abcde");
             assert_eq!(pos, LinePos::new(0, 5));
 
-            let (pos, text) = reader.read_line(QueryLine::NextOf(pos))?.unwrap();
+            let (pos, text) = reader.read_line(&QueryLine::NextOf(pos))?.unwrap();
             assert_eq!(text, "1234567");
             assert_eq!(pos, LinePos::new(6, 13));
 
-            let (pos, text) = reader.read_line(QueryLine::NextOf(pos))?.unwrap();
+            let (pos, text) = reader.read_line(&QueryLine::NextOf(pos))?.unwrap();
             assert_eq!(text, "890");
             assert_eq!(pos, LinePos::new(14, 17));
 
-            let result = reader.read_line(QueryLine::NextOf(pos))?;
+            let result = reader.read_line(&QueryLine::NextOf(pos))?;
             assert_eq!(result, None);
 
-            let (_pos, text) = reader.read_line(QueryLine::AtStart)?.unwrap();
+            let (_pos, text) = reader.read_line(&QueryLine::AtStart)?.unwrap();
             assert_eq!(text, "abcde");
         }
 
         // Read backward
         {
-            let (pos, text) = reader.read_line(QueryLine::AtEnd)?.unwrap();
+            let (pos, text) = reader.read_line(&QueryLine::AtEnd)?.unwrap();
             assert_eq!(text, "890");
             assert_eq!(pos, LinePos::new(14, 17));
 
-            let (pos, text) = reader.read_line(QueryLine::PrevOf(pos))?.unwrap();
+            let (pos, text) = reader.read_line(&QueryLine::PrevOf(pos))?.unwrap();
             assert_eq!(text, "1234567");
             assert_eq!(pos, LinePos::new(6, 13));
 
-            let (pos, text) = reader.read_line(QueryLine::PrevOf(pos))?.unwrap();
+            let (pos, text) = reader.read_line(&QueryLine::PrevOf(pos))?.unwrap();
             assert_eq!(text, "abcde");
             assert_eq!(pos, LinePos::new(0, 5));
 
-            let result = reader.read_line(QueryLine::PrevOf(pos))?;
+            let result = reader.read_line(&QueryLine::PrevOf(pos))?;
             assert_eq!(result, None);
         }
 

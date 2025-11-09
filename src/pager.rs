@@ -94,7 +94,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Some(row) => row,
         };
         let query = QueryLine::At(end_row.line_pos);
-        let row_span = match self.line_store.read_line(query)? {
+        let row_span = match self.line_store.read_line(&query)? {
             None => None,
             Some(line) => {
                 let row_span = line.slice(..=end_row.slice_index);
@@ -120,7 +120,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Some(row) => row,
         };
         let query = QueryLine::At(start_row.line_pos);
-        let row_span = match self.line_store.read_line(query)? {
+        let row_span = match self.line_store.read_line(&query)? {
             None => None,
             Some(line) => {
                 let row_span = line.slice(start_row.slice_index..);
@@ -165,7 +165,7 @@ fn move_down_row<R, Src: Source<R>>(
         return Ok(true);
     }
     let query = QueryLine::NextOf(row.line_pos);
-    match line_store.read_line(query)? {
+    match line_store.read_line(&query)? {
         None => Ok(false),
         Some(line) => {
             *row = Row::from_line(line, 0);
@@ -187,7 +187,7 @@ fn move_up_row<R, Src: Source<R>>(
         return Ok(true);
     }
     let query = QueryLine::PrevOf(row.line_pos);
-    match line_store.read_line(query)? {
+    match line_store.read_line(&query)? {
         None => Ok(false),
         Some(line) => {
             *row = Row::from_line(line, line.row_len() - 1);
@@ -254,7 +254,7 @@ impl<'p, R, Src: Source<R>> PageLoader<'p, R, Src> {
         if self.read_rows >= row_size {
             return Ok(None);
         }
-        match self.pager.line_store.read_line(self.query)? {
+        match self.pager.line_store.read_line(&self.query)? {
             None => Ok(None),
             Some(line) => {
                 let start_slice_idx = if self.read_rows > 0 {
@@ -287,7 +287,7 @@ impl<'p, R, Src: Source<R>> PageLoader<'p, R, Src> {
         if self.read_rows >= row_size {
             return Ok(None);
         }
-        match self.pager.line_store.read_line(self.query)? {
+        match self.pager.line_store.read_line(&self.query)? {
             None => Ok(None),
             Some(line) => {
                 let end_slice_idx = if self.read_rows > 0 {

@@ -43,7 +43,7 @@ impl<R, Src: Source<R>> LineStore<R, Src> {
         }
     }
 
-    pub fn read_line(&mut self, query: QueryLine) -> Result<Option<&mut Line>, AnyError> {
+    pub fn read_line(&mut self, query: &QueryLine) -> Result<Option<&mut Line>, AnyError> {
         self.free_line_space_if_needed();
         match query {
             QueryLine::AtStart => self.read_line_by_start_byte(0, query),
@@ -72,7 +72,7 @@ impl<R, Src: Source<R>> LineStore<R, Src> {
     fn read_line_by_start_byte(
         &mut self,
         start_byte: u64,
-        query: QueryLine,
+        query: &QueryLine,
     ) -> Result<Option<&mut Line>, AnyError> {
         match self.line_map.entry(start_byte) {
             Entry::Occupied(entry) => Ok(Some(entry.into_mut())),
@@ -90,7 +90,7 @@ impl<R, Src: Source<R>> LineStore<R, Src> {
     fn read_line_by_end_byte(
         &mut self,
         end_byte: u64,
-        query: QueryLine,
+        query: &QueryLine,
     ) -> Result<Option<&mut Line>, AnyError> {
         let start_byte = match self.end_to_start.entry(end_byte) {
             Entry::Occupied(entry) => *entry.get(),
@@ -110,8 +110,8 @@ impl<R, Src: Source<R>> LineStore<R, Src> {
 
     fn read_end_line(&mut self) -> Result<Option<&mut Line>, AnyError> {
         match self.end_line_start_byte {
-            Some(start_byte) => self.read_line_by_start_byte(start_byte, QueryLine::AtEnd),
-            None => match self.reader.read_line(QueryLine::AtEnd)? {
+            Some(start_byte) => self.read_line_by_start_byte(start_byte, &QueryLine::AtEnd),
+            None => match self.reader.read_line(&QueryLine::AtEnd)? {
                 None => Ok(None),
                 Some((pos, text)) => {
                     let line = Line::new(LineMeta { pos }, text, self.col_size);
