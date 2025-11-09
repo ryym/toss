@@ -81,6 +81,11 @@ impl<Meta> PageLine<Meta> {
         self.wrap.rows.len()
     }
 
+    #[inline]
+    pub fn plain(&self) -> &str {
+        self.line.plain()
+    }
+
     pub fn slice(&self, wrap_row_range: impl RangeBounds<usize>) -> RowSpan<'_> {
         let (start_byte, end_byte, row_len) = self.wrap.row_span_ends(wrap_row_range);
         let s = &self.line.raw()[start_byte..end_byte];

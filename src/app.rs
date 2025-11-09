@@ -6,6 +6,8 @@ use std::io::{self, IsTerminal};
 use std::time::Duration;
 use std::{env, panic, thread};
 
+use regex::Regex;
+
 use crate::error::AnyError;
 use crate::logger;
 use crate::pager::{PageSize, Pager};
@@ -91,6 +93,9 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
                         'b' => {
                             self.smooth_scroll(self.pager.size().rows(), false)?;
                         }
+                        '/' => {
+                            self.search("search")?;
+                        }
                         _ => continue,
                     },
                     _ => {
@@ -156,6 +161,14 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
             let eased_progress = progress.powi(3);
             let delay = (1.0 + base_delay * eased_progress) as u64;
             thread::sleep(Duration::from_millis(delay));
+        }
+        Ok(())
+    }
+
+    fn search(&mut self, input: &str) -> Result<(), AnyError> {
+        let query = Regex::new(input)?;
+        if self.pager.search(&query)? {
+            self.draw_rows()?;
         }
         Ok(())
     }

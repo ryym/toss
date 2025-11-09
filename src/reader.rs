@@ -1,7 +1,10 @@
 use std::marker::PhantomData;
 
+use regex::Regex;
+
 use crate::{
     error::AnyError,
+    line::Line,
     source::{QueryBlock, Source, SourceCursor},
 };
 
@@ -40,6 +43,7 @@ impl LinePos {
 pub(crate) enum QueryLine {
     AtStart,
     AtEnd,
+    At(LinePos),
     NextOf(LinePos),
     PrevOf(LinePos),
 }
@@ -80,6 +84,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         match query {
             QueryLine::AtStart => self.read_line_forward(0),
             QueryLine::AtEnd => self.read_end_line(),
+            QueryLine::At(pos) => self.read_line_forward(pos.start_byte),
             QueryLine::NextOf(pos) => self.read_line_forward(pos.end_byte + BLB),
             QueryLine::PrevOf(pos) => {
                 if pos.start_byte == 0 {
@@ -158,6 +163,21 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         let pos = LinePos::new(end_byte - buf.len() as u64, end_byte);
         let text = String::from_utf8_lossy(&buf).to_string();
         Ok(Some((pos, text)))
+    }
+
+    pub fn find_first_match_line(
+        &mut self,
+        from: QueryLine,
+        search_query: &Regex,
+    ) -> Result<Option<(LinePos, Line)>, AnyError> {
+        let mut lines = self.lines_from(from);
+        while let Some((pos, text)) = lines.next()? {
+            let line = Line::new(text);
+            if search_query.is_match(line.plain()) {
+                return Ok(Some((pos, line)));
+            }
+        }
+        Ok(None)
     }
 }
 

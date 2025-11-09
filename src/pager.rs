@@ -1,3 +1,5 @@
+use regex::Regex;
+
 use crate::{
     error::AnyError,
     pager::{
@@ -128,6 +130,25 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         let end_pos_before = page.end_line().meta().pos;
         write_page_ending_at(QueryLine::AtEnd, &mut self.reader, &self.size, page)?;
         Ok(page.end_line().meta().pos != end_pos_before)
+    }
+
+    pub fn search(&mut self, search_query: &Regex) -> Result<bool, AnyError> {
+        let page = match &mut self.page {
+            Page::Empty(_) => return Ok(false),
+            Page::Filled(page) => page,
+        };
+        let line_from = match page.find_first_match_line(search_query) {
+            Some(line) => QueryLine::At(line.meta().pos),
+            None => {
+                let line_from = QueryLine::NextOf(page.end_line().meta().pos);
+                match self.reader.find_first_match_line(line_from, search_query)? {
+                    None => return Ok(false),
+                    Some((pos, _)) => QueryLine::At(pos),
+                }
+            }
+        };
+        write_page_from(line_from, &mut self.reader, &self.size, page)?;
+        Ok(true)
     }
 }
 

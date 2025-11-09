@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
 
+use regex::Regex;
+
 use crate::pager::{
     line::{PageLine, RowSpan},
     page::builder::{BackwardPageWriter, ForwardPageWriter, NewPageBuilder},
@@ -91,6 +93,12 @@ impl<LineMeta> FilledPage<LineMeta> {
 
     pub fn backward_page_writer(&mut self) -> BackwardPageWriter<'_, LineMeta> {
         BackwardPageWriter::for_page(self)
+    }
+
+    pub fn find_first_match_line(&mut self, search_query: &Regex) -> Option<&PageLine<LineMeta>> {
+        self.deque
+            .iter()
+            .find(|line| search_query.is_match(line.plain()))
     }
 }
 
