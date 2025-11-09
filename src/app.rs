@@ -29,12 +29,12 @@ fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError
         let file = File::open(file_path)?;
         let source = source::as_seekable(file);
         let reader = Reader::new(source);
-        let pager = Pager::new(reader, PageSize::new(size.n_rows(), size.n_cols()));
+        let pager = Pager::new(reader, PageSize::new(size.n_rows(), size.n_cols()))?;
         App::new(screen, pager).run()?;
     } else {
         let source = source::as_readable(stdin);
         let reader = Reader::new(source);
-        let pager = Pager::new(reader, PageSize::new(size.n_rows(), size.n_cols()));
+        let pager = Pager::new(reader, PageSize::new(size.n_rows(), size.n_cols()))?;
         App::new(screen, pager).run()?;
     }
     Ok(())
@@ -108,11 +108,11 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         self.screen.clear()?;
 
         let mut i_row = 0;
-        let mut page = self.pager.page();
-        while let Some(row_span) = page.next_row_span()? {
+        for row_span in self.pager.row_spans() {
             self.screen.draw_at(i_row, row_span.line())?;
             i_row += row_span.size();
         }
+
         self.screen.flush()?;
         Ok(())
     }

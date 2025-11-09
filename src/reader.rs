@@ -31,6 +31,10 @@ impl LinePos {
         }
     }
 
+    pub fn is_first_line(&self) -> bool {
+        self.start_byte == 0
+    }
+
     #[inline]
     pub fn start_byte(&self) -> u64 {
         self.start_byte
@@ -198,7 +202,7 @@ impl<'r, R, Src: Source<R>> LineCursor<'r, R, Src> {
     }
 
     pub fn next(&mut self) -> Result<Option<Line>, AnyError> {
-        match self.reader.read_line(self.query)? {
+        match self.reader.read_line(&self.query)? {
             None => Ok(None),
             Some((pos, text)) => {
                 self.query = if self.go_forward {

@@ -2,14 +2,14 @@ use crate::{
     error::AnyError,
     pager::{
         line::{PageLine, RowSpan},
-        line_store::{Line, LineStore},
+        page::{EmptyPage, FilledPage, RowSpanIter},
     },
     reader::{LinePos, QueryLine, Reader},
     source::Source,
 };
 
 mod line;
-mod line_store;
+mod page;
 
 #[derive(Debug)]
 pub(crate) struct PageSize {
@@ -26,51 +26,38 @@ impl PageSize {
     pub fn rows(&self) -> usize {
         self.rows
     }
-
-    #[inline]
-    pub fn cols(&self) -> usize {
-        self.cols
-    }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-struct Row {
-    line_pos: LinePos,
-    slice_index: usize,
-    end_slice_index: usize,
+#[derive(Debug)]
+pub(crate) struct LineMeta {
+    pos: LinePos,
 }
 
-impl Row {
-    fn from_line(line: &Line, slice_index: usize) -> Self {
-        Self {
-            line_pos: line.meta().pos(),
-            slice_index,
-            end_slice_index: line.row_len() - 1,
-        }
-    }
+#[derive(Debug)]
+enum Page {
+    Filled(FilledPage<LineMeta>),
+    Empty(EmptyPage<LineMeta>),
 }
 
-/// Pager clips text lines to fit them in the sized frame.
+/// Pager clips text lines to fit them in the sized frame. The frame is called a page.
 /// Its responsibilites are:
 /// 1. Read source text and load to a page.
 /// 2. Determine lines that are currently "visible" in the page.
 /// 3. Wrap lines based on the column size.
 #[derive(Debug)]
 pub(crate) struct Pager<R, Src> {
-    line_store: LineStore<R, Src>,
+    reader: Reader<R, Src>,
     size: PageSize,
-    start_row: Option<Row>,
-    end_row: Option<Row>,
+    page: Page,
 }
 
 impl<R, Src: Source<R>> Pager<R, Src> {
-    pub fn new(reader: Reader<R, Src>, size: PageSize) -> Self {
-        Self {
-            line_store: LineStore::new(reader, &size),
-            size,
-            start_row: None,
-            end_row: None,
-        }
+    pub fn new(mut reader: Reader<R, Src>, size: PageSize) -> Result<Self, AnyError> {
+        let page = match build_page(&mut reader, &size)? {
+            None => Page::Empty(EmptyPage::new()),
+            Some(page) => Page::Filled(page),
+        };
+        Ok(Self { reader, size, page })
     }
 
     #[inline]
@@ -78,248 +65,122 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         &self.size
     }
 
-    pub fn scroll_down_one_row(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
-        if !move_down_row(&mut self.line_store, &mut self.end_row)? {
-            return Ok(None);
+    pub fn row_spans(&mut self) -> RowSpanIter<'_, LineMeta> {
+        match &self.page {
+            Page::Filled(page) => page.row_spans(),
+            Page::Empty(page) => page.row_spans(),
         }
-        if self.start_row != self.end_row {
-            move_down_row(&mut self.line_store, &mut self.start_row)?;
-        }
-        self.end_row_span()
     }
 
-    fn end_row_span(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
-        let end_row = match &self.end_row {
-            None => return Ok(None),
-            Some(row) => row,
+    pub fn scroll_down_one_row(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
+        let page = match &mut self.page {
+            Page::Empty(_) => return Ok(None),
+            Page::Filled(page) => page,
         };
-        let query = QueryLine::At(end_row.line_pos);
-        let row_span = match self.line_store.read_line(&query)? {
-            None => None,
-            Some(line) => {
-                let row_span = line.slice(..=end_row.slice_index);
-                Some(row_span)
+        if !page.move_down_one_row() {
+            let end_pos = page.end_line().meta().pos;
+            match self.reader.read_line(&QueryLine::NextOf(end_pos))? {
+                None => return Ok(None),
+                Some((pos, text)) => {
+                    let line = PageLine::new(LineMeta { pos }, text, self.size.cols);
+                    page.move_down_one_line(line);
+                }
             }
-        };
-        Ok(row_span)
+        }
+        Ok(Some(page.end_row_span()))
     }
 
     pub fn scroll_up_one_row(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
-        if !move_up_row(&mut self.line_store, &mut self.start_row)? {
-            return Ok(None);
-        }
-        if self.start_row != self.end_row {
-            move_up_row(&mut self.line_store, &mut self.end_row)?;
-        }
-        self.start_row_span()
-    }
-
-    fn start_row_span(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
-        let start_row = match &self.start_row {
-            None => return Ok(None),
-            Some(row) => row,
+        let page = match &mut self.page {
+            Page::Empty(_) => return Ok(None),
+            Page::Filled(page) => page,
         };
-        let query = QueryLine::At(start_row.line_pos);
-        let row_span = match self.line_store.read_line(&query)? {
-            None => None,
-            Some(line) => {
-                let row_span = line.slice(start_row.slice_index..);
-                Some(row_span)
+        if !page.move_up_one_row() {
+            let start_pos = page.start_line().meta().pos;
+            match self.reader.read_line(&QueryLine::PrevOf(start_pos))? {
+                None => return Ok(None),
+                Some((pos, text)) => {
+                    let line = PageLine::new(LineMeta { pos }, text, self.size.cols);
+                    page.move_up_one_line(line);
+                }
             }
-        };
-        Ok(row_span)
+        }
+        Ok(Some(page.start_row_span()))
     }
 
     pub fn scroll_to_start(&mut self) -> Result<bool, AnyError> {
-        if let Some(start_row) = &self.start_row
-            && start_row.line_pos.start_byte() == 0
-        {
+        let page = match &mut self.page {
+            Page::Empty(_) => return Ok(false),
+            Page::Filled(page) => page,
+        };
+        if page.start_line().meta().pos.is_first_line() {
             return Ok(false);
         }
-        self.start_row = None;
-        self.end_row = None;
+        write_start_page(&mut self.reader, &self.size, page)?;
         Ok(true)
     }
 
     pub fn scroll_to_end(&mut self) -> Result<bool, AnyError> {
-        let end_row = self.end_row.clone();
-        PageLoader::backward(self, QueryLine::AtEnd).run()?;
-        Ok(self.end_row != end_row)
-    }
-
-    pub fn page(&mut self) -> PageLoader<'_, R, Src> {
-        PageLoader::forward_from_current(self)
-    }
-}
-
-fn move_down_row<R, Src: Source<R>>(
-    line_store: &mut LineStore<R, Src>,
-    row: &mut Option<Row>,
-) -> Result<bool, AnyError> {
-    let row = match row {
-        None => return Ok(false),
-        Some(row) => row,
-    };
-    if row.slice_index < row.end_slice_index {
-        row.slice_index += 1;
-        return Ok(true);
-    }
-    let query = QueryLine::NextOf(row.line_pos);
-    match line_store.read_line(&query)? {
-        None => Ok(false),
-        Some(line) => {
-            *row = Row::from_line(line, 0);
-            Ok(true)
-        }
-    }
-}
-
-fn move_up_row<R, Src: Source<R>>(
-    line_store: &mut LineStore<R, Src>,
-    row: &mut Option<Row>,
-) -> Result<bool, AnyError> {
-    let row = match row {
-        None => return Ok(false),
-        Some(row) => row,
-    };
-    if 0 < row.slice_index {
-        row.slice_index -= 1;
-        return Ok(true);
-    }
-    let query = QueryLine::PrevOf(row.line_pos);
-    match line_store.read_line(&query)? {
-        None => Ok(false),
-        Some(line) => {
-            *row = Row::from_line(line, line.row_len() - 1);
-            Ok(true)
-        }
-    }
-}
-
-pub(crate) struct PageLoader<'p, R, Src> {
-    start_row: Option<Row>,
-    end_row: Option<Row>,
-    read_rows: usize,
-    query: QueryLine,
-    go_forward: bool,
-    pager: &'p mut Pager<R, Src>,
-}
-
-impl<'p, R, Src> Drop for PageLoader<'p, R, Src> {
-    fn drop(&mut self) {
-        if self.start_row.is_some() && self.end_row.is_some() {
-            self.pager.start_row = self.start_row.take();
-            self.pager.end_row = self.end_row.take();
-        }
-    }
-}
-
-impl<'p, R, Src: Source<R>> PageLoader<'p, R, Src> {
-    fn forward_from_current(pager: &'p mut Pager<R, Src>) -> Self {
-        let query = match &pager.start_row {
-            None => QueryLine::AtStart,
-            Some(row) => QueryLine::At(row.line_pos),
+        let page = match &mut self.page {
+            Page::Empty(_) => return Ok(false),
+            Page::Filled(page) => page,
         };
-        Self {
-            read_rows: 0,
-            start_row: pager.start_row.clone(),
-            end_row: None,
-            query,
-            go_forward: true,
-            pager,
-        }
+        let end_pos_before = page.end_line().meta().pos;
+        write_end_page(&mut self.reader, &self.size, page)?;
+        Ok(page.end_line().meta().pos != end_pos_before)
     }
+}
 
-    fn backward(pager: &'p mut Pager<R, Src>, from: QueryLine) -> Self {
-        Self {
-            read_rows: 0,
-            query: from,
-            start_row: None,
-            end_row: None,
-            go_forward: false,
-            pager,
+fn build_page<R, Src: Source<R>>(
+    reader: &mut Reader<R, Src>,
+    size: &PageSize,
+) -> Result<Option<FilledPage<LineMeta>>, AnyError> {
+    let mut builder = FilledPage::builder(size.rows);
+    let mut lines = reader.lines_from(QueryLine::AtStart);
+    while let Some((pos, text)) = lines.next()? {
+        let line = PageLine::new(LineMeta { pos }, text, size.cols);
+        if !builder.push_back(line) {
+            break;
         }
     }
+    match builder.into_page() {
+        Some(page) => Ok(Some(page)),
+        _ => Ok(None),
+    }
+}
 
-    pub fn next_row_span(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
-        if self.go_forward {
-            self.next_forward()
-        } else {
-            self.next_backward()
+fn write_start_page<R, Src: Source<R>>(
+    reader: &mut Reader<R, Src>,
+    size: &PageSize,
+    page: &mut FilledPage<LineMeta>,
+) -> Result<(), AnyError> {
+    let mut writer = page.start_page_writer();
+    let mut lines = reader.lines_from(QueryLine::AtStart);
+    while let Some((pos, text)) = lines.next()? {
+        let line = PageLine::new(LineMeta { pos }, text, size.cols);
+        if !writer.push_back(line) {
+            break;
         }
     }
+    writer.write_to_page();
+    Ok(())
+}
 
-    pub fn next_forward(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
-        let row_size = self.pager.size().rows();
-        if self.read_rows >= row_size {
-            return Ok(None);
-        }
-        match self.pager.line_store.read_line(&self.query)? {
-            None => Ok(None),
-            Some(line) => {
-                let start_slice_idx = if self.read_rows > 0 {
-                    0
-                } else {
-                    match &self.start_row {
-                        Some(row) => row.slice_index,
-                        None => {
-                            self.start_row = Some(Row::from_line(line, 0));
-                            0
-                        }
-                    }
-                };
-                self.read_rows += line.row_len() - start_slice_idx;
-                let (end_slice_idx, line) = if self.read_rows < row_size {
-                    (line.row_len() - 1, line)
-                } else {
-                    let end_slice_idx = line.row_len() - 1 - (self.read_rows - row_size);
-                    self.end_row = Some(Row::from_line(line, end_slice_idx));
-                    (end_slice_idx, line)
-                };
-                self.query = QueryLine::NextOf(line.meta().pos());
-                Ok(Some(line.slice(start_slice_idx..=end_slice_idx)))
-            }
+fn write_end_page<R, Src: Source<R>>(
+    reader: &mut Reader<R, Src>,
+    size: &PageSize,
+    page: &mut FilledPage<LineMeta>,
+) -> Result<(), AnyError> {
+    let mut writer = page.end_page_writer();
+    let mut lines = reader.lines_rev_from(QueryLine::AtEnd);
+    while let Some((pos, text)) = lines.next()? {
+        let line = PageLine::new(LineMeta { pos }, text, size.cols);
+        if !writer.push_front(line) {
+            break;
         }
     }
-
-    fn next_backward(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
-        let row_size = self.pager.size().rows();
-        if self.read_rows >= row_size {
-            return Ok(None);
-        }
-        match self.pager.line_store.read_line(&self.query)? {
-            None => Ok(None),
-            Some(line) => {
-                let end_slice_idx = if self.read_rows > 0 {
-                    line.row_len() - 1
-                } else {
-                    match &self.start_row {
-                        Some(row) => row.slice_index,
-                        None => {
-                            let slice_index = line.row_len() - 1;
-                            self.end_row = Some(Row::from_line(line, slice_index));
-                            slice_index
-                        }
-                    }
-                };
-                self.read_rows += line.row_len();
-                let (start_slice_idx, line) = if self.read_rows < row_size {
-                    (0, line)
-                } else {
-                    let start_slice_idx = self.read_rows - row_size;
-                    self.start_row = Some(Row::from_line(line, start_slice_idx));
-                    (start_slice_idx, line)
-                };
-                self.query = QueryLine::PrevOf(line.meta().pos());
-                Ok(Some(line.slice(start_slice_idx..=end_slice_idx)))
-            }
-        }
-    }
-
-    fn run(mut self) -> Result<(), AnyError> {
-        while self.next_row_span()?.is_some() {}
-        Ok(())
-    }
+    writer.write_to_page();
+    Ok(())
 }
 
 #[cfg(test)]
@@ -330,20 +191,10 @@ mod tests {
 
     use crate::{
         error::AnyError,
-        pager::{PageLoader, PageSize, Pager, line::RowSpan},
+        pager::{PageSize, Pager, line::RowSpan},
         reader::Reader,
-        source::{self, Source},
+        source,
     };
-
-    fn page_to_vec<'p, R, Src: Source<R>>(
-        loader: &mut PageLoader<'p, R, Src>,
-    ) -> Result<Vec<(String, usize)>, AnyError> {
-        let mut vec = Vec::new();
-        while let Some(row_span) = loader.next_row_span()? {
-            vec.push((row_span.line().to_string(), row_span.size()));
-        }
-        Ok(vec)
-    }
 
     #[test]
     fn pager_scroll_up_down() -> Result<(), AnyError> {
@@ -352,68 +203,34 @@ mod tests {
         let source = source::as_readable(cursor);
         let reader = Reader::new(source);
 
-        let mut pager = Pager::new(reader, PageSize { rows: 3, cols: 8 });
+        let mut pager = Pager::new(reader, PageSize { rows: 3, cols: 8 })?;
         assert_eq!(
-            page_to_vec(&mut pager.page())?,
+            pager.row_spans().collect::<Vec<_>>(),
             vec![
-                ("abcde".to_string(), 1),
-                ("1234567".to_string(), 1),
-                ("foo".to_string(), 1),
+                RowSpan::new("abcde", 1),
+                RowSpan::new("1234567", 1),
+                RowSpan::new("foo", 1),
             ]
         );
 
-        let new_row_span = pager.scroll_down_one_row()?;
-        assert_eq!(new_row_span, Some(RowSpan::new("bar", 1)));
+        pager.scroll_down_one_row()?;
         assert_eq!(
-            page_to_vec(&mut pager.page())?,
+            pager.row_spans().collect::<Vec<_>>(),
             vec![
-                ("1234567".to_string(), 1),
-                ("foo".to_string(), 1),
-                ("bar".to_string(), 1),
-            ]
-        );
-
-        let new_row_span = pager.scroll_up_one_row()?;
-        assert_eq!(new_row_span, Some(RowSpan::new("abcde", 1)));
-        assert_eq!(
-            page_to_vec(&mut pager.page())?,
-            vec![
-                ("abcde".to_string(), 1),
-                ("1234567".to_string(), 1),
-                ("foo".to_string(), 1),
+                RowSpan::new("1234567", 1),
+                RowSpan::new("foo", 1),
+                RowSpan::new("bar", 1),
             ]
         );
 
         pager.scroll_to_end()?;
         assert_eq!(
-            page_to_vec(&mut pager.page())?,
+            pager.row_spans().collect::<Vec<_>>(),
             vec![
-                // wrapped 2 lines == 3 rows
-                ("bar".to_string(), 1),
-                ("123456789".to_string(), 2),
+                // Only two row spans since the total rows are 3 (max).
+                RowSpan::new("bar", 1),
+                RowSpan::new("123456789", 2),
             ]
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn display_lines_less_than_page() -> Result<(), AnyError> {
-        let s = "abc\n123".to_string();
-        let cursor = Cursor::new(s);
-        let source = source::as_readable(cursor);
-        let reader = Reader::new(source);
-
-        let mut pager = Pager::new(reader, PageSize { rows: 5, cols: 5 });
-        assert_eq!(
-            page_to_vec(&mut pager.page())?,
-            vec![("abc".to_string(), 1), ("123".to_string(), 1)],
-        );
-
-        pager.scroll_to_end()?;
-        assert_eq!(
-            page_to_vec(&mut pager.page())?,
-            vec![("abc".to_string(), 1), ("123".to_string(), 1)],
         );
 
         Ok(())
@@ -440,32 +257,14 @@ mod bench {
         let file = File::open(file_path)?;
         let source = source::as_seekable(file);
         let reader = Reader::new(source);
-        let mut pager = Pager::new(reader, PageSize::new(20, 80));
+        let mut pager = Pager::new(reader, PageSize::new(20, 80))?;
         b.iter(|| {
             let mut total = 0;
-            let mut page = pager.page();
-            while let Some(row_span) = page.next_row_span().unwrap() {
-                total += row_span.line().len();
-            }
-            drop(page);
-
             while let Some(row_span) = pager.scroll_down_one_row().unwrap() {
                 total += row_span.line().len();
             }
             pager.scroll_to_start().unwrap();
-            let mut page = pager.page();
-            while let Some(row_span) = page.next_row_span().unwrap() {
-                total += row_span.line().len();
-            }
-            drop(page);
-
             pager.scroll_to_end().unwrap();
-            let mut page = pager.page();
-            while let Some(row_span) = page.next_row_span().unwrap() {
-                total += row_span.line().len();
-            }
-            drop(page);
-
             total
         });
         Ok(())
