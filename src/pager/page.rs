@@ -33,14 +33,14 @@ struct Row {
 pub(super) struct FilledPage<LineMeta> {
     /// A double ended queue that holds lines currently displayed in the page.
     deque: VecDeque<PageLine<LineMeta>>,
-    row_size: usize,
+    row_capacity: usize,
     start_row: Row,
     end_row: Row,
 }
 
 impl<LineMeta> FilledPage<LineMeta> {
-    pub fn builder(row_size: usize) -> NewPageBuilder<LineMeta> {
-        NewPageBuilder::new(row_size)
+    pub fn builder(row_capacity: usize) -> NewPageBuilder<LineMeta> {
+        NewPageBuilder::new(row_capacity)
     }
 
     pub fn start_line(&self) -> &PageLine<LineMeta> {

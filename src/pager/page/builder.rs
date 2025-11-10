@@ -8,24 +8,29 @@ use crate::pager::{
 pub(in crate::pager) struct NewPageBuilder<LineMeta> {
     deque: VecDeque<PageLine<LineMeta>>,
     end_row: Option<Row>,
-    row_size: usize,
+    row_capacity: usize,
     read_rows: usize,
 }
 
 impl<LineMeta> NewPageBuilder<LineMeta> {
-    pub fn new(row_size: usize) -> Self {
-        debug_assert!(row_size > 0);
+    pub fn new(row_capacity: usize) -> Self {
+        debug_assert!(row_capacity > 0);
         Self {
-            deque: VecDeque::with_capacity(row_size + 1),
+            deque: VecDeque::with_capacity(row_capacity + 1),
             end_row: None,
-            row_size,
+            row_capacity,
             read_rows: 0,
         }
     }
 
     pub fn push_back(&mut self, line: PageLine<LineMeta>) -> bool {
-        debug_assert!(self.read_rows < self.row_size);
-        match push_back_line(line, &mut self.deque, &mut self.read_rows, self.row_size) {
+        debug_assert!(self.read_rows < self.row_capacity);
+        match push_back_line(
+            line,
+            &mut self.deque,
+            &mut self.read_rows,
+            self.row_capacity,
+        ) {
             None => true,
             Some(end_row) => {
                 self.end_row = Some(end_row);
@@ -41,7 +46,7 @@ impl<LineMeta> NewPageBuilder<LineMeta> {
         let (start_row, end_row) = finalize_start_page_rows(&self.deque, self.end_row.take());
         Some(FilledPage {
             deque: self.deque,
-            row_size: self.row_size,
+            row_capacity: self.row_capacity,
             start_row,
             end_row,
         })
@@ -65,13 +70,13 @@ impl<'page, LineMeta> ForwardPageWriter<'page, LineMeta> {
     }
 
     pub fn push_back(&mut self, line: PageLine<LineMeta>) -> bool {
-        debug_assert!(self.read_rows < self.page.row_size);
+        debug_assert!(self.read_rows < self.page.row_capacity);
 
         match push_back_line(
             line,
             &mut self.page.deque,
             &mut self.read_rows,
-            self.page.row_size,
+            self.page.row_capacity,
         ) {
             None => true,
             Some(end_row) => {
@@ -136,16 +141,16 @@ impl<'page, LineMeta> BackwardPageWriter<'page, LineMeta> {
     }
 
     pub fn push_front(&mut self, line: PageLine<LineMeta>) -> bool {
-        debug_assert!(self.read_rows < self.page.row_size);
+        debug_assert!(self.read_rows < self.page.row_capacity);
 
         self.read_rows += line.row_len();
-        if self.read_rows < self.page.row_size {
+        if self.read_rows < self.page.row_capacity {
             self.page.deque.push_front(line);
             return true;
         }
 
         self.start_row = Some(Row {
-            wrap_row_index: self.read_rows - self.page.row_size,
+            wrap_row_index: self.read_rows - self.page.row_capacity,
         });
         self.page.deque.push_front(line);
         false
