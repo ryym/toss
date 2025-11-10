@@ -9,9 +9,21 @@ use crate::pager::{
 
 mod builder;
 
+/// The start or end row of the page.
 #[derive(Debug, PartialEq)]
-pub(super) struct Row {
-    slice_index: usize,
+struct Row {
+    /// A wrap row index of this `Row`. See [`PageLine`] for terminologies. For example,
+    /// if this is the start row of the page and the page is positioned like below,
+    /// ```text
+    ///  ┌──────────────────────────────┐ Entire text
+    ///  │  A long line is wrapped aut  │
+    ///  │┌ - - - - - - - - - - - - - ┐ Current page
+    ///  │❘ omatically like this. ---------> this `Row`
+    ///  │❘ This is another line.     ❘ │
+    ///  │❘ ...                       ❘ │
+    /// ```
+    /// The line is wrapped into 2 rows and the `wrap_row_index` is 1.
+    wrap_row_index: usize,
 }
 
 /// A page which holds text lines in the page.
@@ -40,11 +52,11 @@ impl<LineMeta> FilledPage<LineMeta> {
     }
 
     pub fn start_row_span(&self) -> RowSpan<'_> {
-        self.start_line().slice(self.start_row.slice_index..)
+        self.start_line().slice(self.start_row.wrap_row_index..)
     }
 
     pub fn end_row_span(&self) -> RowSpan<'_> {
-        self.end_line().slice(..=self.end_row.slice_index)
+        self.end_line().slice(..=self.end_row.wrap_row_index)
     }
 
     pub fn row_spans(&self) -> RowSpanIter<'_, LineMeta> {
@@ -52,7 +64,7 @@ impl<LineMeta> FilledPage<LineMeta> {
     }
 
     /// Try to move down the page one row without loading a new line.
-    /// This succeeds only when the bottom row has more line slices which is not in the page.
+    /// This succeeds only when the bottom line has more wrap rows which is not in the page.
     pub fn move_down_one_row(&mut self) -> bool {
         if !move_down_row(&self.deque[self.deque.len() - 1], &mut self.end_row) {
             return false;
@@ -64,7 +76,7 @@ impl<LineMeta> FilledPage<LineMeta> {
     }
 
     /// Try to move up the page one row without loading a new line.
-    /// This succeeds only when the top row has more line slices which is not in the page.
+    /// This succeeds only when the top line has more wrap rows which is not in the page.
     pub fn move_up_one_row(&mut self) -> bool {
         if !move_up_row(&mut self.start_row) {
             return false;
@@ -103,8 +115,8 @@ impl<LineMeta> FilledPage<LineMeta> {
 }
 
 fn move_down_row<LineMeta>(line: &PageLine<LineMeta>, row: &mut Row) -> bool {
-    if row.slice_index < line.row_len() - 1 {
-        row.slice_index += 1;
+    if row.wrap_row_index < line.row_len() - 1 {
+        row.wrap_row_index += 1;
         true
     } else {
         false
@@ -112,8 +124,8 @@ fn move_down_row<LineMeta>(line: &PageLine<LineMeta>, row: &mut Row) -> bool {
 }
 
 fn move_up_row(row: &mut Row) -> bool {
-    if 0 < row.slice_index {
-        row.slice_index -= 1;
+    if 0 < row.wrap_row_index {
+        row.wrap_row_index -= 1;
         true
     } else {
         false
@@ -130,7 +142,7 @@ impl<LineMeta> EmptyPage<LineMeta> {
     pub fn new() -> Self {
         Self {
             deque: VecDeque::new(),
-            dummy_row: Row { slice_index: 0 },
+            dummy_row: Row { wrap_row_index: 0 },
         }
     }
 
@@ -175,9 +187,9 @@ impl<'page, LineMeta> Iterator for RowSpanIter<'page, LineMeta> {
             None => None,
             Some(line) => {
                 let row_span = if self.deque_index == 0 {
-                    line.slice(self.start_row.slice_index..)
+                    line.slice(self.start_row.wrap_row_index..)
                 } else if self.deque_index == self.deque.len() - 1 {
-                    line.slice(..=self.end_row.slice_index)
+                    line.slice(..=self.end_row.wrap_row_index)
                 } else {
                     line.slice(..)
                 };

@@ -100,9 +100,8 @@ fn push_back_line<LineMeta>(
         return None;
     }
 
-    let end_slice_idx = line.row_len() - 1 - (*read_rows - row_size);
     let end_row = Row {
-        slice_index: end_slice_idx,
+        wrap_row_index: line.row_len() - 1 - (*read_rows - row_size),
     };
     deque.push_back(line);
     Some(end_row)
@@ -112,10 +111,10 @@ fn finalize_start_page_rows<LineMeta>(
     deque: &VecDeque<PageLine<LineMeta>>,
     end_row: Option<Row>,
 ) -> (Row, Row) {
-    let start_row = Row { slice_index: 0 };
+    let start_row = Row { wrap_row_index: 0 };
     // The end row is not set when lines are less than the page size.
     let end_row = end_row.unwrap_or_else(|| Row {
-        slice_index: deque[deque.len() - 1].row_len() - 1,
+        wrap_row_index: deque[deque.len() - 1].row_len() - 1,
     });
     (start_row, end_row)
 }
@@ -145,9 +144,8 @@ impl<'page, LineMeta> BackwardPageWriter<'page, LineMeta> {
             return true;
         }
 
-        let start_slice_idx = self.read_rows - self.page.row_size;
         self.start_row = Some(Row {
-            slice_index: start_slice_idx,
+            wrap_row_index: self.read_rows - self.page.row_size,
         });
         self.page.deque.push_front(line);
         false
@@ -155,10 +153,10 @@ impl<'page, LineMeta> BackwardPageWriter<'page, LineMeta> {
 
     pub fn write_to_page(self) {
         let end_row = Row {
-            slice_index: self.page.deque[self.page.deque.len() - 1].row_len() - 1,
+            wrap_row_index: self.page.deque[self.page.deque.len() - 1].row_len() - 1,
         };
         // The start row is not set when lines are less than the page size.
-        let start_row = self.start_row.unwrap_or(Row { slice_index: 0 });
+        let start_row = self.start_row.unwrap_or(Row { wrap_row_index: 0 });
         self.page.start_row = start_row;
         self.page.end_row = end_row;
     }
