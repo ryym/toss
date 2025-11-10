@@ -1,4 +1,5 @@
 use std::{
+    backtrace::{Backtrace, BacktraceStatus},
     env,
     fs::File,
     io::{BufWriter, Write},
@@ -95,16 +96,13 @@ fn store_logs_on_panic(log_file_handle: Option<SharedFile>) {
             file.flush().ok();
         }
 
-        // Save panic information.
-        let message = if let Some(s) = panic_info.payload().downcast_ref::<String>() {
-            s.as_str()
-        } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-            s
-        } else {
-            "Unknown panic message"
-        };
-        let info = format!("{}\n{:?}", message, panic_info);
         if let Ok(mut panic_log_file) = File::create("toss-panic.log") {
+            let backtrace = Backtrace::capture();
+            let backtrace = match backtrace.status() {
+                BacktraceStatus::Captured => backtrace.to_string(),
+                _ => String::new(),
+            };
+            let info = format!("{panic_info}\n{backtrace}");
             panic_log_file.write_all(info.as_bytes()).ok();
         }
 
