@@ -25,21 +25,23 @@ pub(crate) trait Screen {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ScreenSize {
-    n_cols: usize,
-    n_rows: usize,
+    /// A number of columns of the screen.
+    cols: usize,
+    /// A number of rows of the screen.
+    rows: usize,
 }
 
 impl ScreenSize {
-    pub(crate) fn new(n_cols: usize, n_rows: usize) -> Self {
-        Self { n_cols, n_rows }
+    pub(crate) fn new(cols: usize, rows: usize) -> Self {
+        Self { cols, rows }
     }
 
-    pub(crate) fn n_cols(&self) -> usize {
-        self.n_cols
+    pub(crate) fn cols(&self) -> usize {
+        self.cols
     }
 
-    pub(crate) fn n_rows(&self) -> usize {
-        self.n_rows
+    pub(crate) fn rows(&self) -> usize {
+        self.rows
     }
 }
 

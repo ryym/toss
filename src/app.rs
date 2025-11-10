@@ -31,12 +31,12 @@ fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError
         let file = File::open(file_path)?;
         let source = source::as_seekable(file);
         let reader = Reader::new(source);
-        let pager = Pager::new(reader, PageSize::new(size.n_rows(), size.n_cols()))?;
+        let pager = Pager::new(reader, PageSize::new(size.cols(), size.rows()))?;
         App::new(screen, pager).run()?;
     } else {
         let source = source::as_readable(stdin);
         let reader = Reader::new(source);
-        let pager = Pager::new(reader, PageSize::new(size.n_rows(), size.n_cols()))?;
+        let pager = Pager::new(reader, PageSize::new(size.cols(), size.rows()))?;
         App::new(screen, pager).run()?;
     }
     Ok(())

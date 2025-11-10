@@ -15,13 +15,15 @@ mod page;
 
 #[derive(Debug)]
 pub(crate) struct PageSize {
-    rows: usize,
+    /// A number of columns of the page.
     cols: usize,
+    /// A number of rows of the page.
+    rows: usize,
 }
 
 impl PageSize {
-    pub fn new(rows: usize, cols: usize) -> Self {
-        Self { rows, cols }
+    pub fn new(cols: usize, rows: usize) -> Self {
+        Self { cols, rows }
     }
 
     #[inline]
@@ -280,7 +282,7 @@ mod bench {
         let file = File::open(file_path)?;
         let source = source::as_seekable(file);
         let reader = Reader::new(source);
-        let mut pager = Pager::new(reader, PageSize::new(20, 80))?;
+        let mut pager = Pager::new(reader, PageSize::new(80, 20))?;
         b.iter(|| {
             let mut total = 0;
             while let Some(row_span) = pager.scroll_down_one_row().unwrap() {

@@ -16,7 +16,7 @@ pub struct MockScreen {
 impl MockScreen {
     pub fn new(size: ScreenSize) -> Self {
         let mut draft = Vec::new();
-        draft.resize(size.n_rows(), String::new());
+        draft.resize(size.rows(), String::new());
         Self {
             draft,
             out: String::new(),
@@ -48,26 +48,26 @@ impl super::Screen for MockScreen {
 
     fn clear(&mut self) -> io::Result<()> {
         self.draft.clear();
-        self.draft.resize(self.size.n_rows(), String::new());
+        self.draft.resize(self.size.rows(), String::new());
         Ok(())
     }
 
     fn scroll_forward(&mut self, n_steps: u16) -> io::Result<()> {
         // Remove the first `n_steps` elements from the draft.
         self.draft = self.draft.split_off(n_steps as usize);
-        self.draft.resize(self.size.n_rows(), String::new());
+        self.draft.resize(self.size.rows(), String::new());
         Ok(())
     }
 
     fn scroll_backward(&mut self, n_steps: u16) -> io::Result<()> {
         // Prepend `n_steps` empty strings to the draft.
         let mut draft = Vec::new();
-        draft.resize(self.size.n_rows(), String::new());
+        draft.resize(self.size.rows(), String::new());
         let n_steps = n_steps as usize;
         for i in 0..n_steps {
             draft[i] = String::new();
         }
-        for i in 0..(self.size.n_rows() - n_steps) {
+        for i in 0..(self.size.rows() - n_steps) {
             draft[i + n_steps] = self.draft[i].clone();
         }
         self.draft = draft;
@@ -78,7 +78,7 @@ impl super::Screen for MockScreen {
     fn draw_at(&mut self, mut row: usize, mut line: &str) -> io::Result<()> {
         // Draw a given line with automatically wrapping it based on the column size.
         while line.len() > 0 {
-            let n_cols = self.size.n_cols();
+            let n_cols = self.size.cols();
             if line.len() <= n_cols {
                 self.draft[row] = line.to_string();
                 break;
@@ -86,7 +86,7 @@ impl super::Screen for MockScreen {
             self.draft[row] = format!("{}>", &line[..n_cols]);
             line = &line[n_cols..];
             row += 1;
-            if row >= self.size.n_rows() {
+            if row >= self.size.rows() {
                 return Err(io::Error::new(io::ErrorKind::Other, "row exceed max"));
             }
         }
