@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, fmt::Debug};
 
 use regex::Regex;
 
@@ -29,13 +29,24 @@ struct Row {
 /// A page which holds text lines in the page.
 /// [`crate::pager::Pager`] loads line from the source text and stores them in the page.
 /// See [`PageLine`] for some terminologies.
-#[derive(Debug)]
 pub(super) struct FilledPage<LineMeta> {
     /// A double ended queue that holds lines currently displayed in the page.
     deque: VecDeque<PageLine<LineMeta>>,
     row_capacity: usize,
     start_row: Row,
     end_row: Row,
+}
+
+impl<LineMeta: Debug> Debug for FilledPage<LineMeta> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FilledPage")
+            .field("lines_len", &self.deque.len())
+            .field("start_row", &self.start_row)
+            .field("end_row", &self.end_row)
+            .field("start_line_meta", &self.start_line().meta())
+            .field("end_line_meta", &self.end_line().meta())
+            .finish()
+    }
 }
 
 impl<LineMeta> FilledPage<LineMeta> {

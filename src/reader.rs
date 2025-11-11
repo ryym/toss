@@ -81,6 +81,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
     }
 
     pub(crate) fn read_line(&mut self, query: &QueryLine) -> Result<Option<RawLine>, AnyError> {
+        log::debug!("Reader: read_line by {query:?}");
         match query {
             QueryLine::AtStart => self.read_line_forward(0),
             QueryLine::AtEnd => self.read_end_line(),

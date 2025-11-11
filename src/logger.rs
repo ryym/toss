@@ -73,7 +73,7 @@ pub(crate) fn setup_file_logger() -> Result<Option<FileLoggerGuard>, AnyError> {
     // Set a global logger.
     let logger = FileLogger::new(log_file_handle.clone());
     log::set_boxed_logger(Box::new(logger))?;
-    log::set_max_level(log::LevelFilter::Info);
+    log::set_max_level(log::LevelFilter::Debug);
 
     store_logs_on_panic(Some(log_file_handle.clone()));
 

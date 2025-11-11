@@ -84,13 +84,17 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         if !page.move_down_one_row() {
             let end_pos = page.end_line().meta().pos;
             match self.reader.read_line(&QueryLine::NextOf(end_pos))? {
-                None => return Ok(None),
+                None => {
+                    log::debug!("Pager: not scrolled down: {:?}", page);
+                    return Ok(None);
+                }
                 Some((pos, text)) => {
                     let line = PageLine::new(LineMeta { pos }, text, self.size.cols);
                     page.move_down_one_line(line);
                 }
             }
         }
+        log::debug!("Pager: scrolled down: {:?}", page);
         Ok(Some(page.end_row_span()))
     }
 
@@ -102,13 +106,17 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         if !page.move_up_one_row() {
             let start_pos = page.start_line().meta().pos;
             match self.reader.read_line(&QueryLine::PrevOf(start_pos))? {
-                None => return Ok(None),
+                None => {
+                    log::debug!("Pager: not scrolled up: {:?}", page);
+                    return Ok(None);
+                }
                 Some((pos, text)) => {
                     let line = PageLine::new(LineMeta { pos }, text, self.size.cols);
                     page.move_up_one_line(line);
                 }
             }
         }
+        log::debug!("Pager: scrolled up: {:?}", page);
         Ok(Some(page.start_row_span()))
     }
 

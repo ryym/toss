@@ -24,16 +24,19 @@ pub fn run() -> Result<(), AnyError> {
 }
 
 fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError> {
+    log::debug!("Args: {args:?}");
     let size = screen.size()?;
     let stdin = io::stdin().lock();
     if stdin.is_terminal() || !args.is_empty() {
         let file_path = args.first().unwrap();
+        log::debug!("Read file: {file_path}");
         let file = File::open(file_path)?;
         let source = source::as_seekable(file);
         let reader = Reader::new(source);
         let pager = Pager::new(reader, PageSize::new(size.cols(), size.rows()))?;
         App::new(screen, pager).run()?;
     } else {
+        log::debug!("Read from stdin");
         let source = source::as_readable(stdin);
         let reader = Reader::new(source);
         let pager = Pager::new(reader, PageSize::new(size.cols(), size.rows()))?;
@@ -63,6 +66,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         self.draw_rows()?;
         loop {
             let event = self.screen.next_event()?;
+            log::debug!("Event: {event:?}");
             let event_result = match &self.mode {
                 Mode::View => self.handle_event_on_view(event)?,
                 Mode::Search => self.handle_event_on_search(event)?,
