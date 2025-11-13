@@ -81,7 +81,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Empty(_) => return Ok(None),
             Page::Filled(page) => page,
         };
-        if !page.move_down_one_row() {
+        if !page.move_down_one_wrap_row() {
             let end_pos = page.end_line().meta().pos;
             match self.reader.read_line(&QueryLine::NextOf(end_pos))? {
                 None => {
@@ -103,7 +103,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Empty(_) => return Ok(None),
             Page::Filled(page) => page,
         };
-        if !page.move_up_one_row() {
+        if !page.move_up_one_wrap_row() {
             let start_pos = page.start_line().meta().pos;
             match self.reader.read_line(&QueryLine::PrevOf(start_pos))? {
                 None => {
@@ -125,7 +125,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Empty(_) => return Ok(false),
             Page::Filled(page) => page,
         };
-        if page.start_line().meta().pos.is_first_line() {
+        if page.start_line().meta().pos.is_first_line() && !page.can_move_up_one_wrap_row() {
             return Ok(false);
         }
         write_page_from(QueryLine::AtStart, &mut self.reader, &self.size, page)?;
@@ -138,8 +138,9 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Filled(page) => page,
         };
         let end_pos_before = page.end_line().meta().pos;
+        let end_line_continue_before = page.can_move_down_one_wrap_row();
         write_page_ending_at(QueryLine::AtEnd, &mut self.reader, &self.size, page)?;
-        Ok(page.end_line().meta().pos != end_pos_before)
+        Ok(end_line_continue_before || page.end_line().meta().pos != end_pos_before)
     }
 
     pub fn search(&mut self, search_query: &Regex) -> Result<bool, AnyError> {

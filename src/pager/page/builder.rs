@@ -44,12 +44,12 @@ impl<LineMeta> NewPageBuilder<LineMeta> {
             return None;
         }
         let (start_row, end_row) = finalize_start_page_rows(&self.deque, self.end_row.take());
-        Some(FilledPage {
-            deque: self.deque,
-            row_capacity: self.row_capacity,
+        Some(FilledPage::new(
+            self.deque,
+            self.row_capacity,
             start_row,
             end_row,
-        })
+        ))
     }
 }
 
@@ -90,6 +90,7 @@ impl<'page, LineMeta> ForwardPageWriter<'page, LineMeta> {
         let (start_row, end_row) = finalize_start_page_rows(&self.page.deque, self.end_row.take());
         self.page.start_row = start_row;
         self.page.end_row = end_row;
+        self.page.update_row_len();
     }
 }
 
@@ -116,7 +117,7 @@ fn finalize_start_page_rows<LineMeta>(
     deque: &VecDeque<PageLine<LineMeta>>,
     end_row: Option<Row>,
 ) -> (Row, Row) {
-    let start_row = Row { wrap_row_index: 0 };
+    let start_row = Row::first_wrap_row();
     // The end row is not set when lines are less than the page size.
     let end_row = end_row.unwrap_or_else(|| Row {
         wrap_row_index: deque[deque.len() - 1].row_len() - 1,
@@ -161,8 +162,9 @@ impl<'page, LineMeta> BackwardPageWriter<'page, LineMeta> {
             wrap_row_index: self.page.deque[self.page.deque.len() - 1].row_len() - 1,
         };
         // The start row is not set when lines are less than the page size.
-        let start_row = self.start_row.unwrap_or(Row { wrap_row_index: 0 });
+        let start_row = self.start_row.unwrap_or(Row::first_wrap_row());
         self.page.start_row = start_row;
         self.page.end_row = end_row;
+        self.page.update_row_len();
     }
 }

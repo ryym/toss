@@ -26,6 +26,18 @@ struct Row {
     wrap_row_index: usize,
 }
 
+impl Row {
+    fn first_wrap_row() -> Self {
+        Self { wrap_row_index: 0 }
+    }
+
+    fn last_wrap_row<LineMeta>(line: &PageLine<LineMeta>) -> Self {
+        Self {
+            wrap_row_index: line.row_len() - 1,
+        }
+    }
+}
+
 /// A page which holds text lines in the page.
 /// [`crate::pager::Pager`] loads line from the source text and stores them in the page.
 /// See [`PageLine`] for some terminologies.
@@ -33,6 +45,7 @@ pub(super) struct FilledPage<LineMeta> {
     /// A double ended queue that holds lines currently displayed in the page.
     deque: VecDeque<PageLine<LineMeta>>,
     row_capacity: usize,
+    row_len: usize,
     start_row: Row,
     end_row: Row,
 }
@@ -52,6 +65,23 @@ impl<LineMeta: Debug> Debug for FilledPage<LineMeta> {
 impl<LineMeta> FilledPage<LineMeta> {
     pub fn builder(row_capacity: usize) -> NewPageBuilder<LineMeta> {
         NewPageBuilder::new(row_capacity)
+    }
+
+    fn new(
+        deque: VecDeque<PageLine<LineMeta>>,
+        row_capacity: usize,
+        start_row: Row,
+        end_row: Row,
+    ) -> Self {
+        let mut page = Self {
+            deque,
+            row_capacity,
+            start_row,
+            end_row,
+            row_len: 0,
+        };
+        page.update_row_len();
+        page
     }
 
     pub fn start_line(&self) -> &PageLine<LineMeta> {
@@ -74,40 +104,77 @@ impl<LineMeta> FilledPage<LineMeta> {
         RowSpanIter::from_page(self)
     }
 
-    /// Try to move down the page one row without loading a new line.
-    /// This succeeds only when the bottom line has more wrap rows which is not in the page.
-    pub fn move_down_one_row(&mut self) -> bool {
-        if !move_down_row(&self.deque[self.deque.len() - 1], &mut self.end_row) {
-            return false;
-        }
-        if !move_down_row(&self.deque[0], &mut self.start_row) {
-            self.deque.pop_front();
-        }
-        true
+    fn is_full_rows(&self) -> bool {
+        self.row_len == self.row_capacity
     }
 
-    /// Try to move up the page one row without loading a new line.
-    /// This succeeds only when the top line has more wrap rows which is not in the page.
-    pub fn move_up_one_row(&mut self) -> bool {
-        if !move_up_row(&mut self.start_row) {
+    fn update_row_len(&mut self) {
+        let filled_rows = self.deque.iter().fold(0, |n, line| n + line.row_len());
+        let unvisible_rows = self.start_row.wrap_row_index
+            + (self.end_line().row_len() - 1 - self.end_row.wrap_row_index);
+        self.row_len = filled_rows - unvisible_rows;
+    }
+
+    pub fn can_move_down_one_wrap_row(&self) -> bool {
+        self.end_row.wrap_row_index < self.end_line().row_len() - 1
+    }
+
+    pub fn can_move_up_one_wrap_row(&self) -> bool {
+        self.start_row.wrap_row_index > 0
+    }
+
+    /// Try to move down the page one row without loading a new line.
+    /// This succeeds only when the bottom line has more wrap rows which is not in the page.
+    pub fn move_down_one_wrap_row(&mut self) -> bool {
+        if !move_down_wrap_row(&mut self.end_row, &self.deque[self.deque.len() - 1]) {
             return false;
         }
-        if !move_up_row(&mut self.end_row) {
-            self.deque.pop_back();
-        }
+        self.move_down_start_row();
+        self.update_row_len();
         true
     }
 
     /// Move down to the next row by addig a new line.
     pub fn move_down_one_line(&mut self, line: PageLine<LineMeta>) {
-        self.deque.pop_front();
+        self.move_down_start_row();
         self.deque.push_back(line);
+        self.end_row = Row::first_wrap_row();
+        self.update_row_len();
+    }
+
+    // Must be used with moving down the `end_row`.
+    fn move_down_start_row(&mut self) {
+        if self.is_full_rows() && !move_down_wrap_row(&mut self.start_row, &self.deque[0]) {
+            self.deque.pop_front();
+            self.start_row = Row::first_wrap_row();
+        }
+    }
+
+    /// Try to move up the page one row without loading a new line.
+    /// This succeeds only when the top line has more wrap rows which is not in the page.
+    pub fn move_up_one_wrap_row(&mut self) -> bool {
+        if !move_up_wrap_row(&mut self.start_row) {
+            return false;
+        }
+        self.move_up_end_row();
+        self.update_row_len();
+        true
     }
 
     /// Move up to the next row by addig a new line.
     pub fn move_up_one_line(&mut self, line: PageLine<LineMeta>) {
-        self.deque.pop_back();
+        self.move_up_end_row();
+        self.start_row = Row::last_wrap_row(&line);
         self.deque.push_front(line);
+        self.update_row_len();
+    }
+
+    // Must be used with moving up the `start_row`.
+    fn move_up_end_row(&mut self) {
+        if self.is_full_rows() && !move_up_wrap_row(&mut self.end_row) {
+            self.deque.pop_back();
+            self.end_row = Row::last_wrap_row(self.end_line());
+        }
     }
 
     pub fn forward_page_writer(&mut self) -> ForwardPageWriter<'_, LineMeta> {
@@ -125,7 +192,7 @@ impl<LineMeta> FilledPage<LineMeta> {
     }
 }
 
-fn move_down_row<LineMeta>(line: &PageLine<LineMeta>, row: &mut Row) -> bool {
+fn move_down_wrap_row<LineMeta>(row: &mut Row, line: &PageLine<LineMeta>) -> bool {
     if row.wrap_row_index < line.row_len() - 1 {
         row.wrap_row_index += 1;
         true
@@ -134,7 +201,7 @@ fn move_down_row<LineMeta>(line: &PageLine<LineMeta>, row: &mut Row) -> bool {
     }
 }
 
-fn move_up_row(row: &mut Row) -> bool {
+fn move_up_wrap_row(row: &mut Row) -> bool {
     if 0 < row.wrap_row_index {
         row.wrap_row_index -= 1;
         true
@@ -153,7 +220,7 @@ impl<LineMeta> EmptyPage<LineMeta> {
     pub fn new() -> Self {
         Self {
             deque: VecDeque::new(),
-            dummy_row: Row { wrap_row_index: 0 },
+            dummy_row: Row::first_wrap_row(),
         }
     }
 
@@ -243,7 +310,7 @@ mod tests {
         ];
         assert_eq!(page.row_spans().collect::<Vec<_>>(), initial);
 
-        assert_eq!(page.move_down_one_row(), false);
+        assert_eq!(page.move_down_one_wrap_row(), false);
         assert_eq!(page.row_spans().collect::<Vec<_>>(), initial);
 
         page.move_down_one_line(PageLine::new((), 'd'.to_string(), 3));
