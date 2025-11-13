@@ -17,13 +17,13 @@ use crate::screen::{Event, Key};
 use crate::source::{self, Source};
 
 pub fn run() -> Result<(), AnyError> {
-    let _guard = logger::setup_file_logger()?;
     let mut screen = crate::screen::for_terminal()?;
     let args = env::args().skip(1).collect::<Vec<_>>();
     run_with(&mut screen, args)
 }
 
 fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError> {
+    let _guard = logger::setup_file_logger()?;
     log::debug!("Args: {args:?}");
     let size = screen.size()?;
     let stdin = io::stdin().lock();
