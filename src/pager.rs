@@ -45,8 +45,8 @@ enum Page {
 
 /// Pager clips text lines to fit them in the sized frame. The frame is called a page.
 /// Its responsibilites are:
-/// 1. Read source text and load to a page.
-/// 2. Determine lines that are currently "visible" in the page.
+/// 1. Read source text and load lines to a page.
+/// 2. Determine currently "visible" rows. This role is internally delegated to [`FilledPage`].
 /// 3. Wrap lines based on the column size.
 #[derive(Debug)]
 pub(crate) struct Pager<R, Src> {
@@ -81,7 +81,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Empty(_) => return Ok(None),
             Page::Filled(page) => page,
         };
-        if !page.move_down_one_wrap_row() {
+        if !page.move_down_one_row() {
             let end_pos = page.end_line().meta().pos;
             match self.reader.read_line(&QueryLine::NextOf(end_pos))? {
                 None => {
@@ -103,7 +103,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Empty(_) => return Ok(None),
             Page::Filled(page) => page,
         };
-        if !page.move_up_one_wrap_row() {
+        if !page.move_up_one_row() {
             let start_pos = page.start_line().meta().pos;
             match self.reader.read_line(&QueryLine::PrevOf(start_pos))? {
                 None => {
@@ -125,7 +125,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Empty(_) => return Ok(false),
             Page::Filled(page) => page,
         };
-        if page.start_line().meta().pos.is_first_line() && !page.can_move_up_one_wrap_row() {
+        if page.start_line().meta().pos.is_first_line() && !page.can_move_up_one_row() {
             return Ok(false);
         }
         write_page_from(QueryLine::AtStart, &mut self.reader, &self.size, page)?;
@@ -138,7 +138,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Filled(page) => page,
         };
         let end_pos_before = page.end_line().meta().pos;
-        let end_line_continue_before = page.can_move_down_one_wrap_row();
+        let end_line_continue_before = page.can_move_down_one_row();
         write_page_ending_at(QueryLine::AtEnd, &mut self.reader, &self.size, page)?;
         Ok(end_line_continue_before || page.end_line().meta().pos != end_pos_before)
     }

@@ -12,6 +12,9 @@ mod builder;
 /// The start or end row of the page.
 #[derive(Debug, PartialEq)]
 struct Row {
+    /// The index of the row in [`FilledPage::deque`].
+    /// Note that this index has nothing to do with the line position in the source text.
+    deque_index: usize,
     /// A wrap row index of this `Row`. See [`PageLine`] for terminologies. For example,
     /// if this is the start row of the page and the page is positioned like below,
     /// ```text
@@ -26,26 +29,17 @@ struct Row {
     wrap_row_index: usize,
 }
 
-impl Row {
-    fn first_wrap_row() -> Self {
-        Self { wrap_row_index: 0 }
-    }
-
-    fn last_wrap_row<LineMeta>(line: &PageLine<LineMeta>) -> Self {
-        Self {
-            wrap_row_index: line.row_len() - 1,
-        }
-    }
-}
-
-/// A page which holds text lines in the page.
-/// [`crate::pager::Pager`] loads line from the source text and stores them in the page.
-/// See [`PageLine`] for some terminologies.
+/// FilledPage manages rows currently displayed in the page.
+/// If a line is too long to fit in the page width, it is wrapped into multiple rows.
+/// This struct provides easy-to-use methods by hiding the complexity of line wraps,
+/// but this struct itself does not load lines from source. Lines are set by [`crate::pager::Pager`].
+/// See [`PageLine`] for detailed terminologies like line v.s. row.
 pub(super) struct FilledPage<LineMeta> {
-    /// A double ended queue that holds lines currently displayed in the page.
+    /// A double ended queue that holds lines currently displayed in the page, and
+    /// additional one or more lines before and after the displayed lines.
+    /// Additional lines work as a cache but its main purpose is to simplify the implementation.
     deque: VecDeque<PageLine<LineMeta>>,
     row_capacity: usize,
-    row_len: usize,
     start_row: Row,
     end_row: Row,
 }
@@ -67,114 +61,115 @@ impl<LineMeta> FilledPage<LineMeta> {
         NewPageBuilder::new(row_capacity)
     }
 
-    fn new(
-        deque: VecDeque<PageLine<LineMeta>>,
-        row_capacity: usize,
-        start_row: Row,
-        end_row: Row,
-    ) -> Self {
-        let mut page = Self {
-            deque,
-            row_capacity,
-            start_row,
-            end_row,
-            row_len: 0,
-        };
-        page.update_row_len();
-        page
-    }
-
     pub fn start_line(&self) -> &PageLine<LineMeta> {
-        &self.deque[0]
+        &self.deque[self.start_row.deque_index]
     }
 
     pub fn end_line(&self) -> &PageLine<LineMeta> {
-        &self.deque[self.deque.len() - 1]
+        &self.deque[self.end_row.deque_index]
     }
 
     pub fn start_row_span(&self) -> RowSpan<'_> {
-        self.start_line().slice(self.start_row.wrap_row_index..)
+        let line = &self.deque[self.start_row.deque_index];
+        line.slice(self.start_row.wrap_row_index..)
     }
 
     pub fn end_row_span(&self) -> RowSpan<'_> {
-        self.end_line().slice(..=self.end_row.wrap_row_index)
+        let line = &self.deque[self.end_row.deque_index];
+        line.slice(..=self.end_row.wrap_row_index)
     }
 
     pub fn row_spans(&self) -> RowSpanIter<'_, LineMeta> {
         RowSpanIter::from_page(self)
     }
 
-    fn is_full_rows(&self) -> bool {
-        self.row_len == self.row_capacity
+    fn visible_lines(&self) -> impl Iterator<Item = &PageLine<LineMeta>> {
+        self.deque
+            .iter()
+            .take(self.end_row.deque_index + 1)
+            .skip(self.start_row.deque_index)
     }
 
-    fn update_row_len(&mut self) {
-        let filled_rows = self.deque.iter().fold(0, |n, line| n + line.row_len());
+    fn row_len(&self) -> usize {
+        let visible_line_rows = self.visible_lines().fold(0, |n, line| n + line.row_len());
         let unvisible_rows = self.start_row.wrap_row_index
             + (self.end_line().row_len() - 1 - self.end_row.wrap_row_index);
-        self.row_len = filled_rows - unvisible_rows;
+        visible_line_rows - unvisible_rows
     }
 
-    pub fn can_move_down_one_wrap_row(&self) -> bool {
+    pub fn can_move_down_one_row(&self) -> bool {
         self.end_row.wrap_row_index < self.end_line().row_len() - 1
+            || self.end_row.deque_index < self.deque.len() - 1
     }
 
-    pub fn can_move_up_one_wrap_row(&self) -> bool {
-        self.start_row.wrap_row_index > 0
+    pub fn can_move_up_one_row(&self) -> bool {
+        0 < self.start_row.wrap_row_index || 0 < self.start_row.deque_index
     }
 
-    /// Try to move down the page one row without loading a new line.
-    /// This succeeds only when the bottom line has more wrap rows which is not in the page.
-    pub fn move_down_one_wrap_row(&mut self) -> bool {
-        if !move_down_wrap_row(&mut self.end_row, &self.deque[self.deque.len() - 1]) {
+    /// Try to move down the page one row without loading a new line. This succeeds in either case:
+    /// - when the bottom line has more wrap rows which is not in the page.
+    /// - when the page has additional cached lines which has been previously loaded.
+    pub fn move_down_one_row(&mut self) -> bool {
+        let row_len = self.row_len();
+        if !move_down_row(&self.deque, &mut self.end_row) {
             return false;
         }
-        self.move_down_start_row();
-        self.update_row_len();
+        if row_len == self.row_capacity {
+            move_down_row(&self.deque, &mut self.start_row);
+        }
+        true
+    }
+
+    /// Try to move up the page one row without loading a new line. This succeeds in either case:
+    /// - when the top line has more wrap rows which is not in the page.
+    /// - when the page has additional cached lines which has been previously loaded.
+    pub fn move_up_one_row(&mut self) -> bool {
+        let row_len = self.row_len();
+        if !move_up_row(&self.deque, &mut self.start_row) {
+            return false;
+        }
+        if row_len == self.row_capacity {
+            move_up_row(&self.deque, &mut self.end_row);
+        }
         true
     }
 
     /// Move down to the next row by addig a new line.
     pub fn move_down_one_line(&mut self, line: PageLine<LineMeta>) {
-        self.move_down_start_row();
-        self.deque.push_back(line);
-        self.end_row = Row::first_wrap_row();
-        self.update_row_len();
-    }
-
-    // Must be used with moving down the `end_row`.
-    fn move_down_start_row(&mut self) {
-        if self.is_full_rows() && !move_down_wrap_row(&mut self.start_row, &self.deque[0]) {
-            self.deque.pop_front();
-            self.start_row = Row::first_wrap_row();
-        }
-    }
-
-    /// Try to move up the page one row without loading a new line.
-    /// This succeeds only when the top line has more wrap rows which is not in the page.
-    pub fn move_up_one_wrap_row(&mut self) -> bool {
-        if !move_up_wrap_row(&mut self.start_row) {
-            return false;
-        }
-        self.move_up_end_row();
-        self.update_row_len();
-        true
+        self.push_back(line);
+        self.move_down_one_row();
     }
 
     /// Move up to the next row by addig a new line.
     pub fn move_up_one_line(&mut self, line: PageLine<LineMeta>) {
-        self.move_up_end_row();
-        self.start_row = Row::last_wrap_row(&line);
-        self.deque.push_front(line);
-        self.update_row_len();
+        self.push_front(line);
+        self.move_up_one_row();
     }
 
-    // Must be used with moving up the `start_row`.
-    fn move_up_end_row(&mut self) {
-        if self.is_full_rows() && !move_up_wrap_row(&mut self.end_row) {
-            self.deque.pop_back();
-            self.end_row = Row::last_wrap_row(self.end_line());
+    fn push_back(&mut self, line: PageLine<LineMeta>) {
+        // As long as the dequeue capacity is greater than the page size and this method is called
+        // when the page is at the end of the dequeue, the first element of the dequeue must not
+        // in the page and therefore it should be safe to remove it.
+        debug_assert!(self.end_row.deque_index == self.deque.len() - 1);
+        if self.deque.len() == self.deque.capacity() {
+            self.deque.pop_front();
+            self.start_row.deque_index -= 1;
+            self.end_row.deque_index -= 1;
         }
+        self.deque.push_back(line);
+    }
+
+    fn push_front(&mut self, line: PageLine<LineMeta>) {
+        // As long as the dequeue capacity is greater than the page size and this method is called
+        // when the page is at the start of the dequeue, the last element of the dequeue must not
+        // in the page and therefore it should be safe to remove it.
+        debug_assert!(self.start_row.deque_index == 0);
+        if self.deque.len() == self.deque.capacity() {
+            self.deque.pop_back();
+        }
+        self.start_row.deque_index += 1;
+        self.end_row.deque_index += 1;
+        self.deque.push_front(line);
     }
 
     pub fn forward_page_writer(&mut self) -> ForwardPageWriter<'_, LineMeta> {
@@ -188,22 +183,36 @@ impl<LineMeta> FilledPage<LineMeta> {
     pub fn find_first_match_line(&mut self, search_query: &Regex) -> Option<&PageLine<LineMeta>> {
         self.deque
             .iter()
+            .skip(self.start_row.deque_index)
             .find(|line| search_query.is_match(line.plain()))
     }
 }
 
-fn move_down_wrap_row<LineMeta>(row: &mut Row, line: &PageLine<LineMeta>) -> bool {
+fn move_down_row<LineMeta>(deque: &VecDeque<PageLine<LineMeta>>, row: &mut Row) -> bool {
+    let line = &deque[row.deque_index];
     if row.wrap_row_index < line.row_len() - 1 {
         row.wrap_row_index += 1;
+        true
+    } else if deque.get(row.deque_index + 1).is_some() {
+        *row = Row {
+            deque_index: row.deque_index + 1,
+            wrap_row_index: 0,
+        };
         true
     } else {
         false
     }
 }
 
-fn move_up_wrap_row(row: &mut Row) -> bool {
+fn move_up_row<LineMeta>(deque: &VecDeque<PageLine<LineMeta>>, row: &mut Row) -> bool {
     if 0 < row.wrap_row_index {
         row.wrap_row_index -= 1;
+        true
+    } else if 0 < row.deque_index {
+        *row = Row {
+            deque_index: row.deque_index - 1,
+            wrap_row_index: deque[row.deque_index - 1].row_len() - 1,
+        };
         true
     } else {
         false
@@ -220,7 +229,10 @@ impl<LineMeta> EmptyPage<LineMeta> {
     pub fn new() -> Self {
         Self {
             deque: VecDeque::new(),
-            dummy_row: Row::first_wrap_row(),
+            dummy_row: Row {
+                deque_index: 0,
+                wrap_row_index: 0,
+            },
         }
     }
 
@@ -243,7 +255,7 @@ impl<'page, LineMeta> RowSpanIter<'page, LineMeta> {
             deque: &page.deque,
             start_row: &page.start_row,
             end_row: &page.end_row,
-            deque_index: 0,
+            deque_index: page.start_row.deque_index,
         }
     }
 
@@ -264,9 +276,9 @@ impl<'page, LineMeta> Iterator for RowSpanIter<'page, LineMeta> {
         match self.deque.get(self.deque_index) {
             None => None,
             Some(line) => {
-                let row_span = if self.deque_index == 0 {
+                let row_span = if self.deque_index == self.start_row.deque_index {
                     line.slice(self.start_row.wrap_row_index..)
-                } else if self.deque_index == self.deque.len() - 1 {
+                } else if self.deque_index == self.end_row.deque_index {
                     line.slice(..=self.end_row.wrap_row_index)
                 } else {
                     line.slice(..)
@@ -310,7 +322,7 @@ mod tests {
         ];
         assert_eq!(page.row_spans().collect::<Vec<_>>(), initial);
 
-        assert_eq!(page.move_down_one_wrap_row(), false);
+        assert_eq!(page.move_down_one_row(), false);
         assert_eq!(page.row_spans().collect::<Vec<_>>(), initial);
 
         page.move_down_one_line(PageLine::new((), 'd'.to_string(), 3));
