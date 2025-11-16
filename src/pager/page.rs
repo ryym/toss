@@ -270,7 +270,7 @@ impl<'page> LineSliceIter<'page> {
 
     #[cfg(test)]
     pub fn into_vec(self) -> Vec<(String, usize)> {
-        self.map(|l| (l.line().to_string(), l.row_len())).collect()
+        self.map(|l| (l.to_string(), l.row_len())).collect()
     }
 }
 

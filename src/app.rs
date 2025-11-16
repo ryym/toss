@@ -169,7 +169,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         let mut i_row = 0;
         for line_slice in self.pager.line_slices() {
             self.screen.goto(0, i_row)?;
-            self.screen.write_all(line_slice.line().as_bytes())?;
+            line_slice.write_to(self.screen)?;
             i_row += line_slice.row_len();
         }
 
@@ -185,7 +185,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
                 self.screen.scroll_forward(1)?;
                 let row_start = row_size - new_line_slice.row_len();
                 self.screen.goto(0, row_start)?;
-                self.screen.write_all(new_line_slice.line().as_bytes())?;
+                new_line_slice.write_to(self.screen)?;
                 Ok(true)
             }
         }
@@ -197,7 +197,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
             Some(new_line_slice) => {
                 self.screen.scroll_backward(1)?;
                 self.screen.goto(0, 0)?;
-                self.screen.write_all(new_line_slice.line().as_bytes())?;
+                new_line_slice.write_to(self.screen)?;
                 Ok(true)
             }
         }

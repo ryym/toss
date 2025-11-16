@@ -290,7 +290,7 @@ mod bench {
         b.iter(|| {
             let mut total = 0;
             while let Some(line_slice) = pager.scroll_down_one_row().unwrap() {
-                total += line_slice.line().len();
+                total += line_slice.to_string().len();
             }
             pager.scroll_to_start().unwrap();
             pager.scroll_to_end().unwrap();

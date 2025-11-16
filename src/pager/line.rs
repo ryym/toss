@@ -1,8 +1,11 @@
-use std::ops::{Bound, RangeBounds};
+use std::{
+    io::Write,
+    ops::{Bound, RangeBounds},
+};
 
 use unicode_width::UnicodeWidthChar;
 
-use crate::{line::Line, reader::LinePos};
+use crate::{error::AnyError, line::Line, reader::LinePos};
 
 /// A line in a page.
 ///
@@ -95,6 +98,11 @@ impl PageLine {
         let span = self.wrap.line_slice_span(wrap_row_range);
         LineSlice::new(self, span)
     }
+
+    fn write_to(&self, w: &mut impl Write, span: &LineSliceSpan) -> Result<(), AnyError> {
+        write!(w, "{}", &self.line.raw()[span.start_byte..span.end_byte])?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Default)]
@@ -186,13 +194,20 @@ impl<'line> LineSlice<'line> {
     }
 
     #[inline]
-    pub(crate) fn line(&self) -> &str {
-        &self.line.line.raw()[self.span.start_byte..self.span.end_byte]
+    pub fn row_len(&self) -> usize {
+        self.span.row_len
     }
 
-    #[inline]
-    pub(crate) fn row_len(&self) -> usize {
-        self.span.row_len
+    pub fn write_to(&self, w: &mut impl Write) -> Result<(), AnyError> {
+        self.line.write_to(w, &self.span)
+    }
+
+    #[cfg(test)]
+    pub fn to_string(&self) -> String {
+        let mut buf = std::io::BufWriter::new(Vec::new());
+        self.write_to(&mut buf).unwrap();
+        let buf = buf.into_inner().unwrap();
+        String::from_utf8_lossy(&buf).to_string()
     }
 }
 
