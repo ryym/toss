@@ -91,10 +91,10 @@ impl PageLine {
     }
 
     /// Return a row span which spans wrap rows of the given indice.
-    pub fn slice(&self, wrap_row_range: impl RangeBounds<usize>) -> RowSpan<'_> {
-        let (start_byte, end_byte, row_len) = self.wrap.row_span_ends(wrap_row_range);
+    pub fn slice(&self, wrap_row_range: impl RangeBounds<usize>) -> LineSlice<'_> {
+        let (start_byte, end_byte, row_len) = self.wrap.line_slice_ends(wrap_row_range);
         let s = &self.line.raw()[start_byte..end_byte];
-        RowSpan::new(s, row_len)
+        LineSlice::new(s, row_len)
     }
 }
 
@@ -125,7 +125,7 @@ impl Wrap {
         Self { rows }
     }
 
-    fn row_span_ends(&self, wrap_row_range: impl RangeBounds<usize>) -> (usize, usize, usize) {
+    fn line_slice_ends(&self, wrap_row_range: impl RangeBounds<usize>) -> (usize, usize, usize) {
         let start_row_idx = match wrap_row_range.start_bound() {
             Bound::Unbounded => 0,
             Bound::Included(start) => *start,
@@ -159,18 +159,18 @@ impl WrapRow {
     }
 }
 
-/// Iterator of row spans of the current page.
-/// A row span is neither a row nor a line. It is a wrapped line possibly cut off in the middle
+/// Iterator of line slices of the current page.
+/// A line slice is neither a row nor a line. It is a wrapped line possibly cut off in the middle
 /// to fit in the page. For example, if the first line of the source text is "aabbcc" and the
 /// page column size is 2, the line will be broken into 3 rows: "aa", "bb", "cc". If the page
-/// is scrolled down one row, the first two rows will be "bb" and "cc". This is a row span.
+/// is scrolled down one row, the first two rows will be "bb" and "cc". This is a line slice.
 #[derive(Debug, PartialEq)]
-pub(crate) struct RowSpan<'l> {
+pub(crate) struct LineSlice<'l> {
     line: &'l str,
     size: usize,
 }
 
-impl<'line> RowSpan<'line> {
+impl<'line> LineSlice<'line> {
     pub(super) fn new(line: &'line str, size: usize) -> Self {
         Self { line, size }
     }

@@ -3,8 +3,8 @@ use regex::Regex;
 use crate::{
     error::AnyError,
     pager::{
-        line::{PageLine, RowSpan},
-        page::{EmptyPage, FilledPage, RowSpanIter},
+        line::{LineSlice, PageLine},
+        page::{EmptyPage, FilledPage, LineSliceIter},
     },
     reader::{QueryLine, Reader},
     source::Source,
@@ -64,14 +64,14 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         &self.size
     }
 
-    pub fn row_spans(&mut self) -> RowSpanIter<'_> {
+    pub fn line_slices(&mut self) -> LineSliceIter<'_> {
         match &self.page {
-            Page::Filled(page) => page.row_spans(),
-            Page::Empty(page) => page.row_spans(),
+            Page::Filled(page) => page.line_slices(),
+            Page::Empty(page) => page.line_slices(),
         }
     }
 
-    pub fn scroll_down_one_row(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
+    pub fn scroll_down_one_row(&mut self) -> Result<Option<LineSlice<'_>>, AnyError> {
         let page = match &mut self.page {
             Page::Empty(_) => return Ok(None),
             Page::Filled(page) => page,
@@ -90,10 +90,10 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             }
         }
         log::debug!("Pager: scrolled down: {:?}", page);
-        Ok(Some(page.end_row_span()))
+        Ok(Some(page.end_line_slice()))
     }
 
-    pub fn scroll_up_one_row(&mut self) -> Result<Option<RowSpan<'_>>, AnyError> {
+    pub fn scroll_up_one_row(&mut self) -> Result<Option<LineSlice<'_>>, AnyError> {
         let page = match &mut self.page {
             Page::Empty(_) => return Ok(None),
             Page::Filled(page) => page,
@@ -112,7 +112,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             }
         }
         log::debug!("Pager: scrolled up: {:?}", page);
-        Ok(Some(page.start_row_span()))
+        Ok(Some(page.start_line_slice()))
     }
 
     pub fn scroll_to_start(&mut self) -> Result<bool, AnyError> {
@@ -220,7 +220,7 @@ mod tests {
 
     use crate::{
         error::AnyError,
-        pager::{PageSize, Pager, line::RowSpan},
+        pager::{PageSize, Pager, line::LineSlice},
         reader::Reader,
         source,
     };
@@ -234,31 +234,31 @@ mod tests {
 
         let mut pager = Pager::new(reader, PageSize { rows: 3, cols: 8 })?;
         assert_eq!(
-            pager.row_spans().collect::<Vec<_>>(),
+            pager.line_slices().collect::<Vec<_>>(),
             vec![
-                RowSpan::new("abcde", 1),
-                RowSpan::new("1234567", 1),
-                RowSpan::new("foo", 1),
+                LineSlice::new("abcde", 1),
+                LineSlice::new("1234567", 1),
+                LineSlice::new("foo", 1),
             ]
         );
 
         pager.scroll_down_one_row()?;
         assert_eq!(
-            pager.row_spans().collect::<Vec<_>>(),
+            pager.line_slices().collect::<Vec<_>>(),
             vec![
-                RowSpan::new("1234567", 1),
-                RowSpan::new("foo", 1),
-                RowSpan::new("bar", 1),
+                LineSlice::new("1234567", 1),
+                LineSlice::new("foo", 1),
+                LineSlice::new("bar", 1),
             ]
         );
 
         pager.scroll_to_end()?;
         assert_eq!(
-            pager.row_spans().collect::<Vec<_>>(),
+            pager.line_slices().collect::<Vec<_>>(),
             vec![
                 // Only two row spans since the total rows are 3 (max).
-                RowSpan::new("bar", 1),
-                RowSpan::new("123456789", 2),
+                LineSlice::new("bar", 1),
+                LineSlice::new("123456789", 2),
             ]
         );
 
@@ -289,8 +289,8 @@ mod bench {
         let mut pager = Pager::new(reader, PageSize::new(80, 20))?;
         b.iter(|| {
             let mut total = 0;
-            while let Some(row_span) = pager.scroll_down_one_row().unwrap() {
-                total += row_span.line().len();
+            while let Some(line_slice) = pager.scroll_down_one_row().unwrap() {
+                total += line_slice.line().len();
             }
             pager.scroll_to_start().unwrap();
             pager.scroll_to_end().unwrap();

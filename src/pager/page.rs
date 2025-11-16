@@ -3,7 +3,7 @@ use std::{collections::VecDeque, fmt::Debug};
 use regex::Regex;
 
 use crate::pager::{
-    line::{PageLine, RowSpan},
+    line::{LineSlice, PageLine},
     page::builder::{BackwardPageWriter, ForwardPageWriter, NewPageBuilder},
 };
 
@@ -69,18 +69,18 @@ impl FilledPage {
         &self.deque[self.end_row.deque_index]
     }
 
-    pub fn start_row_span(&self) -> RowSpan<'_> {
+    pub fn start_line_slice(&self) -> LineSlice<'_> {
         let line = &self.deque[self.start_row.deque_index];
         line.slice(self.start_row.wrap_row_index..)
     }
 
-    pub fn end_row_span(&self) -> RowSpan<'_> {
+    pub fn end_line_slice(&self) -> LineSlice<'_> {
         let line = &self.deque[self.end_row.deque_index];
         line.slice(..=self.end_row.wrap_row_index)
     }
 
-    pub fn row_spans(&self) -> RowSpanIter<'_> {
-        RowSpanIter::from_page(self)
+    pub fn line_slices(&self) -> LineSliceIter<'_> {
+        LineSliceIter::from_page(self)
     }
 
     fn visible_lines(&self) -> impl Iterator<Item = &PageLine> {
@@ -236,20 +236,20 @@ impl EmptyPage {
         }
     }
 
-    pub fn row_spans(&self) -> RowSpanIter<'_> {
-        RowSpanIter::empty(self)
+    pub fn line_slices(&self) -> LineSliceIter<'_> {
+        LineSliceIter::empty(self)
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct RowSpanIter<'page> {
+pub(crate) struct LineSliceIter<'page> {
     deque: &'page VecDeque<PageLine>,
     start_row: &'page Row,
     end_row: &'page Row,
     deque_index: usize,
 }
 
-impl<'page> RowSpanIter<'page> {
+impl<'page> LineSliceIter<'page> {
     fn from_page(page: &'page FilledPage) -> Self {
         Self {
             deque: &page.deque,
@@ -269,14 +269,14 @@ impl<'page> RowSpanIter<'page> {
     }
 }
 
-impl<'page> Iterator for RowSpanIter<'page> {
-    type Item = RowSpan<'page>;
+impl<'page> Iterator for LineSliceIter<'page> {
+    type Item = LineSlice<'page>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.deque.get(self.deque_index) {
             None => None,
             Some(line) => {
-                let row_span = if self.deque_index == self.start_row.deque_index {
+                let line_slice = if self.deque_index == self.start_row.deque_index {
                     line.slice(self.start_row.wrap_row_index..)
                 } else if self.deque_index == self.end_row.deque_index {
                     line.slice(..=self.end_row.wrap_row_index)
@@ -284,7 +284,7 @@ impl<'page> Iterator for RowSpanIter<'page> {
                     line.slice(..)
                 };
                 self.deque_index += 1;
-                Some(row_span)
+                Some(line_slice)
             }
         }
     }
@@ -294,7 +294,7 @@ impl<'page> Iterator for RowSpanIter<'page> {
 mod tests {
     use pretty_assertions::assert_eq;
 
-    use crate::pager::{PageLine, line::RowSpan, page::FilledPage};
+    use crate::pager::{PageLine, line::LineSlice, page::FilledPage};
 
     #[test]
     fn hold_lines_less_than_page_size() {
@@ -303,8 +303,8 @@ mod tests {
         builder.push_back(PageLine::dummy("def".to_string(), 3));
         let page = builder.into_page().expect("build page");
         assert_eq!(
-            page.row_spans().collect::<Vec<_>>(),
-            vec![RowSpan::new("abc", 1), RowSpan::new("def", 1)]
+            page.line_slices().collect::<Vec<_>>(),
+            vec![LineSlice::new("abc", 1), LineSlice::new("def", 1)]
         );
     }
 
@@ -316,22 +316,22 @@ mod tests {
         }
         let mut page = builder.into_page().expect("build page");
         let initial = vec![
-            RowSpan::new("a", 1),
-            RowSpan::new("b", 1),
-            RowSpan::new("c", 1),
+            LineSlice::new("a", 1),
+            LineSlice::new("b", 1),
+            LineSlice::new("c", 1),
         ];
-        assert_eq!(page.row_spans().collect::<Vec<_>>(), initial);
+        assert_eq!(page.line_slices().collect::<Vec<_>>(), initial);
 
         assert_eq!(page.move_down_one_row(), false);
-        assert_eq!(page.row_spans().collect::<Vec<_>>(), initial);
+        assert_eq!(page.line_slices().collect::<Vec<_>>(), initial);
 
         page.move_down_one_line(PageLine::dummy('d'.to_string(), 3));
         assert_eq!(
-            page.row_spans().collect::<Vec<_>>(),
+            page.line_slices().collect::<Vec<_>>(),
             vec![
-                RowSpan::new("b", 1),
-                RowSpan::new("c", 1),
-                RowSpan::new("d", 1),
+                LineSlice::new("b", 1),
+                LineSlice::new("c", 1),
+                LineSlice::new("d", 1),
             ]
         );
     }

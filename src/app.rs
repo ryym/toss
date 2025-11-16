@@ -167,10 +167,10 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         self.screen.clear()?;
 
         let mut i_row = 0;
-        for row_span in self.pager.row_spans() {
+        for line_slice in self.pager.line_slices() {
             self.screen.goto(0, i_row)?;
-            self.screen.write_all(row_span.line().as_bytes())?;
-            i_row += row_span.size();
+            self.screen.write_all(line_slice.line().as_bytes())?;
+            i_row += line_slice.size();
         }
 
         self.screen.flush()?;
@@ -181,11 +181,11 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         let row_size = self.pager.size().rows();
         match self.pager.scroll_down_one_row()? {
             None => Ok(false),
-            Some(new_row_span) => {
+            Some(new_line_slice) => {
                 self.screen.scroll_forward(1)?;
-                let row_start = row_size - new_row_span.size();
+                let row_start = row_size - new_line_slice.size();
                 self.screen.goto(0, row_start)?;
-                self.screen.write_all(new_row_span.line().as_bytes())?;
+                self.screen.write_all(new_line_slice.line().as_bytes())?;
                 Ok(true)
             }
         }
@@ -194,10 +194,10 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
     fn scroll_backword_oneline(&mut self) -> Result<bool, AnyError> {
         match self.pager.scroll_up_one_row()? {
             None => Ok(false),
-            Some(new_row_span) => {
+            Some(new_line_slice) => {
                 self.screen.scroll_backward(1)?;
                 self.screen.goto(0, 0)?;
-                self.screen.write_all(new_row_span.line().as_bytes())?;
+                self.screen.write_all(new_line_slice.line().as_bytes())?;
                 Ok(true)
             }
         }
