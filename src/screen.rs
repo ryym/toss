@@ -2,7 +2,7 @@
 pub mod mock;
 
 use std::fs::File;
-use std::io;
+use std::io::{self, BufWriter, Write};
 
 use termion::cursor::Goto;
 use termion::input::{Events, TermRead};
@@ -46,7 +46,7 @@ impl ScreenSize {
 
 pub(crate) struct TerminalScreen<R: io::Read, W: io::Write> {
     events: Events<R>,
-    output: W,
+    output: BufWriter<W>,
 }
 
 pub(crate) fn for_terminal() -> io::Result<TerminalScreen<impl io::Read, impl io::Write>> {
@@ -61,6 +61,7 @@ pub(crate) fn for_terminal() -> io::Result<TerminalScreen<impl io::Read, impl io
 
 impl<R: io::Read, W: io::Write> TerminalScreen<R, W> {
     fn new(events: Events<R>, output: W) -> io::Result<Self> {
+        let output = BufWriter::new(output);
         Ok(Self { events, output })
     }
 }
