@@ -168,7 +168,8 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
 
         let mut i_row = 0;
         for row_span in self.pager.row_spans() {
-            self.screen.draw_at(i_row, row_span.line())?;
+            self.screen.goto(0, i_row)?;
+            self.screen.write_all(row_span.line().as_bytes())?;
             i_row += row_span.size();
         }
 
@@ -183,7 +184,8 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
             Some(new_row_span) => {
                 self.screen.scroll_forward(1)?;
                 let row_start = row_size - new_row_span.size();
-                self.screen.draw_at(row_start, new_row_span.line())?;
+                self.screen.goto(0, row_start)?;
+                self.screen.write_all(new_row_span.line().as_bytes())?;
                 Ok(true)
             }
         }
@@ -194,7 +196,8 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
             None => Ok(false),
             Some(new_row_span) => {
                 self.screen.scroll_backward(1)?;
-                self.screen.draw_at(0, new_row_span.line())?;
+                self.screen.goto(0, 0)?;
+                self.screen.write_all(new_row_span.line().as_bytes())?;
                 Ok(true)
             }
         }

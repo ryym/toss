@@ -12,15 +12,14 @@ use termion::terminal_size;
 
 pub(crate) use termion::event::{Event, Key};
 
-pub(crate) trait Screen {
+pub(crate) trait Screen: io::Write {
     fn size(&self) -> io::Result<ScreenSize>;
     fn next_event(&mut self) -> io::Result<Event>;
     fn clear(&mut self) -> io::Result<()>;
     fn scroll_forward(&mut self, n_steps: u16) -> io::Result<()>;
     fn scroll_backward(&mut self, n_steps: u16) -> io::Result<()>;
-    /// Draw a line at the given row. The row is 0-based.
-    fn draw_at(&mut self, row: usize, line: &str) -> io::Result<()>;
-    fn flush(&mut self) -> io::Result<()>;
+    /// Move the cursor position. Indice are 0-based.
+    fn goto(&mut self, col: usize, row: usize) -> io::Result<()>;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -88,9 +87,14 @@ impl<R: io::Read, W: io::Write> Screen for TerminalScreen<R, W> {
         write!(self.output, "{}", termion::scroll::Down(n_steps))
     }
 
-    fn draw_at(&mut self, row: usize, line: &str) -> io::Result<()> {
-        write!(self.output, "{}{}", Goto(1, (row + 1) as u16), line)?;
-        Ok(())
+    fn goto(&mut self, col: usize, row: usize) -> io::Result<()> {
+        write!(self.output, "{}", Goto((col + 1) as u16, (row + 1) as u16))
+    }
+}
+
+impl<R: io::Read, W: io::Write> io::Write for TerminalScreen<R, W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.output.write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {

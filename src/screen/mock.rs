@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::screen::ScreenSize;
+use crate::screen::{Screen, ScreenSize};
 
 use super::{Event, Key};
 
@@ -11,6 +11,7 @@ pub struct MockScreen {
     pub out: String,
     pub size: ScreenSize,
     events: Vec<Event>,
+    cursor_pos: usize,
 }
 
 impl MockScreen {
@@ -22,6 +23,7 @@ impl MockScreen {
             out: String::new(),
             size,
             events: vec![],
+            cursor_pos: 0,
         }
     }
 
@@ -30,7 +32,7 @@ impl MockScreen {
     }
 }
 
-impl super::Screen for MockScreen {
+impl Screen for MockScreen {
     fn size(&self) -> io::Result<ScreenSize> {
         Ok(self.size)
     }
@@ -75,22 +77,36 @@ impl super::Screen for MockScreen {
         Ok(())
     }
 
-    fn draw_at(&mut self, mut row: usize, mut line: &str) -> io::Result<()> {
+    fn goto(&mut self, col: usize, row: usize) -> io::Result<()> {
+        debug_assert!(col == 0); // Currently we don't move cursor other than col=0.
+        self.cursor_pos = row;
+        Ok(())
+    }
+}
+
+impl io::Write for MockScreen {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let buf_len = buf.len();
+        let whole_line = String::from_utf8_lossy(buf).to_string();
+        let mut line = whole_line.as_str();
+        let mut i_row = self.cursor_pos;
+
         // Draw a given line with automatically wrapping it based on the column size.
         while line.len() > 0 {
             let n_cols = self.size.cols();
             if line.len() <= n_cols {
-                self.draft[row] = line.to_string();
+                self.draft[i_row] = line.to_string();
                 break;
             }
-            self.draft[row] = format!("{}>", &line[..n_cols]);
+            self.draft[i_row] = format!("{}>", &line[..n_cols]);
             line = &line[n_cols..];
-            row += 1;
-            if row >= self.size.rows() {
+            i_row += 1;
+            if i_row >= self.size.rows() {
                 return Err(io::Error::new(io::ErrorKind::Other, "row exceed max"));
             }
         }
-        Ok(())
+
+        Ok(buf_len)
     }
 
     fn flush(&mut self) -> io::Result<()> {
