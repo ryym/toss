@@ -93,8 +93,7 @@ impl PageLine {
     /// Return a row span which spans wrap rows of the given indice.
     pub fn slice(&self, wrap_row_range: impl RangeBounds<usize>) -> LineSlice<'_> {
         let span = self.wrap.line_slice_span(wrap_row_range);
-        let s = &self.line.raw()[span.start_byte..span.end_byte];
-        LineSlice::new(s, span.row_len)
+        LineSlice::new(self, span)
     }
 }
 
@@ -164,7 +163,7 @@ impl WrapRow {
 }
 
 #[derive(Debug)]
-struct LineSliceSpan {
+pub(super) struct LineSliceSpan {
     start_byte: usize,
     end_byte: usize,
     row_len: usize,
@@ -175,25 +174,25 @@ struct LineSliceSpan {
 /// to fit in the page. For example, if the first line of the source text is "aabbcc" and the
 /// page column size is 2, the line will be broken into 3 rows: "aa", "bb", "cc". If the page
 /// is scrolled down one row, the first two rows will be "bb" and "cc". This is a line slice.
-#[derive(Debug, PartialEq)]
-pub(crate) struct LineSlice<'l> {
-    line: &'l str,
-    size: usize,
+#[derive(Debug)]
+pub(crate) struct LineSlice<'line> {
+    line: &'line PageLine,
+    span: LineSliceSpan,
 }
 
 impl<'line> LineSlice<'line> {
-    pub(super) fn new(line: &'line str, size: usize) -> Self {
-        Self { line, size }
+    pub(super) fn new(line: &'line PageLine, span: LineSliceSpan) -> Self {
+        Self { line, span }
     }
 
     #[inline]
     pub(crate) fn line(&self) -> &str {
-        self.line
+        &self.line.line.raw()[self.span.start_byte..self.span.end_byte]
     }
 
     #[inline]
-    pub(crate) fn size(&self) -> usize {
-        self.size
+    pub(crate) fn row_len(&self) -> usize {
+        self.span.row_len
     }
 }
 

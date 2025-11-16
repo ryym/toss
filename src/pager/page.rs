@@ -267,6 +267,11 @@ impl<'page> LineSliceIter<'page> {
             deque_index: 0,
         }
     }
+
+    #[cfg(test)]
+    pub fn into_vec(self) -> Vec<(String, usize)> {
+        self.map(|l| (l.line().to_string(), l.row_len())).collect()
+    }
 }
 
 impl<'page> Iterator for LineSliceIter<'page> {
@@ -294,7 +299,7 @@ impl<'page> Iterator for LineSliceIter<'page> {
 mod tests {
     use pretty_assertions::assert_eq;
 
-    use crate::pager::{PageLine, line::LineSlice, page::FilledPage};
+    use crate::pager::{PageLine, page::FilledPage};
 
     #[test]
     fn hold_lines_less_than_page_size() {
@@ -303,8 +308,8 @@ mod tests {
         builder.push_back(PageLine::dummy("def".to_string(), 3));
         let page = builder.into_page().expect("build page");
         assert_eq!(
-            page.line_slices().collect::<Vec<_>>(),
-            vec![LineSlice::new("abc", 1), LineSlice::new("def", 1)]
+            page.line_slices().into_vec(),
+            vec![("abc".to_string(), 1), ("def".to_string(), 1)]
         );
     }
 
@@ -315,23 +320,32 @@ mod tests {
             builder.push_back(PageLine::dummy(chr.to_string(), 3));
         }
         let mut page = builder.into_page().expect("build page");
-        let initial = vec![
-            LineSlice::new("a", 1),
-            LineSlice::new("b", 1),
-            LineSlice::new("c", 1),
-        ];
-        assert_eq!(page.line_slices().collect::<Vec<_>>(), initial);
+        assert_eq!(
+            page.line_slices().into_vec(),
+            vec![
+                ("a".to_string(), 1),
+                ("b".to_string(), 1),
+                ("c".to_string(), 1)
+            ]
+        );
 
         assert_eq!(page.move_down_one_row(), false);
-        assert_eq!(page.line_slices().collect::<Vec<_>>(), initial);
+        assert_eq!(
+            page.line_slices().into_vec(),
+            vec![
+                ("a".to_string(), 1),
+                ("b".to_string(), 1),
+                ("c".to_string(), 1)
+            ]
+        );
 
         page.move_down_one_line(PageLine::dummy('d'.to_string(), 3));
         assert_eq!(
-            page.line_slices().collect::<Vec<_>>(),
+            page.line_slices().into_vec(),
             vec![
-                LineSlice::new("b", 1),
-                LineSlice::new("c", 1),
-                LineSlice::new("d", 1),
+                ("b".to_string(), 1),
+                ("c".to_string(), 1),
+                ("d".to_string(), 1)
             ]
         );
     }

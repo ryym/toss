@@ -220,7 +220,7 @@ mod tests {
 
     use crate::{
         error::AnyError,
-        pager::{PageSize, Pager, line::LineSlice},
+        pager::{PageSize, Pager},
         reader::Reader,
         source,
     };
@@ -234,31 +234,31 @@ mod tests {
 
         let mut pager = Pager::new(reader, PageSize { rows: 3, cols: 8 })?;
         assert_eq!(
-            pager.line_slices().collect::<Vec<_>>(),
+            pager.line_slices().into_vec(),
             vec![
-                LineSlice::new("abcde", 1),
-                LineSlice::new("1234567", 1),
-                LineSlice::new("foo", 1),
+                ("abcde".to_string(), 1),
+                ("1234567".to_string(), 1),
+                ("foo".to_string(), 1),
             ]
         );
 
         pager.scroll_down_one_row()?;
         assert_eq!(
-            pager.line_slices().collect::<Vec<_>>(),
+            pager.line_slices().into_vec(),
             vec![
-                LineSlice::new("1234567", 1),
-                LineSlice::new("foo", 1),
-                LineSlice::new("bar", 1),
+                ("1234567".to_string(), 1),
+                ("foo".to_string(), 1),
+                ("bar".to_string(), 1),
             ]
         );
 
         pager.scroll_to_end()?;
         assert_eq!(
-            pager.line_slices().collect::<Vec<_>>(),
+            pager.line_slices().into_vec(),
             vec![
                 // Only two row spans since the total rows are 3 (max).
-                LineSlice::new("bar", 1),
-                LineSlice::new("123456789", 2),
+                ("bar".to_string(), 1),
+                ("123456789".to_string(), 2),
             ]
         );
 
