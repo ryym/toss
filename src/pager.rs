@@ -6,7 +6,7 @@ use crate::{
         line::{PageLine, RowSpan},
         page::{EmptyPage, FilledPage, RowSpanIter},
     },
-    reader::{LinePos, QueryLine, Reader},
+    reader::{QueryLine, Reader},
     source::Source,
 };
 
@@ -33,14 +33,9 @@ impl PageSize {
 }
 
 #[derive(Debug)]
-pub(crate) struct LineMeta {
-    pos: LinePos,
-}
-
-#[derive(Debug)]
 enum Page {
-    Filled(FilledPage<LineMeta>),
-    Empty(EmptyPage<LineMeta>),
+    Filled(FilledPage),
+    Empty(EmptyPage),
 }
 
 /// Pager clips text lines to fit them in the sized frame. The frame is called a page.
@@ -69,7 +64,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         &self.size
     }
 
-    pub fn row_spans(&mut self) -> RowSpanIter<'_, LineMeta> {
+    pub fn row_spans(&mut self) -> RowSpanIter<'_> {
         match &self.page {
             Page::Filled(page) => page.row_spans(),
             Page::Empty(page) => page.row_spans(),
@@ -82,14 +77,14 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Filled(page) => page,
         };
         if !page.move_down_one_row() {
-            let end_pos = page.end_line().meta().pos;
+            let end_pos = *page.end_line().pos();
             match self.reader.read_line(&QueryLine::NextOf(end_pos))? {
                 None => {
                     log::debug!("Pager: not scrolled down: {:?}", page);
                     return Ok(None);
                 }
                 Some((pos, text)) => {
-                    let line = PageLine::new(LineMeta { pos }, text, self.size.cols);
+                    let line = PageLine::new(pos, text, self.size.cols);
                     page.move_down_one_line(line);
                 }
             }
@@ -104,14 +99,14 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Filled(page) => page,
         };
         if !page.move_up_one_row() {
-            let start_pos = page.start_line().meta().pos;
+            let start_pos = *page.start_line().pos();
             match self.reader.read_line(&QueryLine::PrevOf(start_pos))? {
                 None => {
                     log::debug!("Pager: not scrolled up: {:?}", page);
                     return Ok(None);
                 }
                 Some((pos, text)) => {
-                    let line = PageLine::new(LineMeta { pos }, text, self.size.cols);
+                    let line = PageLine::new(pos, text, self.size.cols);
                     page.move_up_one_line(line);
                 }
             }
@@ -125,7 +120,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Empty(_) => return Ok(false),
             Page::Filled(page) => page,
         };
-        if page.start_line().meta().pos.is_first_line() && !page.can_move_up_one_row() {
+        if page.start_line().pos().is_first_line() && !page.can_move_up_one_row() {
             return Ok(false);
         }
         write_page_from(QueryLine::AtStart, &mut self.reader, &self.size, page)?;
@@ -137,10 +132,10 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Empty(_) => return Ok(false),
             Page::Filled(page) => page,
         };
-        let end_pos_before = page.end_line().meta().pos;
+        let end_pos_before = *page.end_line().pos();
         let end_line_continue_before = page.can_move_down_one_row();
         write_page_ending_at(QueryLine::AtEnd, &mut self.reader, &self.size, page)?;
-        Ok(end_line_continue_before || page.end_line().meta().pos != end_pos_before)
+        Ok(end_line_continue_before || page.end_line().pos() != &end_pos_before)
     }
 
     pub fn search(&mut self, search_query: &Regex) -> Result<bool, AnyError> {
@@ -149,9 +144,9 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Filled(page) => page,
         };
         let line_from = match page.find_first_match_line(search_query) {
-            Some(line) => QueryLine::At(line.meta().pos),
+            Some(line) => QueryLine::At(*line.pos()),
             None => {
-                let line_from = QueryLine::NextOf(page.end_line().meta().pos);
+                let line_from = QueryLine::NextOf(*page.end_line().pos());
                 match self.reader.find_first_match_line(line_from, search_query)? {
                     None => return Ok(false),
                     Some((pos, _)) => QueryLine::At(pos),
@@ -166,11 +161,11 @@ impl<R, Src: Source<R>> Pager<R, Src> {
 fn build_page<R, Src: Source<R>>(
     reader: &mut Reader<R, Src>,
     size: &PageSize,
-) -> Result<Option<FilledPage<LineMeta>>, AnyError> {
+) -> Result<Option<FilledPage>, AnyError> {
     let mut builder = FilledPage::builder(size.rows);
     let mut lines = reader.lines_from(QueryLine::AtStart);
     while let Some((pos, text)) = lines.next()? {
-        let line = PageLine::new(LineMeta { pos }, text, size.cols);
+        let line = PageLine::new(pos, text, size.cols);
         if !builder.push_back(line) {
             break;
         }
@@ -185,12 +180,12 @@ fn write_page_from<R, Src: Source<R>>(
     query: QueryLine,
     reader: &mut Reader<R, Src>,
     size: &PageSize,
-    page: &mut FilledPage<LineMeta>,
+    page: &mut FilledPage,
 ) -> Result<(), AnyError> {
     let mut writer = page.forward_page_writer();
     let mut lines = reader.lines_from(query);
     while let Some((pos, text)) = lines.next()? {
-        let line = PageLine::new(LineMeta { pos }, text, size.cols);
+        let line = PageLine::new(pos, text, size.cols);
         if !writer.push_back(line) {
             break;
         }
@@ -203,12 +198,12 @@ fn write_page_ending_at<R, Src: Source<R>>(
     query: QueryLine,
     reader: &mut Reader<R, Src>,
     size: &PageSize,
-    page: &mut FilledPage<LineMeta>,
+    page: &mut FilledPage,
 ) -> Result<(), AnyError> {
     let mut writer = page.backward_page_writer();
     let mut lines = reader.lines_rev_from(query);
     while let Some((pos, text)) = lines.next()? {
-        let line = PageLine::new(LineMeta { pos }, text, size.cols);
+        let line = PageLine::new(pos, text, size.cols);
         if !writer.push_front(line) {
             break;
         }

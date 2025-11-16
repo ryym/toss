@@ -34,38 +34,38 @@ struct Row {
 /// This struct provides easy-to-use methods by hiding the complexity of line wraps,
 /// but this struct itself does not load lines from source. Lines are set by [`crate::pager::Pager`].
 /// See [`PageLine`] for detailed terminologies like line v.s. row.
-pub(super) struct FilledPage<LineMeta> {
+pub(super) struct FilledPage {
     /// A double ended queue that holds lines currently displayed in the page, and
     /// additional one or more lines before and after the displayed lines.
     /// Additional lines work as a cache but its main purpose is to simplify the implementation.
-    deque: VecDeque<PageLine<LineMeta>>,
+    deque: VecDeque<PageLine>,
     row_capacity: usize,
     start_row: Row,
     end_row: Row,
 }
 
-impl<LineMeta: Debug> Debug for FilledPage<LineMeta> {
+impl Debug for FilledPage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FilledPage")
             .field("lines_len", &self.deque.len())
             .field("start_row", &self.start_row)
             .field("end_row", &self.end_row)
-            .field("start_line_meta", &self.start_line().meta())
-            .field("end_line_meta", &self.end_line().meta())
+            .field("start_line_pos", &self.start_line().pos())
+            .field("end_line_pos", &self.end_line().pos())
             .finish()
     }
 }
 
-impl<LineMeta> FilledPage<LineMeta> {
-    pub fn builder(row_capacity: usize) -> NewPageBuilder<LineMeta> {
+impl FilledPage {
+    pub fn builder(row_capacity: usize) -> NewPageBuilder {
         NewPageBuilder::new(row_capacity)
     }
 
-    pub fn start_line(&self) -> &PageLine<LineMeta> {
+    pub fn start_line(&self) -> &PageLine {
         &self.deque[self.start_row.deque_index]
     }
 
-    pub fn end_line(&self) -> &PageLine<LineMeta> {
+    pub fn end_line(&self) -> &PageLine {
         &self.deque[self.end_row.deque_index]
     }
 
@@ -79,11 +79,11 @@ impl<LineMeta> FilledPage<LineMeta> {
         line.slice(..=self.end_row.wrap_row_index)
     }
 
-    pub fn row_spans(&self) -> RowSpanIter<'_, LineMeta> {
+    pub fn row_spans(&self) -> RowSpanIter<'_> {
         RowSpanIter::from_page(self)
     }
 
-    fn visible_lines(&self) -> impl Iterator<Item = &PageLine<LineMeta>> {
+    fn visible_lines(&self) -> impl Iterator<Item = &PageLine> {
         self.deque
             .iter()
             .take(self.end_row.deque_index + 1)
@@ -135,18 +135,18 @@ impl<LineMeta> FilledPage<LineMeta> {
     }
 
     /// Move down to the next row by addig a new line.
-    pub fn move_down_one_line(&mut self, line: PageLine<LineMeta>) {
+    pub fn move_down_one_line(&mut self, line: PageLine) {
         self.push_back(line);
         self.move_down_one_row();
     }
 
     /// Move up to the next row by addig a new line.
-    pub fn move_up_one_line(&mut self, line: PageLine<LineMeta>) {
+    pub fn move_up_one_line(&mut self, line: PageLine) {
         self.push_front(line);
         self.move_up_one_row();
     }
 
-    fn push_back(&mut self, line: PageLine<LineMeta>) {
+    fn push_back(&mut self, line: PageLine) {
         // As long as the dequeue capacity is greater than the page size and this method is called
         // when the page is at the end of the dequeue, the first element of the dequeue must not
         // in the page and therefore it should be safe to remove it.
@@ -159,7 +159,7 @@ impl<LineMeta> FilledPage<LineMeta> {
         self.deque.push_back(line);
     }
 
-    fn push_front(&mut self, line: PageLine<LineMeta>) {
+    fn push_front(&mut self, line: PageLine) {
         // As long as the dequeue capacity is greater than the page size and this method is called
         // when the page is at the start of the dequeue, the last element of the dequeue must not
         // in the page and therefore it should be safe to remove it.
@@ -172,15 +172,15 @@ impl<LineMeta> FilledPage<LineMeta> {
         self.deque.push_front(line);
     }
 
-    pub fn forward_page_writer(&mut self) -> ForwardPageWriter<'_, LineMeta> {
+    pub fn forward_page_writer(&mut self) -> ForwardPageWriter<'_> {
         ForwardPageWriter::for_page(self)
     }
 
-    pub fn backward_page_writer(&mut self) -> BackwardPageWriter<'_, LineMeta> {
+    pub fn backward_page_writer(&mut self) -> BackwardPageWriter<'_> {
         BackwardPageWriter::for_page(self)
     }
 
-    pub fn find_first_match_line(&mut self, search_query: &Regex) -> Option<&PageLine<LineMeta>> {
+    pub fn find_first_match_line(&mut self, search_query: &Regex) -> Option<&PageLine> {
         self.deque
             .iter()
             .skip(self.start_row.deque_index)
@@ -188,7 +188,7 @@ impl<LineMeta> FilledPage<LineMeta> {
     }
 }
 
-fn move_down_row<LineMeta>(deque: &VecDeque<PageLine<LineMeta>>, row: &mut Row) -> bool {
+fn move_down_row(deque: &VecDeque<PageLine>, row: &mut Row) -> bool {
     let line = &deque[row.deque_index];
     if row.wrap_row_index < line.row_len() - 1 {
         row.wrap_row_index += 1;
@@ -204,7 +204,7 @@ fn move_down_row<LineMeta>(deque: &VecDeque<PageLine<LineMeta>>, row: &mut Row) 
     }
 }
 
-fn move_up_row<LineMeta>(deque: &VecDeque<PageLine<LineMeta>>, row: &mut Row) -> bool {
+fn move_up_row(deque: &VecDeque<PageLine>, row: &mut Row) -> bool {
     if 0 < row.wrap_row_index {
         row.wrap_row_index -= 1;
         true
@@ -220,12 +220,12 @@ fn move_up_row<LineMeta>(deque: &VecDeque<PageLine<LineMeta>>, row: &mut Row) ->
 }
 
 #[derive(Debug)]
-pub(super) struct EmptyPage<LineMeta> {
-    deque: VecDeque<PageLine<LineMeta>>,
+pub(super) struct EmptyPage {
+    deque: VecDeque<PageLine>,
     dummy_row: Row,
 }
 
-impl<LineMeta> EmptyPage<LineMeta> {
+impl EmptyPage {
     pub fn new() -> Self {
         Self {
             deque: VecDeque::new(),
@@ -236,21 +236,21 @@ impl<LineMeta> EmptyPage<LineMeta> {
         }
     }
 
-    pub fn row_spans(&self) -> RowSpanIter<'_, LineMeta> {
+    pub fn row_spans(&self) -> RowSpanIter<'_> {
         RowSpanIter::empty(self)
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct RowSpanIter<'page, LineMeta> {
-    deque: &'page VecDeque<PageLine<LineMeta>>,
+pub(crate) struct RowSpanIter<'page> {
+    deque: &'page VecDeque<PageLine>,
     start_row: &'page Row,
     end_row: &'page Row,
     deque_index: usize,
 }
 
-impl<'page, LineMeta> RowSpanIter<'page, LineMeta> {
-    fn from_page(page: &'page FilledPage<LineMeta>) -> Self {
+impl<'page> RowSpanIter<'page> {
+    fn from_page(page: &'page FilledPage) -> Self {
         Self {
             deque: &page.deque,
             start_row: &page.start_row,
@@ -259,7 +259,7 @@ impl<'page, LineMeta> RowSpanIter<'page, LineMeta> {
         }
     }
 
-    fn empty(page: &'page EmptyPage<LineMeta>) -> Self {
+    fn empty(page: &'page EmptyPage) -> Self {
         Self {
             deque: &page.deque,
             start_row: &page.dummy_row,
@@ -269,7 +269,7 @@ impl<'page, LineMeta> RowSpanIter<'page, LineMeta> {
     }
 }
 
-impl<'page, LineMeta> Iterator for RowSpanIter<'page, LineMeta> {
+impl<'page> Iterator for RowSpanIter<'page> {
     type Item = RowSpan<'page>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -299,8 +299,8 @@ mod tests {
     #[test]
     fn hold_lines_less_than_page_size() {
         let mut builder = FilledPage::builder(3);
-        builder.push_back(PageLine::new((), "abc".to_string(), 3));
-        builder.push_back(PageLine::new((), "def".to_string(), 3));
+        builder.push_back(PageLine::dummy("abc".to_string(), 3));
+        builder.push_back(PageLine::dummy("def".to_string(), 3));
         let page = builder.into_page().expect("build page");
         assert_eq!(
             page.row_spans().collect::<Vec<_>>(),
@@ -312,7 +312,7 @@ mod tests {
     fn move_page_across_lines() {
         let mut builder = FilledPage::builder(3);
         for chr in 'a'..='c' {
-            builder.push_back(PageLine::new((), chr.to_string(), 3));
+            builder.push_back(PageLine::dummy(chr.to_string(), 3));
         }
         let mut page = builder.into_page().expect("build page");
         let initial = vec![
@@ -325,7 +325,7 @@ mod tests {
         assert_eq!(page.move_down_one_row(), false);
         assert_eq!(page.row_spans().collect::<Vec<_>>(), initial);
 
-        page.move_down_one_line(PageLine::new((), 'd'.to_string(), 3));
+        page.move_down_one_line(PageLine::dummy('d'.to_string(), 3));
         assert_eq!(
             page.row_spans().collect::<Vec<_>>(),
             vec![

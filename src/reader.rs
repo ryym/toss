@@ -27,6 +27,14 @@ pub(crate) struct LinePos {
 pub(crate) type RawLine = (LinePos, String);
 
 impl LinePos {
+    #[cfg(test)]
+    pub fn dummy() -> Self {
+        Self {
+            start_byte: 0,
+            end_byte: 0,
+        }
+    }
+
     fn new(start_byte: u64, end_byte: u64) -> Self {
         Self {
             start_byte,

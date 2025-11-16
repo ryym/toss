@@ -5,14 +5,14 @@ use crate::pager::{
     page::{FilledPage, Row},
 };
 
-pub(in crate::pager) struct NewPageBuilder<LineMeta> {
-    deque: VecDeque<PageLine<LineMeta>>,
+pub(in crate::pager) struct NewPageBuilder {
+    deque: VecDeque<PageLine>,
     end_row: Option<Row>,
     row_capacity: usize,
     read_rows: usize,
 }
 
-impl<LineMeta> NewPageBuilder<LineMeta> {
+impl NewPageBuilder {
     pub fn new(row_capacity: usize) -> Self {
         debug_assert!(row_capacity > 0);
         Self {
@@ -23,7 +23,7 @@ impl<LineMeta> NewPageBuilder<LineMeta> {
         }
     }
 
-    pub fn push_back(&mut self, line: PageLine<LineMeta>) -> bool {
+    pub fn push_back(&mut self, line: PageLine) -> bool {
         debug_assert!(self.read_rows < self.row_capacity);
         match push_back_line(
             line,
@@ -39,7 +39,7 @@ impl<LineMeta> NewPageBuilder<LineMeta> {
         }
     }
 
-    pub fn into_page(mut self) -> Option<FilledPage<LineMeta>> {
+    pub fn into_page(mut self) -> Option<FilledPage> {
         if self.deque.is_empty() {
             return None;
         }
@@ -53,14 +53,14 @@ impl<LineMeta> NewPageBuilder<LineMeta> {
     }
 }
 
-pub(in crate::pager) struct ForwardPageWriter<'page, LineMeta> {
-    page: &'page mut FilledPage<LineMeta>,
+pub(in crate::pager) struct ForwardPageWriter<'page> {
+    page: &'page mut FilledPage,
     end_row: Option<Row>,
     read_rows: usize,
 }
 
-impl<'page, LineMeta> ForwardPageWriter<'page, LineMeta> {
-    pub fn for_page(page: &'page mut FilledPage<LineMeta>) -> Self {
+impl<'page> ForwardPageWriter<'page> {
+    pub fn for_page(page: &'page mut FilledPage) -> Self {
         page.deque.clear();
         Self {
             page,
@@ -69,7 +69,7 @@ impl<'page, LineMeta> ForwardPageWriter<'page, LineMeta> {
         }
     }
 
-    pub fn push_back(&mut self, line: PageLine<LineMeta>) -> bool {
+    pub fn push_back(&mut self, line: PageLine) -> bool {
         debug_assert!(self.read_rows < self.page.row_capacity);
 
         match push_back_line(
@@ -93,9 +93,9 @@ impl<'page, LineMeta> ForwardPageWriter<'page, LineMeta> {
     }
 }
 
-fn push_back_line<LineMeta>(
-    line: PageLine<LineMeta>,
-    deque: &mut VecDeque<PageLine<LineMeta>>,
+fn push_back_line(
+    line: PageLine,
+    deque: &mut VecDeque<PageLine>,
     read_rows: &mut usize,
     row_capacity: usize,
 ) -> Option<Row> {
@@ -113,10 +113,7 @@ fn push_back_line<LineMeta>(
     Some(end_row)
 }
 
-fn finalize_start_page_rows<LineMeta>(
-    deque: &VecDeque<PageLine<LineMeta>>,
-    end_row: Option<Row>,
-) -> (Row, Row) {
+fn finalize_start_page_rows(deque: &VecDeque<PageLine>, end_row: Option<Row>) -> (Row, Row) {
     let start_row = Row {
         deque_index: 0,
         wrap_row_index: 0,
@@ -129,14 +126,14 @@ fn finalize_start_page_rows<LineMeta>(
     (start_row, end_row)
 }
 
-pub(in crate::pager) struct BackwardPageWriter<'page, LineMeta> {
-    page: &'page mut FilledPage<LineMeta>,
+pub(in crate::pager) struct BackwardPageWriter<'page> {
+    page: &'page mut FilledPage,
     start_row: Option<Row>,
     read_rows: usize,
 }
 
-impl<'page, LineMeta> BackwardPageWriter<'page, LineMeta> {
-    pub fn for_page(page: &'page mut FilledPage<LineMeta>) -> Self {
+impl<'page> BackwardPageWriter<'page> {
+    pub fn for_page(page: &'page mut FilledPage) -> Self {
         page.deque.clear();
         Self {
             page,
@@ -145,7 +142,7 @@ impl<'page, LineMeta> BackwardPageWriter<'page, LineMeta> {
         }
     }
 
-    pub fn push_front(&mut self, line: PageLine<LineMeta>) -> bool {
+    pub fn push_front(&mut self, line: PageLine) -> bool {
         debug_assert!(self.read_rows < self.page.row_capacity);
 
         self.read_rows += line.row_len();

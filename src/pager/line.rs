@@ -2,7 +2,7 @@ use std::ops::{Bound, RangeBounds};
 
 use unicode_width::UnicodeWidthChar;
 
-use crate::line::Line;
+use crate::{line::Line, reader::LinePos};
 
 /// A line in a page.
 ///
@@ -53,9 +53,8 @@ use crate::line::Line;
 ///           └ - - - - - - - - - - - ┘
 /// ```
 #[derive(Debug)]
-pub(super) struct PageLine<Meta> {
-    /// Any metadata related to this line.
-    meta: Meta,
+pub(super) struct PageLine {
+    pos: LinePos,
 
     /// An original line.
     line: Line,
@@ -64,16 +63,21 @@ pub(super) struct PageLine<Meta> {
     wrap: Wrap,
 }
 
-impl<Meta> PageLine<Meta> {
-    pub fn new(meta: Meta, text: String, n_cols: usize) -> Self {
+impl PageLine {
+    #[cfg(test)]
+    pub fn dummy(text: String, n_cols: usize) -> Self {
+        Self::new(LinePos::dummy(), text, n_cols)
+    }
+
+    pub fn new(pos: LinePos, text: String, n_cols: usize) -> Self {
         let line = Line::new(text);
         let wrap = Wrap::new(&line, n_cols);
-        Self { meta, line, wrap }
+        Self { pos, line, wrap }
     }
 
     #[inline]
-    pub fn meta(&self) -> &Meta {
-        &self.meta
+    pub fn pos(&self) -> &LinePos {
+        &self.pos
     }
 
     #[inline]
@@ -196,6 +200,6 @@ mod bench {
 
     #[bench]
     fn make_line(b: &mut Bencher) {
-        b.iter(|| PageLine::new((), S.to_string(), 17))
+        b.iter(|| PageLine::dummy(S.to_string(), 17))
     }
 }
