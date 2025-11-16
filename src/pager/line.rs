@@ -92,9 +92,9 @@ impl PageLine {
 
     /// Return a row span which spans wrap rows of the given indice.
     pub fn slice(&self, wrap_row_range: impl RangeBounds<usize>) -> LineSlice<'_> {
-        let (start_byte, end_byte, row_len) = self.wrap.line_slice_ends(wrap_row_range);
-        let s = &self.line.raw()[start_byte..end_byte];
-        LineSlice::new(s, row_len)
+        let span = self.wrap.line_slice_span(wrap_row_range);
+        let s = &self.line.raw()[span.start_byte..span.end_byte];
+        LineSlice::new(s, span.row_len)
     }
 }
 
@@ -125,7 +125,7 @@ impl Wrap {
         Self { rows }
     }
 
-    fn line_slice_ends(&self, wrap_row_range: impl RangeBounds<usize>) -> (usize, usize, usize) {
+    fn line_slice_span(&self, wrap_row_range: impl RangeBounds<usize>) -> LineSliceSpan {
         let start_row_idx = match wrap_row_range.start_bound() {
             Bound::Unbounded => 0,
             Bound::Included(start) => *start,
@@ -143,7 +143,11 @@ impl Wrap {
         };
         let end_row = &self.rows[end_row_idx];
         let row_len = end_row_idx - start_row_idx + 1;
-        (start_byte, end_row.end_byte, row_len)
+        LineSliceSpan {
+            start_byte,
+            end_byte: end_row.end_byte,
+            row_len,
+        }
     }
 }
 
@@ -157,6 +161,13 @@ impl WrapRow {
     fn new(end_byte: usize) -> Self {
         Self { end_byte }
     }
+}
+
+#[derive(Debug)]
+struct LineSliceSpan {
+    start_byte: usize,
+    end_byte: usize,
+    row_len: usize,
 }
 
 /// Iterator of line slices of the current page.
