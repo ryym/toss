@@ -12,12 +12,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ansi-control-codes"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fea32e0d6400b50c211ad0d63de1623da597e9f8d9a7280dfe54e83f5216b3a"
-
-[[package]]
 name = "bitflags"
 version = "2.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -218,7 +212,6 @@ dependencies = [
 name = "toss"
 version = "0.1.0"
 dependencies = [
- "ansi-control-codes",
  "indoc",
  "log",
  "pretty_assertions",
