@@ -1,4 +1,4 @@
-use ansi_control_codes::parser::{Token, TokenStream};
+use crate::terminal;
 
 /// A line in target text. It can be decorated with ANSI escape sequences.
 #[derive(Debug, Default)]
@@ -33,13 +33,12 @@ impl Line {
         let mut plain = String::with_capacity(raw_line.len());
         let mut plain_to_raw = Vec::new();
         let mut i_raw = 0;
-        for token in TokenStream::from(&raw_line) {
-            match token {
-                Token::ControlFunction(c) => {
-                    // Allocate a string just to get the byte length of escape sequences :(
-                    i_raw += String::from(c).len();
+        for part in terminal::parse_text(&raw_line) {
+            match part {
+                terminal::Text::Control(s) => {
+                    i_raw += s.len();
                 }
-                Token::String(s) => {
+                terminal::Text::Plain(s) => {
                     plain.push_str(s);
                     for _ in s.as_bytes() {
                         plain_to_raw.push(i_raw);
