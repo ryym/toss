@@ -8,6 +8,8 @@ use termion::event::{Event, Key};
 use unicode_width::UnicodeWidthChar;
 
 use crate::{
+    AppResult,
+    io::WriteStr,
     screen::{Screen, ScreenSize},
     terminal,
 };
@@ -187,9 +189,8 @@ impl MockScreen {
     }
 }
 
-impl io::Write for MockScreen {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let text = str::from_utf8(buf).unwrap();
+impl WriteStr for MockScreen {
+    fn write_all(&mut self, text: &str) -> AppResult<()> {
         let pos = &mut self.cursor;
         let mut row = &mut self.draft[pos.row];
         for part in terminal::parse_text(text) {
@@ -221,10 +222,10 @@ impl io::Write for MockScreen {
                 }
             }
         }
-        Ok(buf.len())
+        Ok(())
     }
 
-    fn flush(&mut self) -> io::Result<()> {
+    fn flush(&mut self) -> AppResult<()> {
         for row in &self.draft {
             self.out.push_str(&row.to_string());
             self.out.push('\n');
@@ -288,24 +289,23 @@ impl Screen for MockScreen {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
-
     use indoc::indoc;
     use pretty_assertions::assert_eq;
     use termion::event::{Event, Key};
 
     use crate::{
         AppResult,
+        io::WriteStr,
         screen::{Screen, ScreenSize, mock::MockScreen},
     };
 
     #[test]
     fn write_lines() -> AppResult<()> {
         let mut screen = MockScreen::new(ScreenSize::new(5, 3));
-        screen.write(b"abc")?;
+        screen.write_all("abc")?;
         screen.goto(0, 1)?;
-        screen.write(b"de")?;
-        screen.write(b"fgh")?;
+        screen.write_all("de")?;
+        screen.write_all("fgh")?;
 
         assert_eq!(screen.out(), "");
         screen.flush()?;
@@ -323,10 +323,10 @@ mod tests {
     #[test]
     fn write_and_wrap_lines() -> AppResult<()> {
         let mut screen = MockScreen::new(ScreenSize::new(5, 3));
-        screen.write(b"abcdefg")?;
+        screen.write_all("abcdefg")?;
         screen.flush()?;
         screen.goto(0, 0)?;
-        screen.write("あいうえ".as_bytes())?;
+        screen.write_all("あいうえ")?;
         screen.flush()?;
 
         let want = indoc! {"
@@ -346,10 +346,10 @@ mod tests {
     #[test]
     fn write_line_with_control() -> AppResult<()> {
         let mut screen = MockScreen::new(ScreenSize::new(3, 3));
-        screen.write("\x1b[7mabc\x1b[27m".as_bytes())?;
+        screen.write_all("\x1b[7mabc\x1b[27m")?;
         screen.flush()?;
         screen.goto(0, 1)?;
-        screen.write("12\x1b[7m34\x1b[27m5".as_bytes())?;
+        screen.write_all("12\x1b[7m34\x1b[27m5")?;
         screen.flush()?;
 
         let want = indoc! {"
@@ -370,19 +370,19 @@ mod tests {
     fn overwrite_lines() -> AppResult<()> {
         let mut screen = MockScreen::new(ScreenSize::new(10, 1));
 
-        screen.write(b"abcdefg")?;
+        screen.write_all("abcdefg")?;
         screen.goto(0, 0)?;
-        screen.write(b"AB")?;
+        screen.write_all("AB")?;
         screen.flush()?;
 
         screen.goto(0, 0)?;
-        screen.write("あいう".as_bytes())?;
+        screen.write_all("あいう")?;
         screen.flush()?;
 
         screen.goto(2, 0)?;
-        screen.write("i".as_bytes())?;
+        screen.write_all("i")?;
         screen.goto(5, 0)?;
-        screen.write("u".as_bytes())?;
+        screen.write_all("u")?;
         screen.flush()?;
 
         let want = indoc! {"
@@ -402,11 +402,11 @@ mod tests {
     fn record_events() -> AppResult<()> {
         let mut screen = MockScreen::new(ScreenSize::new(5, 3));
         screen.set_events(vec![Event::Key(Key::Char('a')), Event::Key(Key::Char('q'))]);
-        screen.write(b"1234")?;
+        screen.write_all("1234")?;
         screen.flush()?;
         screen.next_event()?;
         screen.goto(0, 1)?;
-        screen.write(b"5678")?;
+        screen.write_all("5678")?;
         screen.flush()?;
         screen.next_event()?;
 
