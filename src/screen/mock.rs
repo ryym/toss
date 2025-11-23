@@ -295,12 +295,12 @@ mod tests {
     use termion::event::{Event, Key};
 
     use crate::{
-        error::AnyError,
+        AppResult,
         screen::{Screen, ScreenSize, mock::MockScreen},
     };
 
     #[test]
-    fn write_lines() -> Result<(), AnyError> {
+    fn write_lines() -> AppResult<()> {
         let mut screen = MockScreen::new(ScreenSize::new(5, 3));
         screen.write(b"abc")?;
         screen.goto(0, 1)?;
@@ -321,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn write_and_wrap_lines() -> Result<(), AnyError> {
+    fn write_and_wrap_lines() -> AppResult<()> {
         let mut screen = MockScreen::new(ScreenSize::new(5, 3));
         screen.write(b"abcdefg")?;
         screen.flush()?;
@@ -344,7 +344,7 @@ mod tests {
     }
 
     #[test]
-    fn write_line_with_control() -> Result<(), AnyError> {
+    fn write_line_with_control() -> AppResult<()> {
         let mut screen = MockScreen::new(ScreenSize::new(3, 3));
         screen.write("\x1b[7mabc\x1b[27m".as_bytes())?;
         screen.flush()?;
@@ -367,7 +367,7 @@ mod tests {
     }
 
     #[test]
-    fn overwrite_lines() -> Result<(), AnyError> {
+    fn overwrite_lines() -> AppResult<()> {
         let mut screen = MockScreen::new(ScreenSize::new(10, 1));
 
         screen.write(b"abcdefg")?;
@@ -399,7 +399,7 @@ mod tests {
     }
 
     #[test]
-    fn record_events() -> Result<(), AnyError> {
+    fn record_events() -> AppResult<()> {
         let mut screen = MockScreen::new(ScreenSize::new(5, 3));
         screen.set_events(vec![Event::Key(Key::Char('a')), Event::Key(Key::Char('q'))]);
         screen.write(b"1234")?;

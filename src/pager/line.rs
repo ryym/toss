@@ -5,7 +5,7 @@ use std::{
 
 use unicode_width::UnicodeWidthChar;
 
-use crate::{error::AnyError, line::Line, reader::LinePos};
+use crate::{AppResult, line::Line, reader::LinePos};
 
 /// A line in a page.
 ///
@@ -99,7 +99,7 @@ impl PageLine {
         LineSlice::new(self, span)
     }
 
-    fn write_to(&self, w: &mut impl Write, span: &LineSliceSpan) -> Result<(), AnyError> {
+    fn write_to(&self, w: &mut impl Write, span: &LineSliceSpan) -> AppResult<()> {
         write!(w, "{}", &self.line.raw()[span.start_byte..span.end_byte])?;
         Ok(())
     }
@@ -198,7 +198,7 @@ impl<'line> LineSlice<'line> {
         self.span.row_len
     }
 
-    pub fn write_to(&self, w: &mut impl Write) -> Result<(), AnyError> {
+    pub fn write_to(&self, w: &mut impl Write) -> AppResult<()> {
         self.line.write_to(w, &self.span)
     }
 

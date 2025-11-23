@@ -9,7 +9,7 @@ use std::{
 
 use log::{Log, Metadata};
 
-use crate::error::AnyError;
+use crate::AppResult;
 
 type SharedFile = Arc<Mutex<BufWriter<File>>>;
 
@@ -54,7 +54,7 @@ impl Drop for FileLoggerGuard {
 }
 
 /// Set up a [`FileLogger`] as a global logger.
-pub(crate) fn setup_file_logger() -> Result<Option<FileLoggerGuard>, AnyError> {
+pub(crate) fn setup_file_logger() -> AppResult<Option<FileLoggerGuard>> {
     let env_var = match env::var("RUST_LOG").ok() {
         None => {
             store_logs_on_panic(None);

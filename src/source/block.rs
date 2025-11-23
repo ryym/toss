@@ -3,7 +3,7 @@ use std::{
     io::{BufReader, Read},
 };
 
-use crate::error::AnyError;
+use crate::AppResult;
 
 pub(super) const BLOCK_SIZE: u64 = 8192;
 
@@ -79,7 +79,7 @@ impl BlockKey {
 pub(super) fn read_block_from<R: Read>(
     reader: &mut BufReader<R>,
     start_byte: u64,
-) -> Result<Option<Block>, AnyError> {
+) -> AppResult<Option<Block>> {
     let mut buf: [u8; BLOCK_SIZE as usize] = [0; BLOCK_SIZE as usize];
     let mut bytes_read = 0;
     while bytes_read < BLOCK_SIZE as usize {

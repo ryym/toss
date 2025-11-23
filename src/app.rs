@@ -8,22 +8,22 @@ use std::{env, panic, thread};
 
 use regex::Regex;
 
-use crate::error::AnyError;
-use crate::logger;
+use crate::AppResult;
+use crate::logger::setup_file_logger;
 use crate::pager::{PageSize, Pager};
 use crate::reader::Reader;
 use crate::screen::Screen;
 use crate::screen::{Event, Key};
 use crate::source::{self, Source};
 
-pub fn run() -> Result<(), AnyError> {
+pub fn run() -> AppResult<()> {
     let mut screen = crate::screen::for_terminal()?;
     let args = env::args().skip(1).collect::<Vec<_>>();
     run_with(&mut screen, args)
 }
 
-fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> Result<(), AnyError> {
-    let _guard = logger::setup_file_logger()?;
+fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> AppResult<()> {
+    let _guard = setup_file_logger()?;
     log::debug!("Args: {args:?}");
     let size = screen.size()?;
     let stdin = io::stdin().lock();
@@ -62,7 +62,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         }
     }
 
-    fn run(&mut self) -> Result<(), AnyError> {
+    fn run(&mut self) -> AppResult<()> {
         self.draw_rows()?;
         loop {
             let event = self.screen.next_event()?;
@@ -78,7 +78,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         }
     }
 
-    fn handle_event_on_view(&mut self, event: Event) -> Result<EventResult, AnyError> {
+    fn handle_event_on_view(&mut self, event: Event) -> AppResult<EventResult> {
         match event {
             Event::Key(key) => match key {
                 Key::Esc => return Ok(EventResult::Exit),
@@ -133,7 +133,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         Ok(EventResult::Continue)
     }
 
-    fn handle_event_on_search(&mut self, event: Event) -> Result<EventResult, AnyError> {
+    fn handle_event_on_search(&mut self, event: Event) -> AppResult<EventResult> {
         match event {
             Event::Key(key) => match key {
                 Key::Esc => {
@@ -163,7 +163,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         Ok(EventResult::Continue)
     }
 
-    fn draw_rows(&mut self) -> Result<(), AnyError> {
+    fn draw_rows(&mut self) -> AppResult<()> {
         self.screen.clear()?;
 
         let mut i_row = 0;
@@ -177,7 +177,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         Ok(())
     }
 
-    fn scroll_forward_oneline(&mut self) -> Result<bool, AnyError> {
+    fn scroll_forward_oneline(&mut self) -> AppResult<bool> {
         let row_size = self.pager.size().rows();
         match self.pager.scroll_down_one_row()? {
             None => Ok(false),
@@ -191,7 +191,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         }
     }
 
-    fn scroll_backword_oneline(&mut self) -> Result<bool, AnyError> {
+    fn scroll_backword_oneline(&mut self) -> AppResult<bool> {
         match self.pager.scroll_up_one_row()? {
             None => Ok(false),
             Some(new_line_slice) => {
@@ -203,7 +203,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         }
     }
 
-    fn smooth_scroll(&mut self, n_rows: usize, go_down: bool) -> Result<(), AnyError> {
+    fn smooth_scroll(&mut self, n_rows: usize, go_down: bool) -> AppResult<()> {
         let base_delay = 420.0 / (n_rows as f64 + 2.0);
         for step in 0..n_rows {
             if go_down {
@@ -222,7 +222,7 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
         Ok(())
     }
 
-    fn search(&mut self, input: &str) -> Result<(), AnyError> {
+    fn search(&mut self, input: &str) -> AppResult<()> {
         let query = Regex::new(input)?;
         if self.pager.search(&query)? {
             self.draw_rows()?;

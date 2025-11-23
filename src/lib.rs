@@ -15,3 +15,5 @@ mod reader;
 mod screen;
 mod source;
 mod terminal;
+
+pub(crate) type AppResult<T> = Result<T, error::AnyError>;

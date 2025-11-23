@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use regex::Regex;
 
 use crate::{
-    error::AnyError,
+    AppResult,
     line::Line,
     source::{QueryBlock, Source, SourceCursor},
 };
@@ -88,7 +88,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         LineCursor::new(self, query, false)
     }
 
-    pub(crate) fn read_line(&mut self, query: &QueryLine) -> Result<Option<RawLine>, AnyError> {
+    pub(crate) fn read_line(&mut self, query: &QueryLine) -> AppResult<Option<RawLine>> {
         log::debug!("Reader: read_line by {query:?}");
         match query {
             QueryLine::AtStart => self.read_line_forward(0),
@@ -105,7 +105,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         }
     }
 
-    fn read_line_forward(&mut self, start_byte: u64) -> Result<Option<RawLine>, AnyError> {
+    fn read_line_forward(&mut self, start_byte: u64) -> AppResult<Option<RawLine>> {
         let mut cursor = SourceCursor::forward(&mut self.source, QueryBlock::Having(start_byte));
         if !cursor.has_next()? {
             return Ok(None);
@@ -126,7 +126,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         Ok(Some((pos, text)))
     }
 
-    fn read_line_ending_at(&mut self, line_break_byte: u64) -> Result<Option<RawLine>, AnyError> {
+    fn read_line_ending_at(&mut self, line_break_byte: u64) -> AppResult<Option<RawLine>> {
         if line_break_byte == 0 {
             return Ok(None);
         }
@@ -134,7 +134,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         self.read_line_backward(QueryBlock::Having(line_end_byte))
     }
 
-    fn read_end_line(&mut self) -> Result<Option<RawLine>, AnyError> {
+    fn read_end_line(&mut self) -> AppResult<Option<RawLine>> {
         match self.source_end {
             SourceEnd::NonLineBreak => self.read_line_backward(QueryBlock::AtEnd),
             SourceEnd::LineBreak(line_end_byte) => {
@@ -152,7 +152,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         }
     }
 
-    fn read_line_backward(&mut self, from: QueryBlock) -> Result<Option<RawLine>, AnyError> {
+    fn read_line_backward(&mut self, from: QueryBlock) -> AppResult<Option<RawLine>> {
         let mut cursor = SourceCursor::backward(&mut self.source, from);
         let end_byte = match cursor.cursor_pos()? {
             None => return Ok(None),
@@ -178,7 +178,7 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         &mut self,
         from: QueryLine,
         search_query: &Regex,
-    ) -> Result<Option<(LinePos, Line)>, AnyError> {
+    ) -> AppResult<Option<(LinePos, Line)>> {
         let mut lines = self.lines_from(from);
         while let Some((pos, text)) = lines.next()? {
             let line = Line::new(text);
@@ -206,7 +206,7 @@ impl<'r, R, Src: Source<R>> LineCursor<'r, R, Src> {
         }
     }
 
-    pub fn next(&mut self) -> Result<Option<RawLine>, AnyError> {
+    pub fn next(&mut self) -> AppResult<Option<RawLine>> {
         match self.reader.read_line(&self.query)? {
             None => Ok(None),
             Some((pos, text)) => {
@@ -228,20 +228,20 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        error::AnyError,
+        AppResult,
         reader::{LinePos, QueryLine, Reader},
         source::Source,
     };
 
     #[test]
-    fn readable_read_lines_back_and_forth() -> Result<(), AnyError> {
+    fn readable_read_lines_back_and_forth() -> AppResult<()> {
         test_readable_read_lines_back_and_forth(crate::source::as_readable)
     }
     #[test]
-    fn seekable_read_lines_back_and_forth() -> Result<(), AnyError> {
+    fn seekable_read_lines_back_and_forth() -> AppResult<()> {
         test_readable_read_lines_back_and_forth(crate::source::as_seekable)
     }
-    fn test_readable_read_lines_back_and_forth<S, F>(make_source: F) -> Result<(), AnyError>
+    fn test_readable_read_lines_back_and_forth<S, F>(make_source: F) -> AppResult<()>
     where
         S: Source<Cursor<String>>,
         F: Fn(Cursor<String>) -> S,

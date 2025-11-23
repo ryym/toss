@@ -1,7 +1,7 @@
 use regex::Regex;
 
 use crate::{
-    error::AnyError,
+    AppResult,
     pager::{
         line::{LineSlice, PageLine},
         page::{EmptyPage, FilledPage, LineSliceIter},
@@ -51,7 +51,7 @@ pub(crate) struct Pager<R, Src> {
 }
 
 impl<R, Src: Source<R>> Pager<R, Src> {
-    pub fn new(mut reader: Reader<R, Src>, size: PageSize) -> Result<Self, AnyError> {
+    pub fn new(mut reader: Reader<R, Src>, size: PageSize) -> AppResult<Self> {
         let page = match build_page(&mut reader, &size)? {
             None => Page::Empty(EmptyPage::new()),
             Some(page) => Page::Filled(page),
@@ -71,7 +71,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         }
     }
 
-    pub fn scroll_down_one_row(&mut self) -> Result<Option<LineSlice<'_>>, AnyError> {
+    pub fn scroll_down_one_row(&mut self) -> AppResult<Option<LineSlice<'_>>> {
         let page = match &mut self.page {
             Page::Empty(_) => return Ok(None),
             Page::Filled(page) => page,
@@ -93,7 +93,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         Ok(Some(page.end_line_slice()))
     }
 
-    pub fn scroll_up_one_row(&mut self) -> Result<Option<LineSlice<'_>>, AnyError> {
+    pub fn scroll_up_one_row(&mut self) -> AppResult<Option<LineSlice<'_>>> {
         let page = match &mut self.page {
             Page::Empty(_) => return Ok(None),
             Page::Filled(page) => page,
@@ -115,7 +115,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         Ok(Some(page.start_line_slice()))
     }
 
-    pub fn scroll_to_start(&mut self) -> Result<bool, AnyError> {
+    pub fn scroll_to_start(&mut self) -> AppResult<bool> {
         let page = match &mut self.page {
             Page::Empty(_) => return Ok(false),
             Page::Filled(page) => page,
@@ -127,7 +127,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         Ok(true)
     }
 
-    pub fn scroll_to_end(&mut self) -> Result<bool, AnyError> {
+    pub fn scroll_to_end(&mut self) -> AppResult<bool> {
         let page = match &mut self.page {
             Page::Empty(_) => return Ok(false),
             Page::Filled(page) => page,
@@ -138,7 +138,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         Ok(end_line_continue_before || page.end_line().pos() != &end_pos_before)
     }
 
-    pub fn search(&mut self, search_query: &Regex) -> Result<bool, AnyError> {
+    pub fn search(&mut self, search_query: &Regex) -> AppResult<bool> {
         let page = match &mut self.page {
             Page::Empty(_) => return Ok(false),
             Page::Filled(page) => page,
@@ -161,7 +161,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
 fn build_page<R, Src: Source<R>>(
     reader: &mut Reader<R, Src>,
     size: &PageSize,
-) -> Result<Option<FilledPage>, AnyError> {
+) -> AppResult<Option<FilledPage>> {
     let mut builder = FilledPage::builder(size.rows);
     let mut lines = reader.lines_from(QueryLine::AtStart);
     while let Some((pos, text)) = lines.next()? {
@@ -181,7 +181,7 @@ fn write_page_from<R, Src: Source<R>>(
     reader: &mut Reader<R, Src>,
     size: &PageSize,
     page: &mut FilledPage,
-) -> Result<(), AnyError> {
+) -> AppResult<()> {
     let mut writer = page.forward_page_writer();
     let mut lines = reader.lines_from(query);
     while let Some((pos, text)) = lines.next()? {
@@ -199,7 +199,7 @@ fn write_page_ending_at<R, Src: Source<R>>(
     reader: &mut Reader<R, Src>,
     size: &PageSize,
     page: &mut FilledPage,
-) -> Result<(), AnyError> {
+) -> AppResult<()> {
     let mut writer = page.backward_page_writer();
     let mut lines = reader.lines_rev_from(query);
     while let Some((pos, text)) = lines.next()? {
@@ -219,14 +219,14 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        error::AnyError,
+        AppResult,
         pager::{PageSize, Pager},
         reader::Reader,
         source,
     };
 
     #[test]
-    fn pager_scroll_up_down() -> Result<(), AnyError> {
+    fn pager_scroll_up_down() -> AppResult<()> {
         let s = "abcde\n1234567\nfoo\nbar\n123456789".to_string();
         let cursor = Cursor::new(s);
         let source = source::as_readable(cursor);
@@ -274,14 +274,14 @@ mod bench {
     use test::Bencher;
 
     use crate::{
-        error::AnyError,
+        AppResult,
         pager::{PageSize, Pager},
         reader::Reader,
         source,
     };
 
     #[bench]
-    fn paging(b: &mut Bencher) -> Result<(), AnyError> {
+    fn paging(b: &mut Bencher) -> AppResult<()> {
         let file_path = "Cargo.lock";
         let file = File::open(file_path)?;
         let source = source::as_seekable(file);

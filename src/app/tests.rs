@@ -1,10 +1,11 @@
 use indoc::indoc;
 use pretty_assertions::assert_eq;
 
+use crate::AppResult;
 use crate::screen::mock::MockScreen;
 use crate::screen::{Event, Key, ScreenSize};
 
-fn tmpfile(content: &str) -> Result<(String, tempfile::NamedTempFile), crate::app::AnyError> {
+fn tmpfile(content: &str) -> AppResult<(String, tempfile::NamedTempFile)> {
     use std::io::{Seek, SeekFrom, Write};
     let mut tmpfile = tempfile::NamedTempFile::new()?;
     tmpfile.write_all(content.as_bytes())?;
@@ -30,7 +31,7 @@ const TEXT_SMALL: &str = indoc! {"
 "};
 
 #[test]
-fn open_and_quit() -> Result<(), super::AnyError> {
+fn open_and_quit() -> AppResult<()> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![Event::Key(Key::Char('q'))]);
@@ -48,7 +49,7 @@ fn open_and_quit() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn navigate_up_down() -> Result<(), super::AnyError> {
+fn navigate_up_down() -> AppResult<()> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![
@@ -92,7 +93,7 @@ fn navigate_up_down() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn navigate_top_bottom() -> Result<(), super::AnyError> {
+fn navigate_top_bottom() -> AppResult<()> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![
@@ -131,7 +132,7 @@ fn navigate_top_bottom() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn cannot_go_beyond_top() -> Result<(), super::AnyError> {
+fn cannot_go_beyond_top() -> AppResult<()> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![
@@ -167,7 +168,7 @@ fn cannot_go_beyond_top() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn cannot_go_beyond_bottom() -> Result<(), super::AnyError> {
+fn cannot_go_beyond_bottom() -> AppResult<()> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![
@@ -209,7 +210,7 @@ fn cannot_go_beyond_bottom() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn smooth_scroll_up_down() -> Result<(), super::AnyError> {
+fn smooth_scroll_up_down() -> AppResult<()> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 4));
     screen.set_events(vec![
@@ -256,7 +257,7 @@ fn smooth_scroll_up_down() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn navigate_up_down_wrapped_lines() -> Result<(), super::AnyError> {
+fn navigate_up_down_wrapped_lines() -> AppResult<()> {
     let (path, _file) = tmpfile(indoc! {"
         0
         01234567
@@ -312,7 +313,7 @@ fn navigate_up_down_wrapped_lines() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn navigate_top_bottom_wrapped_lines() -> Result<(), super::AnyError> {
+fn navigate_top_bottom_wrapped_lines() -> AppResult<()> {
     let (path, _file) = tmpfile(indoc! {"
         0
         01234567
@@ -382,7 +383,7 @@ fn navigate_top_bottom_wrapped_lines() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn navigate_top_wrapped_lines() -> Result<(), super::AnyError> {
+fn navigate_top_wrapped_lines() -> AppResult<()> {
     let (path, _file) = tmpfile(indoc! {"
         01234567
         abcdefg
@@ -423,7 +424,7 @@ fn navigate_top_wrapped_lines() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn navigate_over_wrapped_lines_only_on_start_or_end() -> Result<(), super::AnyError> {
+fn navigate_over_wrapped_lines_only_on_start_or_end() -> AppResult<()> {
     let (path, _file) = tmpfile(indoc! {"
         0
         01
@@ -484,7 +485,7 @@ fn navigate_over_wrapped_lines_only_on_start_or_end() -> Result<(), super::AnyEr
 }
 
 #[test]
-fn go_beyond_bottom_by_search() -> Result<(), super::AnyError> {
+fn go_beyond_bottom_by_search() -> AppResult<()> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 4));
     screen.set_events(vec![
@@ -553,7 +554,7 @@ fn go_beyond_bottom_by_search() -> Result<(), super::AnyError> {
 }
 
 #[test]
-fn go_beyond_bottom_by_search_wrapped() -> Result<(), super::AnyError> {
+fn go_beyond_bottom_by_search_wrapped() -> AppResult<()> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(4, 4));
     screen.set_events(vec![

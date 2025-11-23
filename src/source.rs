@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    error::AnyError,
+    AppResult,
     source::block::{BLOCK_SIZE, Block, BlockKey, read_block_from},
 };
 
@@ -18,7 +18,7 @@ type BlockPool = HashMap<BlockKey, Block>;
 /// Source is a source text and provide a convenient way of reading content on demand.
 /// It caches loaded content per "block" with a fixed byte size. Disk accesses occur sparsely.
 pub(crate) trait Source<R> {
-    fn read_block(&mut self, query: QueryBlock) -> Result<Option<&Block>, AnyError>;
+    fn read_block(&mut self, query: QueryBlock) -> AppResult<Option<&Block>>;
 }
 
 pub(crate) fn as_readable<R: Read>(reader: R) -> impl Source<R> {
@@ -72,7 +72,7 @@ impl<R: Read + Seek> SeekableSource<R> {
         }
     }
 
-    fn read_and_cache_block(&mut self, byte_index: u64) -> Result<Option<&Block>, AnyError> {
+    fn read_and_cache_block(&mut self, byte_index: u64) -> AppResult<Option<&Block>> {
         let key = BlockKey::from_byte(byte_index);
         let entry = self.pool.entry(key);
         let block = match entry {
@@ -99,7 +99,7 @@ impl<R: Read + Seek> SeekableSource<R> {
 }
 
 impl<R: Read + Seek> Source<R> for SeekableSource<R> {
-    fn read_block(&mut self, query: QueryBlock) -> Result<Option<&Block>, AnyError> {
+    fn read_block(&mut self, query: QueryBlock) -> AppResult<Option<&Block>> {
         let block = match query {
             QueryBlock::Having(byte_index) => self.read_and_cache_block(byte_index)?,
             QueryBlock::AtEnd => {
@@ -126,7 +126,7 @@ impl<R: Read> OneDirectionalSource<R> {
         }
     }
 
-    fn read_and_cache_block(&mut self, byte_index: u64) -> Result<Option<&Block>, AnyError> {
+    fn read_and_cache_block(&mut self, byte_index: u64) -> AppResult<Option<&Block>> {
         let key = BlockKey::from_byte(byte_index);
         let entry = self.pool.entry(key);
         let block = match entry {
@@ -145,7 +145,7 @@ impl<R: Read> OneDirectionalSource<R> {
 }
 
 impl<R: Read> Source<R> for OneDirectionalSource<R> {
-    fn read_block(&mut self, query: QueryBlock) -> Result<Option<&Block>, AnyError> {
+    fn read_block(&mut self, query: QueryBlock) -> AppResult<Option<&Block>> {
         match query {
             QueryBlock::Having(byte_index) => {
                 let mut byte_cursor = 0;
@@ -177,19 +177,19 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        error::AnyError,
+        AppResult,
         source::{QueryBlock, Source},
     };
 
     #[test]
-    fn read_as_readable() -> Result<(), AnyError> {
+    fn read_as_readable() -> AppResult<()> {
         test_read_source(crate::source::as_readable)
     }
     #[test]
-    fn read_as_seekable() -> Result<(), AnyError> {
+    fn read_as_seekable() -> AppResult<()> {
         test_read_source(crate::source::as_seekable)
     }
-    fn test_read_source<S, F>(make_source: F) -> Result<(), AnyError>
+    fn test_read_source<S, F>(make_source: F) -> AppResult<()>
     where
         S: Source<Cursor<String>>,
         F: Fn(Cursor<String>) -> S,

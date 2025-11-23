@@ -1,7 +1,7 @@
 use std::{cmp, marker::PhantomData};
 
 use crate::{
-    error::AnyError,
+    AppResult,
     source::{QueryBlock, Source},
 };
 
@@ -38,7 +38,7 @@ impl<'src, R, Src: Source<R>> SourceCursor<'src, R, Src> {
         }
     }
 
-    pub fn cursor_pos(&mut self) -> Result<Option<u64>, AnyError> {
+    pub fn cursor_pos(&mut self) -> AppResult<Option<u64>> {
         let query = match self.query {
             None => return Ok(None),
             Some(query) => query,
@@ -53,11 +53,11 @@ impl<'src, R, Src: Source<R>> SourceCursor<'src, R, Src> {
         Ok(Some(byte))
     }
 
-    pub fn has_next(&mut self) -> Result<bool, AnyError> {
+    pub fn has_next(&mut self) -> AppResult<bool> {
         Ok(self.cursor_pos()?.is_some())
     }
 
-    pub fn next_content(&mut self) -> Result<Option<&[u8]>, AnyError> {
+    pub fn next_content(&mut self) -> AppResult<Option<&[u8]>> {
         if self.go_forward {
             self.read_forward()
         } else {
@@ -65,7 +65,7 @@ impl<'src, R, Src: Source<R>> SourceCursor<'src, R, Src> {
         }
     }
 
-    fn read_forward(&mut self) -> Result<Option<&[u8]>, AnyError> {
+    fn read_forward(&mut self) -> AppResult<Option<&[u8]>> {
         let query = match self.query {
             None => return Ok(None),
             Some(query) => query,
@@ -80,7 +80,7 @@ impl<'src, R, Src: Source<R>> SourceCursor<'src, R, Src> {
         }
     }
 
-    fn read_backward(&mut self) -> Result<Option<&[u8]>, AnyError> {
+    fn read_backward(&mut self) -> AppResult<Option<&[u8]>> {
         let query = match self.query {
             None => return Ok(None),
             Some(query) => query,
