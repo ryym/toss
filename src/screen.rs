@@ -77,7 +77,7 @@ impl<R: io::Read, W: io::Write> Screen for TerminalScreen<R, W> {
     }
 
     fn clear(&mut self) -> io::Result<()> {
-        write!(self.output, "{}{}", termion::clear::All, Goto(1, 1),)
+        write!(self.output, "{}{}", termion::clear::All, Goto(1, 1))
     }
 
     fn scroll_forward(&mut self, n_steps: u16) -> io::Result<()> {
