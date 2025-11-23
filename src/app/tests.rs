@@ -43,7 +43,7 @@ fn open_and_quit() -> Result<(), super::AnyError> {
         -----
         [EVENT]:char:q
     "};
-    assert_eq!(&screen.out, want);
+    assert_eq!(screen.out(), want);
     Ok(())
 }
 
@@ -87,7 +87,7 @@ fn navigate_up_down() -> Result<(), super::AnyError> {
         -----
         [EVENT]:char:q
     "};
-    assert_eq!(&screen.out, want);
+    assert_eq!(screen.out(), want);
     Ok(())
 }
 
@@ -125,7 +125,7 @@ fn navigate_top_bottom() -> Result<(), super::AnyError> {
         -----
         [EVENT]:char:q
     "};
-    assert_eq!(&screen.out, want);
+    assert_eq!(screen.out(), want);
 
     Ok(())
 }
@@ -162,7 +162,7 @@ fn cannot_go_beyond_top() -> Result<(), super::AnyError> {
         [EVENT]:char:g
         [EVENT]:char:q
     "};
-    assert_eq!(&screen.out, want);
+    assert_eq!(screen.out(), want);
     Ok(())
 }
 
@@ -204,7 +204,7 @@ fn cannot_go_beyond_bottom() -> Result<(), super::AnyError> {
         [EVENT]:char:j
         [EVENT]:char:q
     "};
-    assert_eq!(&screen.out, want);
+    assert_eq!(screen.out(), want);
     Ok(())
 }
 
@@ -250,7 +250,7 @@ fn smooth_scroll_up_down() -> Result<(), super::AnyError> {
         -----
         [EVENT]:char:q
     "};
-    assert_eq!(&screen.out, want);
+    assert_eq!(screen.out(), want);
 
     Ok(())
 }
@@ -306,7 +306,7 @@ fn navigate_up_down_wrapped_lines() -> Result<(), super::AnyError> {
         -----
         [EVENT]:char:q
     "};
-    assert_eq!(&screen.out, want);
+    assert_eq!(screen.out(), want);
 
     Ok(())
 }
@@ -376,7 +376,7 @@ fn navigate_top_bottom_wrapped_lines() -> Result<(), super::AnyError> {
         -----
         [EVENT]:char:q
     "};
-    assert_eq!(&screen.out, want);
+    assert_eq!(screen.out(), want);
 
     Ok(())
 }
@@ -417,7 +417,7 @@ fn navigate_top_wrapped_lines() -> Result<(), super::AnyError> {
         [EVENT]:char:g
         [EVENT]:char:q
     "};
-    assert_eq!(&screen.out, want);
+    assert_eq!(screen.out(), want);
 
     Ok(())
 }
@@ -478,7 +478,7 @@ fn navigate_over_wrapped_lines_only_on_start_or_end() -> Result<(), super::AnyEr
         -----
         [EVENT]:char:q
     "};
-    assert_eq!(&screen.out, want);
+    assert_eq!(screen.out(), want);
 
     Ok(())
 }
@@ -513,7 +513,7 @@ fn go_beyond_bottom_by_search() -> Result<(), super::AnyError> {
         -----
         [EVENT]:char:/
         [EVENT]:char:9
-        [EVENT]:char:\n
+        [EVENT]:char:'\\n'
         line 9
         line 10
 
@@ -547,7 +547,7 @@ fn go_beyond_bottom_by_search() -> Result<(), super::AnyError> {
         -----
         [EVENT]:char:q
     "};
-    assert_eq!(&screen.out, want);
+    assert_eq!(screen.out(), want);
 
     Ok(())
 }
@@ -584,7 +584,7 @@ fn go_beyond_bottom_by_search_wrapped() -> Result<(), super::AnyError> {
         [EVENT]:char:/
         [EVENT]:char:1
         [EVENT]:char:0
-        [EVENT]:char:\n
+        [EVENT]:char:'\\n'
         line>
          10
 
@@ -618,7 +618,7 @@ fn go_beyond_bottom_by_search_wrapped() -> Result<(), super::AnyError> {
         -----
         [EVENT]:char:q
     "};
-    assert_eq!(&screen.out, want);
+    assert_eq!(screen.out(), want);
 
     Ok(())
 }
