@@ -145,7 +145,7 @@ fn visualize_control(s: &str) -> String {
     // Replace all possible control sequences to a plain string for easy testing.
     // In real world, there are infinite patterns of control sequences.
     // But patterns used in tests are limited.
-    s.replace("\x1b[7m", "[[").replace("\x1b[27m", "]]")
+    s.replace("\x1b[7m", "*(").replace("\x1b[27m", ")*")
 }
 
 /// An in-memory implementation of [`Screen`] purely for testing purpose.
@@ -353,13 +353,13 @@ mod tests {
         screen.flush()?;
 
         let want = indoc! {"
-            [[abc]]
+            *(abc)*
 
 
             -----
-            [[abc]]
-            12[[3>
-            4]]5
+            *(abc)*
+            12*(3>
+            4)*5
             -----
         "};
         assert_eq!(screen.out(), want);
