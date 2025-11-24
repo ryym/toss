@@ -14,6 +14,7 @@ mod logger;
 mod pager;
 mod reader;
 mod screen;
+mod search;
 mod source;
 mod terminal;
 

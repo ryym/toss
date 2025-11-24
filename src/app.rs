@@ -14,6 +14,7 @@ use crate::pager::{PageSize, Pager};
 use crate::reader::Reader;
 use crate::screen::Screen;
 use crate::screen::{Event, Key};
+use crate::search::Query;
 use crate::source::{self, Source};
 
 pub fn run() -> AppResult<()> {
@@ -223,8 +224,8 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
     }
 
     fn search(&mut self, input: &str) -> AppResult<()> {
-        let query = Regex::new(input)?;
-        if self.pager.search(&query)? {
+        let query = Query::new(Regex::new(input)?);
+        if self.pager.search(query)? {
             self.draw_rows()?;
         }
         Ok(())

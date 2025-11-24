@@ -1,12 +1,11 @@
-use regex::Regex;
-
 use crate::{
     AppResult,
     pager::{
         line::{LineSlice, PageLine},
         page::{EmptyPage, FilledPage, LineSliceIter},
     },
-    reader::{QueryLine, Reader},
+    reader::{LinePos, QueryLine, Reader},
+    search::Query,
     source::Source,
 };
 
@@ -46,8 +45,8 @@ enum Page {
 #[derive(Debug)]
 pub(crate) struct Pager<R, Src> {
     reader: Reader<R, Src>,
-    size: PageSize,
     page: Page,
+    line_factory: PageLineFactory,
 }
 
 impl<R, Src: Source<R>> Pager<R, Src> {
@@ -56,12 +55,19 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             None => Page::Empty(EmptyPage::new()),
             Some(page) => Page::Filled(page),
         };
-        Ok(Self { reader, size, page })
+        Ok(Self {
+            reader,
+            page,
+            line_factory: PageLineFactory {
+                page_size: size,
+                search_query: None,
+            },
+        })
     }
 
     #[inline]
     pub fn size(&self) -> &PageSize {
-        &self.size
+        &self.line_factory.page_size
     }
 
     pub fn line_slices(&mut self) -> LineSliceIter<'_> {
@@ -84,7 +90,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
                     return Ok(None);
                 }
                 Some((pos, text)) => {
-                    let line = PageLine::new(pos, text, self.size.cols);
+                    let line = self.line_factory.new_line(pos, text);
                     page.move_down_one_line(line);
                 }
             }
@@ -106,7 +112,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
                     return Ok(None);
                 }
                 Some((pos, text)) => {
-                    let line = PageLine::new(pos, text, self.size.cols);
+                    let line = self.line_factory.new_line(pos, text);
                     page.move_up_one_line(line);
                 }
             }
@@ -123,7 +129,12 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         if page.start_line().pos().is_first_line() && !page.can_move_up_one_row() {
             return Ok(false);
         }
-        write_page_from(QueryLine::AtStart, &mut self.reader, &self.size, page)?;
+        write_page_from(
+            QueryLine::AtStart,
+            &mut self.reader,
+            page,
+            &self.line_factory,
+        )?;
         Ok(true)
     }
 
@@ -134,26 +145,28 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         };
         let end_pos_before = *page.end_line().pos();
         let end_line_continue_before = page.can_move_down_one_row();
-        write_page_ending_at(QueryLine::AtEnd, &mut self.reader, &self.size, page)?;
+        write_page_ending_at(QueryLine::AtEnd, &mut self.reader, page, &self.line_factory)?;
         Ok(end_line_continue_before || page.end_line().pos() != &end_pos_before)
     }
 
-    pub fn search(&mut self, search_query: &Regex) -> AppResult<bool> {
+    pub fn search(&mut self, query: Query) -> AppResult<bool> {
         let page = match &mut self.page {
             Page::Empty(_) => return Ok(false),
             Page::Filled(page) => page,
         };
-        let line_from = match page.find_first_match_line(search_query) {
+        let regex = query.regex();
+        let line_from = match page.find_first_match_line(regex) {
             Some(line) => QueryLine::At(*line.pos()),
             None => {
                 let line_from = QueryLine::NextOf(*page.end_line().pos());
-                match self.reader.find_first_match_line(line_from, search_query)? {
+                match self.reader.find_first_match_line(line_from, regex)? {
                     None => return Ok(false),
                     Some((pos, _)) => QueryLine::At(pos),
                 }
             }
         };
-        write_page_from(line_from, &mut self.reader, &self.size, page)?;
+        self.line_factory.search_query = Some(query);
+        write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
         Ok(true)
     }
 }
@@ -179,13 +192,13 @@ fn build_page<R, Src: Source<R>>(
 fn write_page_from<R, Src: Source<R>>(
     query: QueryLine,
     reader: &mut Reader<R, Src>,
-    size: &PageSize,
     page: &mut FilledPage,
+    line_factory: &PageLineFactory,
 ) -> AppResult<()> {
     let mut writer = page.forward_page_writer();
     let mut lines = reader.lines_from(query);
     while let Some((pos, text)) = lines.next()? {
-        let line = PageLine::new(pos, text, size.cols);
+        let line = line_factory.new_line(pos, text);
         if !writer.push_back(line) {
             break;
         }
@@ -197,19 +210,35 @@ fn write_page_from<R, Src: Source<R>>(
 fn write_page_ending_at<R, Src: Source<R>>(
     query: QueryLine,
     reader: &mut Reader<R, Src>,
-    size: &PageSize,
     page: &mut FilledPage,
+    line_factory: &PageLineFactory,
 ) -> AppResult<()> {
     let mut writer = page.backward_page_writer();
     let mut lines = reader.lines_rev_from(query);
     while let Some((pos, text)) = lines.next()? {
-        let line = PageLine::new(pos, text, size.cols);
+        let line = line_factory.new_line(pos, text);
         if !writer.push_front(line) {
             break;
         }
     }
     writer.write_to_page();
     Ok(())
+}
+
+#[derive(Debug)]
+struct PageLineFactory {
+    page_size: PageSize,
+    search_query: Option<Query>,
+}
+
+impl PageLineFactory {
+    fn new_line(&self, pos: LinePos, text: String) -> PageLine {
+        let mut line = PageLine::new(pos, text, self.page_size.cols);
+        if let Some(query) = &self.search_query {
+            line.search(query.regex());
+        }
+        line
+    }
 }
 
 #[cfg(test)]

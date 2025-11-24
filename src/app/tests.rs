@@ -515,7 +515,7 @@ fn go_beyond_bottom_by_search() -> AppResult<()> {
         [EVENT]:char:/
         [EVENT]:char:9
         [EVENT]:char:'\\n'
-        line 9
+        line [[9]]
         line 10
 
 
@@ -523,7 +523,7 @@ fn go_beyond_bottom_by_search() -> AppResult<()> {
         [EVENT]:char:j
         [EVENT]:char:k
         line 8
-        line 9
+        line [[9]]
         line 10
 
         -----
@@ -531,19 +531,19 @@ fn go_beyond_bottom_by_search() -> AppResult<()> {
         [EVENT]:char:k
         line 7
         line 8
-        line 9
+        line [[9]]
         line 10
         -----
         [EVENT]:char:k
         line 6
         line 7
         line 8
-        line 9
+        line [[9]]
         -----
         [EVENT]:char:j
         line 7
         line 8
-        line 9
+        line [[9]]
         line 10
         -----
         [EVENT]:char:q
@@ -587,7 +587,7 @@ fn go_beyond_bottom_by_search_wrapped() -> AppResult<()> {
         [EVENT]:char:0
         [EVENT]:char:'\\n'
         line>
-         10
+         [[10]]
 
 
         -----
@@ -595,7 +595,7 @@ fn go_beyond_bottom_by_search_wrapped() -> AppResult<()> {
         [EVENT]:char:k
          9
         line>
-         10
+         [[10]]
 
         -----
         [EVENT]:char:j
@@ -603,7 +603,7 @@ fn go_beyond_bottom_by_search_wrapped() -> AppResult<()> {
         line>
          9
         line>
-         10
+         [[10]]
         -----
         [EVENT]:char:k
          8
@@ -615,7 +615,7 @@ fn go_beyond_bottom_by_search_wrapped() -> AppResult<()> {
         line>
          9
         line>
-         10
+         [[10]]
         -----
         [EVENT]:char:q
     "};

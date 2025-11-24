@@ -1,8 +1,14 @@
 use std::ops::{Bound, RangeBounds};
 
+use regex::Regex;
 use unicode_width::UnicodeWidthChar;
 
-use crate::{AppResult, io::WriteStr, line::Line, reader::LinePos};
+use crate::{
+    AppResult,
+    io::WriteStr,
+    line::{Line, LineHighlight, WriteLineArgs},
+    reader::LinePos,
+};
 
 /// A line in a page.
 ///
@@ -55,12 +61,11 @@ use crate::{AppResult, io::WriteStr, line::Line, reader::LinePos};
 #[derive(Debug)]
 pub(super) struct PageLine {
     pos: LinePos,
-
     /// An original line.
     line: Line,
-
     /// Applied wrapping based on the page's column size.
     wrap: Wrap,
+    decoration: Decoration,
 }
 
 impl PageLine {
@@ -72,7 +77,12 @@ impl PageLine {
     pub fn new(pos: LinePos, text: String, n_cols: usize) -> Self {
         let line = Line::new(text);
         let wrap = Wrap::new(&line, n_cols);
-        Self { pos, line, wrap }
+        Self {
+            pos,
+            line,
+            wrap,
+            decoration: Decoration::default(),
+        }
     }
 
     #[inline]
@@ -96,8 +106,19 @@ impl PageLine {
         LineSlice::new(self, span)
     }
 
+    pub fn search(&mut self, query: &Regex) {
+        self.decoration.highlight = self.line.search(query);
+    }
+
     fn write_to(&self, w: &mut impl WriteStr, span: &LineSliceSpan) -> AppResult<()> {
-        self.line.write_to(w, span.start_byte..span.end_byte)
+        log::debug!("{:?}", self.decoration);
+        self.line.write_to(
+            w,
+            WriteLineArgs {
+                range: span.start_byte..span.end_byte,
+                highlight: &self.decoration.highlight,
+            },
+        )
     }
 }
 
@@ -105,6 +126,11 @@ impl PageLine {
 struct Wrap {
     /// Rows are a list of cut-off text of the original line to fit in the page width.
     rows: Vec<WrapRow>,
+}
+
+#[derive(Debug, Default)]
+struct Decoration {
+    highlight: LineHighlight,
 }
 
 impl Wrap {
