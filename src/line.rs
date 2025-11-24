@@ -10,7 +10,7 @@ pub(crate) struct Line {
     plain: String,
 
     /// A byte index mapping from each character in `plain` to `raw`. Example:
-    /// - raw: `\xb[1mHi\xb[0m, 😀` ("Hi" is bold)
+    /// - raw: `\x1b[1mHi\x1b[0m, 😀` ("Hi" is bold)
     /// - plain: `Hi, 😀`
     /// - plain_to_raw:
     ///   ```text
