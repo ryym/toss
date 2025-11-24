@@ -485,6 +485,361 @@ fn navigate_over_wrapped_lines_only_on_start_or_end() -> AppResult<()> {
 }
 
 #[test]
+fn search_and_highlight() -> AppResult<()> {
+    let (path, _file) = tmpfile(TEXT_SMALL)?;
+    let mut screen = MockScreen::new(ScreenSize::new(8, 4));
+    screen.set_events(vec![
+        // Search by "line".
+        Event::Key(Key::Char('/')),
+        Event::Key(Key::Char('l')),
+        Event::Key(Key::Char('i')),
+        Event::Key(Key::Char('n')),
+        Event::Key(Key::Char('e')),
+        Event::Key(Key::Char('\n')),
+        // Navigate up and down.
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('G')),
+        Event::Key(Key::Char('g')),
+        // quit.
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        line 1
+        line 2
+        line 3
+        line 4
+        -----
+        [EVENT]:char:/
+        [EVENT]:char:l
+        [EVENT]:char:i
+        [EVENT]:char:n
+        [EVENT]:char:e
+        [EVENT]:char:'\\n'
+        *(line)* 1
+        *(line)* 2
+        *(line)* 3
+        *(line)* 4
+        -----
+        [EVENT]:char:j
+        *(line)* 2
+        *(line)* 3
+        *(line)* 4
+        *(line)* 5
+        -----
+        [EVENT]:char:j
+        *(line)* 3
+        *(line)* 4
+        *(line)* 5
+        *(line)* 6
+        -----
+        [EVENT]:char:k
+        *(line)* 2
+        *(line)* 3
+        *(line)* 4
+        *(line)* 5
+        -----
+        [EVENT]:char:k
+        *(line)* 1
+        *(line)* 2
+        *(line)* 3
+        *(line)* 4
+        -----
+        [EVENT]:char:G
+        *(line)* 7
+        *(line)* 8
+        *(line)* 9
+        *(line)* 10
+        -----
+        [EVENT]:char:g
+        *(line)* 1
+        *(line)* 2
+        *(line)* 3
+        *(line)* 4
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(screen.out(), want);
+    Ok(())
+}
+
+#[test]
+fn search_by_different_keywords() -> AppResult<()> {
+    let (path, _file) = tmpfile(TEXT_SMALL)?;
+    let mut screen = MockScreen::new(ScreenSize::new(8, 4));
+    screen.set_events(vec![
+        // Search by "li".
+        Event::Key(Key::Char('/')),
+        Event::Key(Key::Char('l')),
+        Event::Key(Key::Char('i')),
+        Event::Key(Key::Char('\n')),
+        // Navigate.
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('j')),
+        // Search by "ne".
+        Event::Key(Key::Char('/')),
+        Event::Key(Key::Char('n')),
+        Event::Key(Key::Char('e')),
+        Event::Key(Key::Char('\n')),
+        // Navigate.
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('G')),
+        // quit.
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        line 1
+        line 2
+        line 3
+        line 4
+        -----
+        [EVENT]:char:/
+        [EVENT]:char:l
+        [EVENT]:char:i
+        [EVENT]:char:'\\n'
+        *(li)*ne 1
+        *(li)*ne 2
+        *(li)*ne 3
+        *(li)*ne 4
+        -----
+        [EVENT]:char:j
+        *(li)*ne 2
+        *(li)*ne 3
+        *(li)*ne 4
+        *(li)*ne 5
+        -----
+        [EVENT]:char:j
+        *(li)*ne 3
+        *(li)*ne 4
+        *(li)*ne 5
+        *(li)*ne 6
+        -----
+        [EVENT]:char:/
+        [EVENT]:char:n
+        [EVENT]:char:e
+        [EVENT]:char:'\\n'
+        li*(ne)* 3
+        li*(ne)* 4
+        li*(ne)* 5
+        li*(ne)* 6
+        -----
+        [EVENT]:char:j
+        li*(ne)* 4
+        li*(ne)* 5
+        li*(ne)* 6
+        li*(ne)* 7
+        -----
+        [EVENT]:char:k
+        li*(ne)* 3
+        li*(ne)* 4
+        li*(ne)* 5
+        li*(ne)* 6
+        -----
+        [EVENT]:char:k
+        li*(ne)* 2
+        li*(ne)* 3
+        li*(ne)* 4
+        li*(ne)* 5
+        -----
+        [EVENT]:char:k
+        li*(ne)* 1
+        li*(ne)* 2
+        li*(ne)* 3
+        li*(ne)* 4
+        -----
+        [EVENT]:char:G
+        li*(ne)* 7
+        li*(ne)* 8
+        li*(ne)* 9
+        li*(ne)* 10
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(screen.out(), want);
+    Ok(())
+}
+
+#[test]
+fn search_and_highlight_wrapped_line() -> AppResult<()> {
+    let (path, _file) = tmpfile(indoc! {"
+        line 1
+        line 2
+        line 3
+        01234abcde
+        vwxyz98765
+    "})?;
+    let mut screen = MockScreen::new(ScreenSize::new(6, 3));
+    screen.set_events(vec![
+        // Search by "cde".
+        Event::Key(Key::Char('/')),
+        Event::Key(Key::Char('c')),
+        Event::Key(Key::Char('d')),
+        Event::Key(Key::Char('e')),
+        Event::Key(Key::Char('\n')),
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:/
+        [EVENT]:char:c
+        [EVENT]:char:d
+        [EVENT]:char:e
+        [EVENT]:char:'\\n'
+        01234a>
+        b*(cde)*
+        vwxyz9
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(screen.out(), want);
+    Ok(())
+}
+
+#[test]
+fn search_and_highlight_wrapped_line_over_top() -> AppResult<()> {
+    let (path, _file) = tmpfile(indoc! {"
+        line 1
+        line 2
+        line 3
+        01234abcde
+        vwxyz98765
+        line 4
+    "})?;
+    let mut screen = MockScreen::new(ScreenSize::new(6, 3));
+    screen.set_events(vec![
+        // Search by "ab".
+        Event::Key(Key::Char('/')),
+        Event::Key(Key::Char('a')),
+        Event::Key(Key::Char('b')),
+        Event::Key(Key::Char('\n')),
+        // Navigate up and down.
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:/
+        [EVENT]:char:a
+        [EVENT]:char:b
+        [EVENT]:char:'\\n'
+        01234*(a>
+        b)*cde
+        vwxyz9
+        -----
+        [EVENT]:char:j
+        b)*cde
+        vwxyz9>
+        8765
+        -----
+        [EVENT]:char:j
+        vwxyz9>
+        8765
+        line 4
+        -----
+        [EVENT]:char:k
+        *(b)*cde
+        vwxyz9>
+        8765
+        -----
+        [EVENT]:char:k
+        01234*(a>
+        *(b)*cde
+        vwxyz9>
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(screen.out(), want);
+    Ok(())
+}
+
+#[test]
+fn search_and_highlight_wrapped_line_over_bottom() -> AppResult<()> {
+    let (path, _file) = tmpfile(indoc! {"
+        line 1
+        line 2
+        line 3
+        01234abcde
+        vwxyz98765
+        line 4
+    "})?;
+    let mut screen = MockScreen::new(ScreenSize::new(6, 3));
+    screen.set_events(vec![
+        // Search by "98".
+        Event::Key(Key::Char('/')),
+        Event::Key(Key::Char('9')),
+        Event::Key(Key::Char('8')),
+        Event::Key(Key::Char('\n')),
+        // Navigate up and down.
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('j')),
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:/
+        [EVENT]:char:9
+        [EVENT]:char:8
+        [EVENT]:char:'\\n'
+        vwxyz*(9>
+        8)*765
+        line 4
+        -----
+        [EVENT]:char:k
+        bcde
+        vwxyz*(9>
+        8)*765
+        -----
+        [EVENT]:char:k
+        01234a>
+        bcde
+        vwxyz*(9>
+        -----
+        [EVENT]:char:j
+        bcde
+        vwxyz*(9>
+        8)*765
+        -----
+        [EVENT]:char:j
+        vwxyz*(9>
+        8)*765
+        line 4
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(screen.out(), want);
+    Ok(())
+}
+
+#[test]
 fn go_beyond_bottom_by_search() -> AppResult<()> {
     let (path, _file) = tmpfile(TEXT_SMALL)?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 4));
