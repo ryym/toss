@@ -1,4 +1,6 @@
-use crate::terminal;
+use std::ops::Range;
+
+use crate::{AppResult, io::WriteStr, terminal};
 
 /// A line in target text. It can be decorated with ANSI escape sequences.
 #[derive(Debug, Default)]
@@ -67,6 +69,16 @@ impl Line {
     #[inline]
     pub fn plain_to_raw(&self) -> &[usize] {
         &self.plain_to_raw
+    }
+
+    pub fn write_to(&self, w: &mut impl WriteStr, range: Range<usize>) -> AppResult<()> {
+        if self.raw.is_empty() {
+            return Ok(());
+        }
+        assert!(range.start < self.raw.len());
+        assert!(range.end <= self.raw.len());
+
+        w.write_all(&self.raw[range.start..range.end])
     }
 }
 

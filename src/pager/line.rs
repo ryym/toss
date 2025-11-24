@@ -97,7 +97,7 @@ impl PageLine {
     }
 
     fn write_to(&self, w: &mut impl WriteStr, span: &LineSliceSpan) -> AppResult<()> {
-        w.write_all(&self.line.raw()[span.start_byte..span.end_byte])
+        self.line.write_to(w, span.start_byte..span.end_byte)
     }
 }
 
