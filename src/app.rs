@@ -1,21 +1,19 @@
+mod core;
+mod mode;
 #[cfg(test)]
 mod tests;
 
+use std::env;
 use std::fs::File;
 use std::io::{self, IsTerminal};
-use std::time::Duration;
-use std::{env, panic, thread};
-
-use regex::Regex;
-
-use termion::event::{Event, Key};
 
 use crate::AppResult;
+use crate::app::core::Core;
+use crate::app::mode::Mode;
 use crate::logger::setup_file_logger;
 use crate::pager::{PageSize, Pager};
 use crate::reader::Reader;
 use crate::screen::Screen;
-use crate::search::Query;
 use crate::source::{self, Source};
 
 pub fn run() -> AppResult<()> {
@@ -36,218 +34,41 @@ fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> AppResult<()> {
         let source = source::as_seekable(file);
         let reader = Reader::new(source);
         let pager = Pager::new(reader, PageSize::new(size.cols(), size.rows()))?;
-        App::new(screen, pager).run()?;
+        App::new(pager).run(screen)?;
     } else {
         log::debug!("Read from stdin");
         let source = source::as_readable(stdin);
         let reader = Reader::new(source);
         let pager = Pager::new(reader, PageSize::new(size.cols(), size.rows()))?;
-        App::new(screen, pager).run()?;
+        App::new(pager).run(screen)?;
     }
     Ok(())
 }
 
-struct App<'s, S, R, Src> {
-    screen: &'s mut S,
+struct App<R, Src> {
     pager: Pager<R, Src>,
-    mode: Mode,
-    search_state: SearchState,
 }
 
-impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
-    fn new(screen: &'s mut S, pager: Pager<R, Src>) -> Self {
-        Self {
-            screen,
-            pager,
-            mode: Mode::View,
-            search_state: SearchState { input: Vec::new() },
-        }
+impl<R, Src: Source<R>> App<R, Src> {
+    fn new(pager: Pager<R, Src>) -> Self {
+        Self { pager }
     }
 
-    fn run(&mut self) -> AppResult<()> {
-        self.draw_rows()?;
+    fn run<S: Screen>(&mut self, screen: &mut S) -> AppResult<()> {
+        let mut core = Core::new(screen, &mut self.pager);
+        core.draw_rows()?;
+        let mut mode = Mode::view(core);
         loop {
-            let event = self.screen.next_event()?;
-            log::debug!("Event: {event:?}");
-            let event_result = match &self.mode {
-                Mode::View => self.handle_event_on_view(event)?,
-                Mode::Search => self.handle_event_on_search(event)?,
-            };
-            match event_result {
-                EventResult::Continue => {}
-                EventResult::Exit => return Ok(()),
+            match mode.run()? {
+                NextAction::Exit => break,
+                NextAction::NextMode(next_mode) => mode = next_mode,
             }
-        }
-    }
-
-    fn handle_event_on_view(&mut self, event: Event) -> AppResult<EventResult> {
-        match event {
-            Event::Key(key) => match key {
-                Key::Esc => return Ok(EventResult::Exit),
-                Key::Char(chr) => match chr {
-                    'q' => return Ok(EventResult::Exit),
-                    'j' => {
-                        if self.scroll_forward_oneline()? {
-                            self.screen.flush()?;
-                        }
-                    }
-                    'k' => {
-                        if self.scroll_backword_oneline()? {
-                            self.screen.flush()?;
-                        }
-                    }
-                    'g' => {
-                        if self.pager.scroll_to_start()? {
-                            self.draw_rows()?;
-                        }
-                    }
-                    'G' => {
-                        if self.pager.scroll_to_end()? {
-                            self.draw_rows()?;
-                        }
-                    }
-                    'd' => {
-                        self.smooth_scroll(self.pager.size().rows() / 2, true)?;
-                    }
-                    'u' => {
-                        self.smooth_scroll(self.pager.size().rows() / 2, false)?;
-                    }
-                    'f' | ' ' => {
-                        self.smooth_scroll(self.pager.size().rows(), true)?;
-                    }
-                    'b' => {
-                        self.smooth_scroll(self.pager.size().rows(), false)?;
-                    }
-                    '/' => {
-                        self.search_state = SearchState { input: Vec::new() };
-                        self.mode = Mode::Search;
-                    }
-                    'n' => {
-                        if self.pager.jump_to_next_search_match()? {
-                            self.draw_rows()?;
-                        }
-                    }
-                    _ => return Ok(EventResult::Continue),
-                },
-                _ => {
-                    panic!("unexpected key")
-                }
-            },
-            _ => {
-                panic!("unexpected event")
-            }
-        }
-        Ok(EventResult::Continue)
-    }
-
-    fn handle_event_on_search(&mut self, event: Event) -> AppResult<EventResult> {
-        match event {
-            Event::Key(key) => match key {
-                Key::Esc => {
-                    self.mode = Mode::View;
-                }
-                Key::Char(chr) => match chr {
-                    '\n' => {
-                        let input = self.search_state.input.iter().collect::<String>();
-                        self.search(&input)?;
-                        self.mode = Mode::View;
-                    }
-                    c => {
-                        self.search_state.input.push(c);
-                        // interactive search
-                        // let input = self.search_state.input.iter().collect::<String>();
-                        // self.search(&input)?;
-                    }
-                },
-                _ => {
-                    panic!("unexpected key")
-                }
-            },
-            _ => {
-                panic!("unexpected event")
-            }
-        }
-        Ok(EventResult::Continue)
-    }
-
-    fn draw_rows(&mut self) -> AppResult<()> {
-        self.screen.clear()?;
-
-        let mut i_row = 0;
-        for line_slice in self.pager.line_slices() {
-            self.screen.goto(0, i_row)?;
-            line_slice.write_to(self.screen)?;
-            i_row += line_slice.row_len();
-        }
-
-        self.screen.flush()?;
-        Ok(())
-    }
-
-    fn scroll_forward_oneline(&mut self) -> AppResult<bool> {
-        let row_size = self.pager.size().rows();
-        match self.pager.scroll_down_one_row()? {
-            None => Ok(false),
-            Some(new_line_slice) => {
-                self.screen.scroll_forward(1)?;
-                let row_start = row_size - new_line_slice.row_len();
-                self.screen.goto(0, row_start)?;
-                new_line_slice.write_to(self.screen)?;
-                Ok(true)
-            }
-        }
-    }
-
-    fn scroll_backword_oneline(&mut self) -> AppResult<bool> {
-        match self.pager.scroll_up_one_row()? {
-            None => Ok(false),
-            Some(new_line_slice) => {
-                self.screen.scroll_backward(1)?;
-                self.screen.goto(0, 0)?;
-                new_line_slice.write_to(self.screen)?;
-                Ok(true)
-            }
-        }
-    }
-
-    fn smooth_scroll(&mut self, n_rows: usize, go_down: bool) -> AppResult<()> {
-        let base_delay = 420.0 / (n_rows as f64 + 2.0);
-        for step in 0..n_rows {
-            if go_down {
-                if !self.scroll_forward_oneline()? {
-                    break;
-                }
-            } else if !self.scroll_backword_oneline()? {
-                break;
-            }
-            self.screen.flush()?;
-            let progress = step as f64 / n_rows as f64;
-            let eased_progress = progress.powi(3);
-            let delay = (1.0 + base_delay * eased_progress) as u64;
-            thread::sleep(Duration::from_millis(delay));
-        }
-        Ok(())
-    }
-
-    fn search(&mut self, input: &str) -> AppResult<()> {
-        let query = Query::new(Regex::new(input)?);
-        if self.pager.search(query)? {
-            self.draw_rows()?;
         }
         Ok(())
     }
 }
 
-enum Mode {
-    View,
-    Search,
-}
-
-enum EventResult {
-    Continue,
+enum NextAction<'app, S, R, Src> {
+    NextMode(Mode<'app, S, R, Src>),
     Exit,
-}
-
-struct SearchState {
-    input: Vec<char>,
 }
