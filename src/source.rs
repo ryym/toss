@@ -1,3 +1,6 @@
+mod block;
+mod cursor;
+
 use std::{
     collections::{HashMap, hash_map::Entry},
     io::{BufReader, Read, Seek, SeekFrom},
@@ -7,9 +10,6 @@ use crate::{
     AppResult,
     source::block::{BLOCK_SIZE, Block, BlockKey, read_block_from},
 };
-
-mod block;
-mod cursor;
 
 pub(crate) use cursor::SourceCursor;
 

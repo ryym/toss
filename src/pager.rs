@@ -1,3 +1,6 @@
+mod line;
+mod page;
+
 use crate::{
     AppResult,
     pager::{
@@ -8,9 +11,6 @@ use crate::{
     search::Query,
     source::Source,
 };
-
-mod line;
-mod page;
 
 #[derive(Debug)]
 pub(crate) struct PageSize {
