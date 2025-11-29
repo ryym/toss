@@ -121,6 +121,11 @@ impl<'s, S: Screen, R, Src: Source<R>> App<'s, S, R, Src> {
                         self.search_state = SearchState { input: Vec::new() };
                         self.mode = Mode::Search;
                     }
+                    'n' => {
+                        if self.pager.jump_to_next_search_match()? {
+                            self.draw_rows()?;
+                        }
+                    }
                     _ => return Ok(EventResult::Continue),
                 },
                 _ => {

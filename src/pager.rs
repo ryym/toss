@@ -169,6 +169,32 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
         Ok(true)
     }
+
+    pub fn jump_to_next_search_match(&mut self) -> AppResult<bool> {
+        let page = match &mut self.page {
+            Page::Empty(_) => return Ok(false),
+            Page::Filled(page) => page,
+        };
+        let query = match &self.line_factory.search_query {
+            None => return Ok(false),
+            Some(query) => query,
+        };
+        // The process is almost the same as `Self::search`. It just find a next match after the
+        // cursor (== a first line + `--jump-target`), instead of the first match.
+        let regex = query.regex();
+        let line_from = match page.find_second_match_line(regex) {
+            Some(line) => QueryLine::At(*line.pos()),
+            None => {
+                let line_from = QueryLine::NextOf(*page.end_line().pos());
+                match self.reader.find_first_match_line(line_from, regex)? {
+                    None => return Ok(false),
+                    Some((pos, _)) => QueryLine::At(pos),
+                }
+            }
+        };
+        write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
+        Ok(true)
+    }
 }
 
 fn build_page<R, Src: Source<R>>(

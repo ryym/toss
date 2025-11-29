@@ -978,3 +978,68 @@ fn go_beyond_bottom_by_search_wrapped() -> AppResult<()> {
 
     Ok(())
 }
+
+#[test]
+fn search_and_jump_matches_forward() -> AppResult<()> {
+    let (path, _file) = tmpfile(TEXT_SMALL)?;
+    let mut screen = MockScreen::new(ScreenSize::new(10, 3));
+    screen.set_events(vec![
+        // Search by "li".
+        Event::Key(Key::Char('/')),
+        Event::Key(Key::Char('l')),
+        Event::Key(Key::Char('i')),
+        Event::Key(Key::Char('\n')),
+        // Jump to subsequent matches.
+        Event::Key(Key::Char('n')),
+        Event::Key(Key::Char('n')),
+        // Move and then jump to a next match.
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('n')),
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        line 1
+        line 2
+        line 3
+        -----
+        [EVENT]:char:/
+        [EVENT]:char:l
+        [EVENT]:char:i
+        [EVENT]:char:'\\n'
+        *(li)*ne 1
+        *(li)*ne 2
+        *(li)*ne 3
+        -----
+        [EVENT]:char:n
+        *(li)*ne 2
+        *(li)*ne 3
+        *(li)*ne 4
+        -----
+        [EVENT]:char:n
+        *(li)*ne 3
+        *(li)*ne 4
+        *(li)*ne 5
+        -----
+        [EVENT]:char:k
+        *(li)*ne 2
+        *(li)*ne 3
+        *(li)*ne 4
+        -----
+        [EVENT]:char:k
+        *(li)*ne 1
+        *(li)*ne 2
+        *(li)*ne 3
+        -----
+        [EVENT]:char:n
+        *(li)*ne 2
+        *(li)*ne 3
+        *(li)*ne 4
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(screen.out(), want);
+    Ok(())
+}

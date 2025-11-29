@@ -180,10 +180,18 @@ impl FilledPage {
         BackwardPageWriter::for_page(self)
     }
 
-    pub fn find_first_match_line(&mut self, query: &Regex) -> Option<&PageLine> {
+    pub fn find_first_match_line(&self, query: &Regex) -> Option<&PageLine> {
+        self.find_first_match_after(0, query)
+    }
+
+    pub fn find_second_match_line(&self, query: &Regex) -> Option<&PageLine> {
+        self.find_first_match_after(1, query)
+    }
+
+    fn find_first_match_after(&self, skip: usize, query: &Regex) -> Option<&PageLine> {
         self.deque
             .iter()
-            .skip(self.start_row.deque_index)
+            .skip(self.start_row.deque_index + skip)
             .find(|line| query.is_match(line.plain()))
     }
 }
