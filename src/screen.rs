@@ -5,12 +5,11 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 
 use termion::cursor::Goto;
+use termion::event::Event;
 use termion::input::{Events, TermRead};
 use termion::raw::IntoRawMode;
 use termion::screen::IntoAlternateScreen;
 use termion::terminal_size;
-
-pub(crate) use termion::event::{Event, Key};
 
 use crate::AppResult;
 use crate::io::WriteStr;

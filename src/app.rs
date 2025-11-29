@@ -8,12 +8,13 @@ use std::{env, panic, thread};
 
 use regex::Regex;
 
+use termion::event::{Event, Key};
+
 use crate::AppResult;
 use crate::logger::setup_file_logger;
 use crate::pager::{PageSize, Pager};
 use crate::reader::Reader;
 use crate::screen::Screen;
-use crate::screen::{Event, Key};
 use crate::search::Query;
 use crate::source::{self, Source};
 

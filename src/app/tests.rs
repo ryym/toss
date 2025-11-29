@@ -1,9 +1,10 @@
 use indoc::indoc;
 use pretty_assertions::assert_eq;
+use termion::event::{Event, Key};
 
 use crate::AppResult;
+use crate::screen::ScreenSize;
 use crate::screen::mock::MockScreen;
-use crate::screen::{Event, Key, ScreenSize};
 
 fn tmpfile(content: &str) -> AppResult<(String, tempfile::NamedTempFile)> {
     use std::io::{Seek, SeekFrom, Write};
