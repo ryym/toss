@@ -25,23 +25,26 @@ pub fn run() -> AppResult<()> {
 fn run_with<S: Screen>(screen: &mut S, args: Vec<String>) -> AppResult<()> {
     let _guard = setup_file_logger()?;
     log::debug!("Args: {args:?}");
-    let size = screen.size()?;
     let stdin = io::stdin().lock();
     if stdin.is_terminal() || !args.is_empty() {
         let file_path = args.first().unwrap();
         log::debug!("Read file: {file_path}");
         let file = File::open(file_path)?;
         let source = source::as_seekable(file);
-        let reader = Reader::new(source);
-        let pager = Pager::new(reader, PageSize::new(size.cols(), size.rows()))?;
-        App::new(pager).run(screen)?;
+        run_app(screen, source)?;
     } else {
         log::debug!("Read from stdin");
         let source = source::as_readable(stdin);
-        let reader = Reader::new(source);
-        let pager = Pager::new(reader, PageSize::new(size.cols(), size.rows()))?;
-        App::new(pager).run(screen)?;
+        run_app(screen, source)?;
     }
+    Ok(())
+}
+
+fn run_app<R>(screen: &mut impl Screen, source: impl Source<R>) -> AppResult<()> {
+    let size = screen.size()?;
+    let reader = Reader::new(source);
+    let pager = Pager::new(reader, PageSize::new(size.cols(), size.rows()))?;
+    App::new(pager).run(screen)?;
     Ok(())
 }
 
