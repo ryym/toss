@@ -5,7 +5,6 @@ use crate::{
     AppResult,
     app::{Core, Mode, NextAction},
     screen::Screen,
-    search::Query,
     source::Source,
 };
 
@@ -64,7 +63,7 @@ impl<'app, S: Screen, R, Src: Source<R>> SearchMode<'app, S, R, Src> {
     }
 
     fn search(&mut self, input: &str) -> AppResult<()> {
-        let query = Query::new(Regex::new(input)?);
+        let query = Regex::new(input)?;
         if self.core.pager.search(query)? {
             self.core.draw_rows()?;
         }

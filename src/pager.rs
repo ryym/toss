@@ -1,6 +1,8 @@
 mod line;
 mod page;
 
+use regex::Regex;
+
 use crate::{
     AppResult,
     pager::{
@@ -8,7 +10,6 @@ use crate::{
         page::{EmptyPage, FilledPage, LineSliceIter},
     },
     reader::{LinePos, QueryLine, Reader},
-    search::Query,
     source::Source,
 };
 
@@ -29,6 +30,11 @@ impl PageSize {
     pub fn rows(&self) -> usize {
         self.rows
     }
+}
+
+#[derive(Debug)]
+struct SearchState {
+    query: Regex,
 }
 
 #[derive(Debug)]
@@ -60,7 +66,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             page,
             line_factory: PageLineFactory {
                 page_size: size,
-                search_query: None,
+                search: None,
             },
         })
     }
@@ -149,23 +155,22 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         Ok(end_line_continue_before || page.end_line().pos() != &end_pos_before)
     }
 
-    pub fn search(&mut self, query: Query) -> AppResult<bool> {
+    pub fn search(&mut self, query: Regex) -> AppResult<bool> {
         let page = match &mut self.page {
             Page::Empty(_) => return Ok(false),
             Page::Filled(page) => page,
         };
-        let regex = query.regex();
-        let line_from = match page.find_first_match_line(regex) {
+        let line_from = match page.find_first_match_line(&query) {
             Some(line) => QueryLine::At(*line.pos()),
             None => {
                 let line_from = QueryLine::NextOf(*page.end_line().pos());
-                match self.reader.find_first_match_line(line_from, regex)? {
+                match self.reader.find_first_match_line(line_from, &query)? {
                     None => return Ok(false),
                     Some((pos, _)) => QueryLine::At(pos),
                 }
             }
         };
-        self.line_factory.search_query = Some(query);
+        self.line_factory.search = Some(SearchState { query });
         write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
         Ok(true)
     }
@@ -175,18 +180,17 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Empty(_) => return Ok(false),
             Page::Filled(page) => page,
         };
-        let query = match &self.line_factory.search_query {
+        let query = match &self.line_factory.search {
             None => return Ok(false),
-            Some(query) => query,
+            Some(search) => &search.query,
         };
         // The process is almost the same as `Self::search`. It just find a next match after the
         // cursor (== a first line + `--jump-target`), instead of the first match.
-        let regex = query.regex();
-        let line_from = match page.find_second_match_line(regex) {
+        let line_from = match page.find_second_match_line(query) {
             Some(line) => QueryLine::At(*line.pos()),
             None => {
                 let line_from = QueryLine::NextOf(*page.end_line().pos());
-                match self.reader.find_first_match_line(line_from, regex)? {
+                match self.reader.find_first_match_line(line_from, query)? {
                     None => return Ok(false),
                     Some((pos, _)) => QueryLine::At(pos),
                 }
@@ -254,14 +258,14 @@ fn write_page_ending_at<R, Src: Source<R>>(
 #[derive(Debug)]
 struct PageLineFactory {
     page_size: PageSize,
-    search_query: Option<Query>,
+    search: Option<SearchState>,
 }
 
 impl PageLineFactory {
     fn new_line(&self, pos: LinePos, text: String) -> PageLine {
         let mut line = PageLine::new(pos, text, self.page_size.cols);
-        if let Some(query) = &self.search_query {
-            line.search(query.regex());
+        if let Some(search) = &self.search {
+            line.search(&search.query);
         }
         line
     }
