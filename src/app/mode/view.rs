@@ -10,19 +10,19 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub(super) struct Scroll {
+struct Scroll {
     pub direction: ScrollDirection,
     pub amount: ScrollAmount,
 }
 
 #[derive(Debug)]
-pub(super) enum ScrollDirection {
+enum ScrollDirection {
     Up,
     Down,
 }
 
 #[derive(Debug)]
-pub(super) enum ScrollAmount {
+enum ScrollAmount {
     HalfPage,
     OnePage,
 }
