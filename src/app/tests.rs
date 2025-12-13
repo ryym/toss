@@ -982,13 +982,29 @@ fn go_beyond_bottom_by_search_wrapped() -> AppResult<()> {
 
 #[test]
 fn search_and_jump_matches_forward() -> AppResult<()> {
-    let (path, _file) = tmpfile(TEXT_SMALL)?;
+    let (path, _file) = tmpfile(indoc! {"
+        apple 1
+        orange
+        banana
+        apple 2
+        orange
+        banana
+        orange
+        apple 3
+        banana
+        orange
+        apple 4
+        banana
+    "})?;
     let mut screen = MockScreen::new(ScreenSize::new(10, 3));
     screen.set_events(vec![
-        // Search by "li".
+        // Search by "apple".
         Event::Key(Key::Char('/')),
+        Event::Key(Key::Char('a')),
+        Event::Key(Key::Char('p')),
+        Event::Key(Key::Char('p')),
         Event::Key(Key::Char('l')),
-        Event::Key(Key::Char('i')),
+        Event::Key(Key::Char('e')),
         Event::Key(Key::Char('\n')),
         // Jump to subsequent matches.
         Event::Key(Key::Char('n')),
@@ -1002,42 +1018,123 @@ fn search_and_jump_matches_forward() -> AppResult<()> {
     super::run_with(&mut screen, vec![path])?;
 
     let want = indoc! {"
-        line 1
-        line 2
-        line 3
+        apple 1
+        orange
+        banana
         -----
         [EVENT]:char:/
+        [EVENT]:char:a
+        [EVENT]:char:p
+        [EVENT]:char:p
         [EVENT]:char:l
-        [EVENT]:char:i
+        [EVENT]:char:e
         [EVENT]:char:'\\n'
-        *(li)*ne 1
-        *(li)*ne 2
-        *(li)*ne 3
+        *(apple)* 1
+        orange
+        banana
         -----
         [EVENT]:char:n
-        *(li)*ne 2
-        *(li)*ne 3
-        *(li)*ne 4
+        *(apple)* 2
+        orange
+        banana
         -----
         [EVENT]:char:n
-        *(li)*ne 3
-        *(li)*ne 4
-        *(li)*ne 5
+        *(apple)* 3
+        banana
+        orange
         -----
         [EVENT]:char:k
-        *(li)*ne 2
-        *(li)*ne 3
-        *(li)*ne 4
+        orange
+        *(apple)* 3
+        banana
         -----
         [EVENT]:char:k
-        *(li)*ne 1
-        *(li)*ne 2
-        *(li)*ne 3
+        banana
+        orange
+        *(apple)* 3
         -----
         [EVENT]:char:n
-        *(li)*ne 2
-        *(li)*ne 3
-        *(li)*ne 4
+        *(apple)* 3
+        banana
+        orange
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(screen.out(), want);
+    Ok(())
+}
+
+#[test]
+fn search_and_jump_matches_back_and_forth() -> AppResult<()> {
+    let (path, _file) = tmpfile(indoc! {"
+        apple 1
+        orange
+        banana
+        apple 2
+        orange
+        banana
+        orange
+        apple 3
+        banana
+        orange
+        apple 4
+        banana
+    "})?;
+    let mut screen = MockScreen::new(ScreenSize::new(10, 3));
+    screen.set_events(vec![
+        // Search by "apple".
+        Event::Key(Key::Char('/')),
+        Event::Key(Key::Char('a')),
+        Event::Key(Key::Char('p')),
+        Event::Key(Key::Char('p')),
+        Event::Key(Key::Char('l')),
+        Event::Key(Key::Char('e')),
+        Event::Key(Key::Char('\n')),
+        // Jump forward through matches.
+        Event::Key(Key::Char('n')),
+        Event::Key(Key::Char('n')),
+        // Jump backward through matches.
+        Event::Key(Key::Char('N')),
+        Event::Key(Key::Char('N')),
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        apple 1
+        orange
+        banana
+        -----
+        [EVENT]:char:/
+        [EVENT]:char:a
+        [EVENT]:char:p
+        [EVENT]:char:p
+        [EVENT]:char:l
+        [EVENT]:char:e
+        [EVENT]:char:'\\n'
+        *(apple)* 1
+        orange
+        banana
+        -----
+        [EVENT]:char:n
+        *(apple)* 2
+        orange
+        banana
+        -----
+        [EVENT]:char:n
+        *(apple)* 3
+        banana
+        orange
+        -----
+        [EVENT]:char:N
+        *(apple)* 2
+        orange
+        banana
+        -----
+        [EVENT]:char:N
+        *(apple)* 1
+        orange
+        banana
         -----
         [EVENT]:char:q
     "};
