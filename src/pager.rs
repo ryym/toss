@@ -4,7 +4,7 @@ mod page;
 use regex::Regex;
 
 use crate::{
-    AppResult,
+    AppResult, SearchDirection,
     pager::{
         line::{LineSlice, PageLine},
         page::{EmptyPage, FilledPage, LineSliceIter},
@@ -35,6 +35,7 @@ impl PageSize {
 #[derive(Debug)]
 struct SearchState {
     query: Regex,
+    direction: SearchDirection,
 }
 
 #[derive(Debug)]
@@ -155,7 +156,15 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         Ok(end_line_continue_before || page.end_line().pos() != &end_pos_before)
     }
 
-    pub fn search(&mut self, query: Regex) -> AppResult<bool> {
+    pub fn search(&mut self, query: Regex, direction: SearchDirection) -> AppResult<bool> {
+        if matches!(direction, SearchDirection::Down) {
+            self.search_forward(query)
+        } else {
+            self.search_backward(query)
+        }
+    }
+
+    fn search_forward(&mut self, query: Regex) -> AppResult<bool> {
         let page = match &mut self.page {
             Page::Empty(_) => return Ok(false),
             Page::Filled(page) => page,
@@ -170,33 +179,86 @@ impl<R, Src: Source<R>> Pager<R, Src> {
                 }
             }
         };
-        self.line_factory.search = Some(SearchState { query });
+        self.line_factory.search = Some(SearchState {
+            query,
+            direction: SearchDirection::Down,
+        });
         write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
         Ok(true)
     }
 
-    pub fn jump_to_next_search_match(&mut self) -> AppResult<bool> {
+    fn search_backward(&mut self, query: Regex) -> AppResult<bool> {
         let page = match &mut self.page {
             Page::Empty(_) => return Ok(false),
             Page::Filled(page) => page,
         };
-        let query = match &self.line_factory.search {
-            None => return Ok(false),
-            Some(search) => &search.query,
-        };
-        // The process is almost the same as `Self::search`. It just find a next match after the
-        // cursor (== a first line + `--jump-target`), instead of the first match.
-        let line_from = match page.find_second_match_line(query) {
+        let line_from = match page.find_last_match_line(&query) {
             Some(line) => QueryLine::At(*line.pos()),
             None => {
-                let line_from = QueryLine::NextOf(*page.end_line().pos());
-                match self.reader.find_first_match_line(line_from, query)? {
+                let line_from = QueryLine::PrevOf(*page.start_line().pos());
+                match self.reader.find_last_match_line_before(line_from, &query)? {
                     None => return Ok(false),
                     Some((pos, _)) => QueryLine::At(pos),
                 }
             }
         };
+        self.line_factory.search = Some(SearchState {
+            query,
+            direction: SearchDirection::Up,
+        });
         write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
+        Ok(true)
+    }
+
+    pub fn jump_to_next_search_match(&mut self) -> AppResult<bool> {
+        self.jump_to_next_search_match_with(false)
+    }
+
+    pub fn jump_to_next_search_match_reversed(&mut self) -> AppResult<bool> {
+        self.jump_to_next_search_match_with(true)
+    }
+
+    fn jump_to_next_search_match_with(&mut self, reversed: bool) -> AppResult<bool> {
+        let page = match &mut self.page {
+            Page::Empty(_) => return Ok(false),
+            Page::Filled(page) => page,
+        };
+        let search = match &self.line_factory.search {
+            None => return Ok(false),
+            Some(search) => search,
+        };
+        let go_down = if reversed {
+            matches!(search.direction, SearchDirection::Up)
+        } else {
+            matches!(search.direction, SearchDirection::Down)
+        };
+        // Find the next or previous match from the current one.
+        // The current one is always the first line (+ `--jump-target`) of the page.
+        if go_down {
+            let line_from = match page.find_second_match_line(&search.query) {
+                Some(line) => QueryLine::At(*line.pos()),
+                None => {
+                    let line_from = QueryLine::NextOf(*page.end_line().pos());
+                    match self
+                        .reader
+                        .find_first_match_line(line_from, &search.query)?
+                    {
+                        None => return Ok(false),
+                        Some((pos, _)) => QueryLine::At(pos),
+                    }
+                }
+            };
+            write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
+        } else {
+            let line_from = match self.reader.find_last_match_line_before(
+                QueryLine::PrevOf(*page.start_line().pos()),
+                &search.query,
+            )? {
+                None => return Ok(false),
+                Some((pos, _)) => QueryLine::At(pos),
+            };
+            write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
+        }
         Ok(true)
     }
 }

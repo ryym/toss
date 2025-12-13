@@ -188,6 +188,21 @@ impl<R, Src: Source<R>> Reader<R, Src> {
         }
         Ok(None)
     }
+
+    pub fn find_last_match_line_before(
+        &mut self,
+        from: QueryLine,
+        search_query: &Regex,
+    ) -> AppResult<Option<(LinePos, Line)>> {
+        let mut lines = self.lines_rev_from(from);
+        while let Some((pos, text)) = lines.next()? {
+            let line = Line::new(text);
+            if search_query.is_match(line.plain()) {
+                return Ok(Some((pos, line)));
+            }
+        }
+        Ok(None)
+    }
 }
 
 /// LineCursor provides an iterator-like interface to read lines one by one.

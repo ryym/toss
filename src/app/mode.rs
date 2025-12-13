@@ -1,5 +1,5 @@
 use crate::{
-    AppResult,
+    AppResult, SearchDirection,
     app::{
         Core, NextAction,
         mode::{search::SearchMode, view::ViewMode},
@@ -21,8 +21,8 @@ impl<'app, S: Screen, R, Src: Source<R>> Mode<'app, S, R, Src> {
         Self::View(ViewMode::new(core))
     }
 
-    pub fn search(core: Core<'app, S, R, Src>) -> Self {
-        Self::Search(SearchMode::new(core))
+    pub fn search(core: Core<'app, S, R, Src>, direction: SearchDirection) -> Self {
+        Self::Search(SearchMode::new(core, direction))
     }
 
     pub fn run(self) -> AppResult<NextAction<'app, S, R, Src>> {

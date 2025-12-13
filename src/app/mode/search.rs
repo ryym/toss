@@ -2,7 +2,7 @@ use regex::Regex;
 use termion::event::{Event, Key};
 
 use crate::{
-    AppResult,
+    AppResult, SearchDirection,
     app::{Core, Mode, NextAction},
     screen::Screen,
     source::Source,
@@ -11,11 +11,15 @@ use crate::{
 #[derive(Debug)]
 struct SearchState {
     input: Vec<char>,
+    direction: SearchDirection,
 }
 
 impl SearchState {
-    fn new() -> Self {
-        Self { input: Vec::new() }
+    fn new(direction: SearchDirection) -> Self {
+        Self {
+            input: Vec::new(),
+            direction,
+        }
     }
 }
 
@@ -26,10 +30,10 @@ pub(in crate::app) struct SearchMode<'app, S, R, Src> {
 }
 
 impl<'app, S: Screen, R, Src: Source<R>> SearchMode<'app, S, R, Src> {
-    pub fn new(core: Core<'app, S, R, Src>) -> Self {
+    pub fn new(core: Core<'app, S, R, Src>, direction: SearchDirection) -> Self {
         Self {
             core,
-            state: SearchState::new(),
+            state: SearchState::new(direction),
         }
     }
 
@@ -64,7 +68,7 @@ impl<'app, S: Screen, R, Src: Source<R>> SearchMode<'app, S, R, Src> {
 
     fn search(&mut self, input: &str) -> AppResult<()> {
         let query = Regex::new(input)?;
-        if self.core.pager.search(query)? {
+        if self.core.pager.search(query, self.state.direction)? {
             self.core.draw_rows()?;
         }
         Ok(())

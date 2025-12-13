@@ -3,7 +3,7 @@ use std::{thread, time::Duration};
 use termion::event::{Event, Key};
 
 use crate::{
-    AppResult,
+    AppResult, SearchDirection,
     app::{Core, Mode, NextAction},
     screen::Screen,
     source::Source,
@@ -80,8 +80,20 @@ impl<'app, S: Screen, R, Src: Source<R>> ViewMode<'app, S, R, Src> {
                             amount: ScrollAmount::OnePage,
                         })?;
                     }
-                    '/' => return Ok(NextAction::NextMode(Mode::search(self.core))),
+                    '/' => {
+                        return Ok(NextAction::NextMode(Mode::search(
+                            self.core,
+                            SearchDirection::Down,
+                        )));
+                    }
+                    '?' => {
+                        return Ok(NextAction::NextMode(Mode::search(
+                            self.core,
+                            SearchDirection::Up,
+                        )));
+                    }
                     'n' => self.jump_to_next_search_match()?,
+                    'N' => self.jump_to_next_search_match_reversed()?,
                     _ => {}
                 },
                 _ => {
@@ -176,6 +188,13 @@ impl<'app, S: Screen, R, Src: Source<R>> ViewMode<'app, S, R, Src> {
 
     fn jump_to_next_search_match(&mut self) -> AppResult<()> {
         if self.core.pager.jump_to_next_search_match()? {
+            self.core.draw_rows()?;
+        }
+        Ok(())
+    }
+
+    fn jump_to_next_search_match_reversed(&mut self) -> AppResult<()> {
+        if self.core.pager.jump_to_next_search_match_reversed()? {
             self.core.draw_rows()?;
         }
         Ok(())

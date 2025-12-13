@@ -194,6 +194,15 @@ impl FilledPage {
             .skip(self.start_row.deque_index + skip)
             .find(|line| query.is_match(line.plain()))
     }
+
+    pub fn find_last_match_line(&self, query: &Regex) -> Option<&PageLine> {
+        let overflow_rows = self.deque.len() - self.end_row.deque_index - 1;
+        self.deque
+            .iter()
+            .rev()
+            .skip(overflow_rows)
+            .find(|line| query.is_match(line.plain()))
+    }
 }
 
 fn move_down_row(deque: &VecDeque<PageLine>, row: &mut Row) -> bool {

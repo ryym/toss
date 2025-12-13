@@ -18,3 +18,9 @@ mod source;
 mod terminal;
 
 pub(crate) type AppResult<T> = Result<T, error::AnyError>;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SearchDirection {
+    Down,
+    Up,
+}
