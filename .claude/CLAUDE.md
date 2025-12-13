@@ -44,6 +44,9 @@ cargo run <filename>
 cat <filename> | cargo run
 ```
 
+NOTE: Since it uses terminal interactively, CLI tools like Claude Code should not run `cargo run`.
+Instead, you should rely on tests to check the validity of the program.
+
 ### Testing and Validation
 
 ```bash
