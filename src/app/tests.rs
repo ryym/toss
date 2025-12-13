@@ -1141,3 +1141,100 @@ fn search_and_jump_matches_back_and_forth() -> AppResult<()> {
     assert_eq!(screen.out(), want);
     Ok(())
 }
+
+#[test]
+fn search_backward_and_jump_matches() -> AppResult<()> {
+    let (path, _file) = tmpfile(indoc! {"
+        apple 1
+        orange
+        banana
+        apple 2
+        orange
+        banana
+        orange
+        apple 3
+        banana
+        orange
+        apple 4
+        banana
+    "})?;
+    let mut screen = MockScreen::new(ScreenSize::new(10, 3));
+    screen.set_events(vec![
+        // Move to bottom and then up to make apple 3 visible.
+        Event::Key(Key::Char('G')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
+        Event::Key(Key::Char('k')),
+        // Search backward by "apple".
+        Event::Key(Key::Char('?')),
+        Event::Key(Key::Char('a')),
+        Event::Key(Key::Char('p')),
+        Event::Key(Key::Char('p')),
+        Event::Key(Key::Char('l')),
+        Event::Key(Key::Char('e')),
+        Event::Key(Key::Char('\n')),
+        // Jump to previous matches (upward).
+        Event::Key(Key::Char('n')),
+        Event::Key(Key::Char('n')),
+        // Jump to next match (downward).
+        Event::Key(Key::Char('N')),
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        apple 1
+        orange
+        banana
+        -----
+        [EVENT]:char:G
+        orange
+        apple 4
+        banana
+        -----
+        [EVENT]:char:k
+        banana
+        orange
+        apple 4
+        -----
+        [EVENT]:char:k
+        apple 3
+        banana
+        orange
+        -----
+        [EVENT]:char:k
+        orange
+        apple 3
+        banana
+        -----
+        [EVENT]:char:?
+        [EVENT]:char:a
+        [EVENT]:char:p
+        [EVENT]:char:p
+        [EVENT]:char:l
+        [EVENT]:char:e
+        [EVENT]:char:'\\n'
+        *(apple)* 3
+        banana
+        orange
+        -----
+        [EVENT]:char:n
+        *(apple)* 2
+        orange
+        banana
+        -----
+        [EVENT]:char:n
+        *(apple)* 1
+        orange
+        banana
+        -----
+        [EVENT]:char:N
+        *(apple)* 2
+        orange
+        banana
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(screen.out(), want);
+    Ok(())
+}
