@@ -1238,3 +1238,79 @@ fn search_backward_and_jump_matches() -> AppResult<()> {
     assert_eq!(screen.out(), want);
     Ok(())
 }
+
+#[test]
+fn search_and_jump_to_line_with_multiple_matches() -> AppResult<()> {
+    let (path, _file) = tmpfile(indoc! {"
+        apple 1
+        orange
+        apple apple 2
+        banana
+        orange
+        apple 3
+        banana
+        apple apple apple 4
+        orange
+    "})?;
+    let mut screen = MockScreen::new(ScreenSize::new(25, 3));
+    screen.set_events(vec![
+        // Search by "apple".
+        Event::Key(Key::Char('/')),
+        Event::Key(Key::Char('a')),
+        Event::Key(Key::Char('p')),
+        Event::Key(Key::Char('p')),
+        Event::Key(Key::Char('l')),
+        Event::Key(Key::Char('e')),
+        Event::Key(Key::Char('\n')),
+        // Jump to next match lines.
+        // It always jumps to the next line even if the current line has more than one matches.
+        Event::Key(Key::Char('n')),
+        Event::Key(Key::Char('n')),
+        Event::Key(Key::Char('n')),
+        // Jump backward.
+        Event::Key(Key::Char('N')),
+        Event::Key(Key::Char('q')),
+    ]);
+    super::run_with(&mut screen, vec![path])?;
+
+    let want = indoc! {"
+        apple 1
+        orange
+        apple apple 2
+        -----
+        [EVENT]:char:/
+        [EVENT]:char:a
+        [EVENT]:char:p
+        [EVENT]:char:p
+        [EVENT]:char:l
+        [EVENT]:char:e
+        [EVENT]:char:'\\n'
+        *(apple)* 1
+        orange
+        *(apple)* *(apple)* 2
+        -----
+        [EVENT]:char:n
+        *(apple)* *(apple)* 2
+        banana
+        orange
+        -----
+        [EVENT]:char:n
+        *(apple)* 3
+        banana
+        *(apple)* *(apple)* *(apple)* 4
+        -----
+        [EVENT]:char:n
+        *(apple)* *(apple)* *(apple)* 4
+        orange
+
+        -----
+        [EVENT]:char:N
+        *(apple)* 3
+        banana
+        *(apple)* *(apple)* *(apple)* 4
+        -----
+        [EVENT]:char:q
+    "};
+    assert_eq!(screen.out(), want);
+    Ok(())
+}
