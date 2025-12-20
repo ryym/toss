@@ -59,7 +59,7 @@ impl<R, Src: Source<R>> App<R, Src> {
 
     fn run<S: Screen>(&mut self, screen: &mut S) -> AppResult<()> {
         let mut core = Core::new(screen, &mut self.pager);
-        core.draw_rows()?;
+        core.redraw_page()?;
         let mut mode = Mode::view(core);
         loop {
             match mode.run()? {

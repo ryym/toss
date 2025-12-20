@@ -69,7 +69,7 @@ impl<'app, S: Screen, R, Src: Source<R>> SearchMode<'app, S, R, Src> {
     fn search(&mut self, input: &str) -> AppResult<()> {
         let query = Regex::new(input)?;
         if self.core.pager.search(query, self.state.direction)? {
-            self.core.draw_rows()?;
+            self.core.redraw_page()?;
         }
         Ok(())
     }

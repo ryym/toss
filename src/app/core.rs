@@ -19,7 +19,7 @@ impl<'app, S: Screen, R, Src: Source<R>> Core<'app, S, R, Src> {
         Ok(event)
     }
 
-    pub fn draw_rows(&mut self) -> AppResult<()> {
+    pub fn redraw_page(&mut self) -> AppResult<()> {
         self.screen.clear()?;
 
         let mut i_row = 0;

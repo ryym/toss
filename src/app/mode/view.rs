@@ -109,14 +109,14 @@ impl<'app, S: Screen, R, Src: Source<R>> ViewMode<'app, S, R, Src> {
 
     fn scroll_to_start(&mut self) -> AppResult<()> {
         if self.core.pager.scroll_to_start()? {
-            self.core.draw_rows()?;
+            self.core.redraw_page()?;
         }
         Ok(())
     }
 
     fn scroll_to_end(&mut self) -> AppResult<()> {
         if self.core.pager.scroll_to_end()? {
-            self.core.draw_rows()?;
+            self.core.redraw_page()?;
         }
         Ok(())
     }
@@ -188,14 +188,14 @@ impl<'app, S: Screen, R, Src: Source<R>> ViewMode<'app, S, R, Src> {
 
     fn jump_to_next_search_match(&mut self) -> AppResult<()> {
         if self.core.pager.jump_to_next_search_match()? > 0 {
-            self.core.draw_rows()?;
+            self.core.redraw_page()?;
         }
         Ok(())
     }
 
     fn jump_to_next_search_match_reversed(&mut self) -> AppResult<()> {
         if self.core.pager.jump_to_next_search_match_reversed()? > 0 {
-            self.core.draw_rows()?;
+            self.core.redraw_page()?;
         }
         Ok(())
     }
