@@ -190,7 +190,10 @@ impl<'app, S: Screen, R, Src: Source<R>> ViewMode<'app, S, R, Src> {
         let rows_to_scroll = self.core.pager.jump_to_next_search_match()?;
         if rows_to_scroll > 0 {
             self.core.screen.scroll_forward(rows_to_scroll as u16)?;
-            self.core.redraw_page()?;
+            let row_size = self.core.pager.size().rows();
+            let start_row = row_size.saturating_sub(rows_to_scroll);
+            self.core.draw_rows(start_row..)?;
+            self.core.screen.flush()?;
         }
         Ok(())
     }
@@ -199,7 +202,8 @@ impl<'app, S: Screen, R, Src: Source<R>> ViewMode<'app, S, R, Src> {
         let rows_to_scroll = self.core.pager.jump_to_next_search_match_reversed()?;
         if rows_to_scroll > 0 {
             self.core.screen.scroll_backward(rows_to_scroll as u16)?;
-            self.core.redraw_page()?;
+            self.core.draw_rows(..rows_to_scroll)?;
+            self.core.screen.flush()?;
         }
         Ok(())
     }
