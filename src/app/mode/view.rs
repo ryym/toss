@@ -187,14 +187,18 @@ impl<'app, S: Screen, R, Src: Source<R>> ViewMode<'app, S, R, Src> {
     }
 
     fn jump_to_next_search_match(&mut self) -> AppResult<()> {
-        if self.core.pager.jump_to_next_search_match()? > 0 {
+        let rows_to_scroll = self.core.pager.jump_to_next_search_match()?;
+        if rows_to_scroll > 0 {
+            self.core.screen.scroll_forward(rows_to_scroll as u16)?;
             self.core.redraw_page()?;
         }
         Ok(())
     }
 
     fn jump_to_next_search_match_reversed(&mut self) -> AppResult<()> {
-        if self.core.pager.jump_to_next_search_match_reversed()? > 0 {
+        let rows_to_scroll = self.core.pager.jump_to_next_search_match_reversed()?;
+        if rows_to_scroll > 0 {
+            self.core.screen.scroll_backward(rows_to_scroll as u16)?;
             self.core.redraw_page()?;
         }
         Ok(())
