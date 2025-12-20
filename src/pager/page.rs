@@ -17,7 +17,7 @@ use crate::{
 mod builder;
 
 /// The start or end row of the page.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct Row {
     /// The index of the row in [`FilledPage::deque`].
     /// Note that this index has nothing to do with the line position in the source text.
@@ -86,8 +86,58 @@ impl FilledPage {
         line.slice(..=self.end_row.wrap_row_index)
     }
 
-    pub fn line_slices(&self) -> LineSliceIter<'_> {
-        LineSliceIter::from_page(self)
+    pub fn line_slices(&self, row_range: impl RangeBounds<usize>) -> LineSliceIter<'_> {
+        let start_row_idx = match row_range.start_bound() {
+            Bound::Unbounded => 0,
+            Bound::Included(i) => *i,
+            Bound::Excluded(i) => *i + 1,
+        };
+        let end_row_idx = match row_range.end_bound() {
+            Bound::Unbounded => self.row_len() - 1,
+            Bound::Included(i) => *i,
+            Bound::Excluded(i) => {
+                assert!(*i > 0, "excluded bound must be greater than 0");
+                i - 1
+            }
+        };
+        let start_row = self.row_index_to_row(start_row_idx);
+        let end_row = self.row_index_to_row(end_row_idx);
+        LineSliceIter::from_page(self, start_row, end_row)
+    }
+
+    fn row_index_to_row(&self, row_idx: usize) -> Row {
+        let mut current_row_idx = 0;
+        let mut deque_idx = self.start_row.deque_index;
+        let mut wrap_idx = self.start_row.wrap_row_index;
+
+        while deque_idx <= self.end_row.deque_index {
+            let line = &self.deque[deque_idx];
+            let available_wraps = if deque_idx == self.start_row.deque_index {
+                if deque_idx == self.end_row.deque_index {
+                    self.end_row.wrap_row_index - wrap_idx + 1
+                } else {
+                    line.row_len() - wrap_idx
+                }
+            } else if deque_idx == self.end_row.deque_index {
+                self.end_row.wrap_row_index + 1
+            } else {
+                line.row_len()
+            };
+
+            if current_row_idx + available_wraps > row_idx {
+                let offset = row_idx - current_row_idx;
+                return Row {
+                    deque_index: deque_idx,
+                    wrap_row_index: wrap_idx + offset,
+                };
+            }
+
+            current_row_idx += available_wraps;
+            deque_idx += 1;
+            wrap_idx = 0;
+        }
+
+        panic!("row index {row_idx} too large")
     }
 
     pub fn row_len(&self) -> usize {
@@ -318,26 +368,26 @@ impl EmptyPage {
 #[derive(Debug)]
 pub(crate) struct LineSliceIter<'page> {
     deque: &'page VecDeque<PageLine>,
-    start_row: &'page Row,
-    end_row: &'page Row,
+    start_row: Row,
+    end_row: Row,
     deque_index: usize,
 }
 
 impl<'page> LineSliceIter<'page> {
-    fn from_page(page: &'page FilledPage) -> Self {
+    fn from_page(page: &'page FilledPage, start_row: Row, end_row: Row) -> Self {
         Self {
             deque: &page.deque,
-            start_row: &page.start_row,
-            end_row: &page.end_row,
-            deque_index: page.start_row.deque_index,
+            deque_index: start_row.deque_index,
+            start_row,
+            end_row,
         }
     }
 
     fn empty(page: &'page EmptyPage) -> Self {
         Self {
             deque: &page.deque,
-            start_row: &page.dummy_row,
-            end_row: &page.dummy_row,
+            start_row: page.dummy_row.clone(),
+            end_row: page.dummy_row.clone(),
             deque_index: 0,
         }
     }
@@ -352,11 +402,19 @@ impl<'page> Iterator for LineSliceIter<'page> {
     type Item = LineSlice<'page>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.deque_index > self.end_row.deque_index {
+            return None;
+        }
+
         match self.deque.get(self.deque_index) {
             None => None,
             Some(line) => {
                 let line_slice = if self.deque_index == self.start_row.deque_index {
-                    line.slice(self.start_row.wrap_row_index..)
+                    if self.deque_index == self.end_row.deque_index {
+                        line.slice(self.start_row.wrap_row_index..=self.end_row.wrap_row_index)
+                    } else {
+                        line.slice(self.start_row.wrap_row_index..)
+                    }
                 } else if self.deque_index == self.end_row.deque_index {
                     line.slice(..=self.end_row.wrap_row_index)
                 } else {
@@ -382,7 +440,7 @@ mod tests {
         builder.push_back(PageLine::dummy("def".to_string(), 3));
         let page = builder.into_page().expect("build page");
         assert_eq!(
-            page.line_slices().into_vec(),
+            page.line_slices(..).into_vec(),
             vec![("abc".to_string(), 1), ("def".to_string(), 1)]
         );
     }
@@ -395,7 +453,7 @@ mod tests {
         }
         let mut page = builder.into_page().expect("build page");
         assert_eq!(
-            page.line_slices().into_vec(),
+            page.line_slices(..).into_vec(),
             vec![
                 ("a".to_string(), 1),
                 ("b".to_string(), 1),
@@ -405,7 +463,7 @@ mod tests {
 
         assert_eq!(page.move_down_one_row(), false);
         assert_eq!(
-            page.line_slices().into_vec(),
+            page.line_slices(..).into_vec(),
             vec![
                 ("a".to_string(), 1),
                 ("b".to_string(), 1),
@@ -415,7 +473,7 @@ mod tests {
 
         page.move_down_one_line(PageLine::dummy('d'.to_string(), 3));
         assert_eq!(
-            page.line_slices().into_vec(),
+            page.line_slices(..).into_vec(),
             vec![
                 ("b".to_string(), 1),
                 ("c".to_string(), 1),

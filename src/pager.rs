@@ -1,6 +1,8 @@
 mod line;
 mod page;
 
+use std::ops::RangeBounds;
+
 use regex::Regex;
 
 use crate::{
@@ -77,9 +79,9 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         &self.line_factory.page_size
     }
 
-    pub fn line_slices(&mut self) -> LineSliceIter<'_> {
+    pub fn line_slices(&mut self, row_range: impl RangeBounds<usize>) -> LineSliceIter<'_> {
         match &self.page {
-            Page::Filled(page) => page.line_slices(),
+            Page::Filled(page) => page.line_slices(row_range),
             Page::Empty(page) => page.line_slices(),
         }
     }
@@ -366,7 +368,7 @@ mod tests {
 
         let mut pager = Pager::new(reader, PageSize { rows: 3, cols: 8 })?;
         assert_eq!(
-            pager.line_slices().into_vec(),
+            pager.line_slices(..).into_vec(),
             vec![
                 ("abcde".to_string(), 1),
                 ("1234567".to_string(), 1),
@@ -376,7 +378,7 @@ mod tests {
 
         pager.scroll_down_one_row()?;
         assert_eq!(
-            pager.line_slices().into_vec(),
+            pager.line_slices(..).into_vec(),
             vec![
                 ("1234567".to_string(), 1),
                 ("foo".to_string(), 1),
@@ -386,7 +388,7 @@ mod tests {
 
         pager.scroll_to_end()?;
         assert_eq!(
-            pager.line_slices().into_vec(),
+            pager.line_slices(..).into_vec(),
             vec![
                 // Only two row spans since the total rows are 3 (max).
                 ("bar".to_string(), 1),
