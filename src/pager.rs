@@ -170,7 +170,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
             Page::Filled(page) => page,
         };
         let line_from = match page.find_first_match_line(&query) {
-            Some(line) => QueryLine::At(*line.pos()),
+            Some(matching) => QueryLine::At(*matching.pos()),
             None => {
                 let line_from = QueryLine::NextOf(*page.end_line().pos());
                 match self.reader.find_first_match_line(line_from, &query)? {
@@ -210,21 +210,23 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         Ok(true)
     }
 
-    pub fn jump_to_next_search_match(&mut self) -> AppResult<bool> {
+    /// Jump to the next search match and return the number of rows to be scrolled.
+    pub fn jump_to_next_search_match(&mut self) -> AppResult<usize> {
         self.jump_to_next_search_match_with(false)
     }
 
-    pub fn jump_to_next_search_match_reversed(&mut self) -> AppResult<bool> {
+    /// Jump to the next search match in reversed order and return the number of rows to be scrolled.
+    pub fn jump_to_next_search_match_reversed(&mut self) -> AppResult<usize> {
         self.jump_to_next_search_match_with(true)
     }
 
-    fn jump_to_next_search_match_with(&mut self, reversed: bool) -> AppResult<bool> {
+    fn jump_to_next_search_match_with(&mut self, reversed: bool) -> AppResult<usize> {
         let page = match &mut self.page {
-            Page::Empty(_) => return Ok(false),
+            Page::Empty(_) => return Ok(0),
             Page::Filled(page) => page,
         };
         let search = match &self.line_factory.search {
-            None => return Ok(false),
+            None => return Ok(0),
             Some(search) => search,
         };
         let go_down = if reversed {
@@ -235,31 +237,40 @@ impl<R, Src: Source<R>> Pager<R, Src> {
         // Find the next or previous match from the current one.
         // The current one is always the first line (+ `--jump-target`) of the page.
         if go_down {
-            let line_from = match page.find_second_match_line(&search.query) {
-                Some(line) => QueryLine::At(*line.pos()),
+            match page.find_second_match_line(&search.query) {
+                Some(matching) => {
+                    let line_from = QueryLine::At(*matching.pos());
+                    write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
+                    Ok(matching.passed_rows())
+                }
                 None => {
                     let line_from = QueryLine::NextOf(*page.end_line().pos());
                     match self
                         .reader
                         .find_first_match_line(line_from, &search.query)?
                     {
-                        None => return Ok(false),
-                        Some((pos, _)) => QueryLine::At(pos),
+                        None => Ok(0),
+                        Some((pos, _)) => {
+                            let line_from = QueryLine::At(pos);
+                            write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
+                            Ok(page.row_len())
+                        }
                     }
                 }
-            };
-            write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
+            }
         } else {
-            let line_from = match self.reader.find_last_match_line_before(
+            match self.reader.find_last_match_line_before(
                 QueryLine::PrevOf(*page.start_line().pos()),
                 &search.query,
             )? {
-                None => return Ok(false),
-                Some((pos, _)) => QueryLine::At(pos),
-            };
-            write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
+                None => Ok(0),
+                Some((pos, _)) => {
+                    let line_from = QueryLine::At(pos);
+                    write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
+                    Ok(page.row_len())
+                }
+            }
         }
-        Ok(true)
     }
 }
 

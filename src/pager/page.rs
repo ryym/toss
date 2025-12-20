@@ -1,10 +1,17 @@
-use std::{collections::VecDeque, fmt::Debug};
+use std::{
+    collections::VecDeque,
+    fmt::Debug,
+    ops::{Bound, RangeBounds},
+};
 
 use regex::Regex;
 
-use crate::pager::{
-    line::{LineSlice, PageLine},
-    page::builder::{BackwardPageWriter, ForwardPageWriter, NewPageBuilder},
+use crate::{
+    pager::{
+        line::{LineSlice, PageLine},
+        page::builder::{BackwardPageWriter, ForwardPageWriter, NewPageBuilder},
+    },
+    reader::LinePos,
 };
 
 mod builder;
@@ -83,18 +90,41 @@ impl FilledPage {
         LineSliceIter::from_page(self)
     }
 
-    fn visible_lines(&self) -> impl Iterator<Item = &PageLine> {
-        self.deque
-            .iter()
-            .take(self.end_row.deque_index + 1)
-            .skip(self.start_row.deque_index)
+    pub fn row_len(&self) -> usize {
+        self.row_len_of_lines(..)
     }
 
-    fn row_len(&self) -> usize {
-        let visible_line_rows = self.visible_lines().fold(0, |n, line| n + line.row_len());
-        let unvisible_rows = self.start_row.wrap_row_index
-            + (self.end_line().row_len() - 1 - self.end_row.wrap_row_index);
-        visible_line_rows - unvisible_rows
+    fn row_len_of_lines(&self, deque_range: impl RangeBounds<usize>) -> usize {
+        let start_idx = match deque_range.start_bound() {
+            Bound::Unbounded => self.start_row.deque_index,
+            Bound::Included(i) => *i,
+            Bound::Excluded(_) => panic!("unexpected excluded bound for page rows range"),
+        };
+        let end = match deque_range.end_bound() {
+            Bound::Unbounded => self.end_row.deque_index + 1,
+            Bound::Included(i) => *i + 1,
+            Bound::Excluded(i) => *i,
+        };
+        debug_assert!(start_idx <= self.start_row.deque_index);
+        debug_assert!(end <= self.end_row.deque_index + 1);
+
+        // Sum up the number of rows of lines in the given range.
+        let mut row_len = self
+            .deque
+            .iter()
+            .take(end)
+            .skip(start_idx)
+            .fold(0, |n, line| n + line.row_len());
+
+        // Subtract the number of unvisible rows if they are included.
+        if start_idx == self.start_row.deque_index {
+            row_len -= self.start_row.wrap_row_index;
+        }
+        if end == self.end_row.deque_index + 1 {
+            row_len -= self.end_line().row_len() - 1 - self.end_row.wrap_row_index;
+        }
+
+        row_len
     }
 
     pub fn can_move_down_one_row(&self) -> bool {
@@ -180,19 +210,27 @@ impl FilledPage {
         BackwardPageWriter::for_page(self)
     }
 
-    pub fn find_first_match_line(&self, query: &Regex) -> Option<&PageLine> {
+    pub fn find_first_match_line(&self, query: &Regex) -> Option<MatchingLine> {
         self.find_first_match_after(0, query)
     }
 
-    pub fn find_second_match_line(&self, query: &Regex) -> Option<&PageLine> {
+    pub fn find_second_match_line(&self, query: &Regex) -> Option<MatchingLine> {
         self.find_first_match_after(1, query)
     }
 
-    fn find_first_match_after(&self, skip: usize, query: &Regex) -> Option<&PageLine> {
+    fn find_first_match_after(&self, skip: usize, query: &Regex) -> Option<MatchingLine> {
+        let skipped = self.start_row.deque_index + skip;
         self.deque
             .iter()
-            .skip(self.start_row.deque_index + skip)
-            .find(|line| query.is_match(line.plain()))
+            .skip(skipped)
+            .position(|line| query.is_match(line.plain()))
+            .map(|idx| {
+                let line = &self.deque[skipped + idx];
+                MatchingLine {
+                    passed_rows: self.row_len_of_lines(..skipped + idx),
+                    pos: *line.pos(),
+                }
+            })
     }
 
     pub fn find_last_match_line(&self, query: &Regex) -> Option<&PageLine> {
@@ -233,6 +271,25 @@ fn move_up_row(deque: &VecDeque<PageLine>, row: &mut Row) -> bool {
         true
     } else {
         false
+    }
+}
+
+#[derive(Debug)]
+pub(super) struct MatchingLine {
+    /// The number of rows passed through from the last line position to the matching line.
+    passed_rows: usize,
+    pos: LinePos,
+}
+
+impl MatchingLine {
+    #[inline]
+    pub fn passed_rows(&self) -> usize {
+        self.passed_rows
+    }
+
+    #[inline]
+    pub fn pos(&self) -> &LinePos {
+        &self.pos
     }
 }
 
