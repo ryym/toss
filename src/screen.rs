@@ -63,7 +63,7 @@ pub(crate) fn for_terminal() -> io::Result<TerminalScreen<impl io::Read, impl io
 
 impl<R: io::Read, W: io::Write> TerminalScreen<R, W> {
     fn new(events: Events<R>, output: W) -> io::Result<Self> {
-        let output = BufWriter::new(output);
+        let output = BufWriter::with_capacity(16384, output);
         Ok(Self { events, output })
     }
 }
