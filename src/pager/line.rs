@@ -103,7 +103,7 @@ impl PageLine {
     /// Return a row span which spans wrap rows of the given indice.
     pub fn slice(&self, wrap_row_range: impl RangeBounds<usize>) -> LineSlice<'_> {
         let span = self.wrap.line_slice_span(wrap_row_range);
-        LineSlice::new(self, span)
+        LineSlice::new(self.pos, self, span)
     }
 
     pub fn search(&mut self, query: &Regex) {
@@ -206,13 +206,14 @@ pub(super) struct LineSliceSpan {
 /// is scrolled down one row, the first two rows will be "bb" and "cc". This is a line slice.
 #[derive(Debug)]
 pub(crate) struct LineSlice<'line> {
+    pub pos: LinePos,
     line: &'line PageLine,
     span: LineSliceSpan,
 }
 
 impl<'line> LineSlice<'line> {
-    pub(super) fn new(line: &'line PageLine, span: LineSliceSpan) -> Self {
-        Self { line, span }
+    pub(super) fn new(pos: LinePos, line: &'line PageLine, span: LineSliceSpan) -> Self {
+        Self { pos, line, span }
     }
 
     #[inline]

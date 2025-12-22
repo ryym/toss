@@ -261,6 +261,7 @@ impl<R, Src: Source<R>> Pager<R, Src> {
                 }
             }
         } else {
+            let last_page_start_line_pos = *page.start_line().pos();
             match self.reader.find_last_match_line_before(
                 QueryLine::PrevOf(*page.start_line().pos()),
                 &search.query,
@@ -269,7 +270,14 @@ impl<R, Src: Source<R>> Pager<R, Src> {
                 Some((pos, _)) => {
                     let line_from = QueryLine::At(pos);
                     write_page_from(line_from, &mut self.reader, page, &self.line_factory)?;
-                    Ok(page.row_len())
+                    let mut passed_rows = 0;
+                    for line_slice in page.line_slices(..) {
+                        if line_slice.pos == last_page_start_line_pos {
+                            break;
+                        }
+                        passed_rows += line_slice.row_len();
+                    }
+                    Ok(passed_rows)
                 }
             }
         }
