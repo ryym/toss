@@ -74,13 +74,13 @@ crossterm's `poll(timeout)` provides non-blocking event detection.
 ### Phase 1 (current target): Smooth scroll
 
 - [x] Project setup
-- [ ] Document: read file into lines
-- [ ] Screen trait: abstract terminal operations
-- [ ] ScreenState: track displayed rows, compute ScrollPlan
-- [ ] Renderer: full redraw + incremental scroll rendering
-- [ ] App: frame-driven event loop with key handling
-- [ ] Smooth scroll animation (d/u/f/b with easing)
-- [ ] Line wrapping
+- [x] Document: read file into lines
+- [x] Screen trait: abstract terminal operations
+- [x] ScreenState: track displayed rows, compute ScrollPlan
+- [x] Renderer: full redraw + incremental scroll rendering
+- [x] App: frame-driven event loop with key handling
+- [x] Smooth scroll animation (d/u/f/b with easing)
+- [x] Line wrapping (in Line and ScreenState, integrated with scroll)
 
 No search, no sticky header, no stdin support, no ANSI escape handling.
 Keep it simple to validate the architecture.
