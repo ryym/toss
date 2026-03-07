@@ -1,9 +1,14 @@
 mod app;
 mod document;
 mod line;
+#[cfg(test)]
+mod mock_screen;
 mod screen;
 mod screen_state;
 mod scroll;
+
+#[cfg(test)]
+mod app_tests;
 
 use std::env;
 use std::path::Path;

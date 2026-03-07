@@ -13,7 +13,7 @@ use crate::document::Document;
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {
     fn size(&self) -> io::Result<(u16, u16)>;
-    fn poll_event(&self, timeout: std::time::Duration) -> io::Result<Option<Event>>;
+    fn poll_event(&mut self, timeout: std::time::Duration) -> io::Result<Option<Event>>;
     fn draw_row(&mut self, screen_y: u16, text: &str) -> io::Result<()>;
     fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()>;
     fn clear_and_flush(&mut self) -> io::Result<()>;
@@ -54,7 +54,7 @@ impl Screen for TermScreen {
         terminal::size()
     }
 
-    fn poll_event(&self, timeout: std::time::Duration) -> io::Result<Option<Event>> {
+    fn poll_event(&mut self, timeout: std::time::Duration) -> io::Result<Option<Event>> {
         if event::poll(timeout)? {
             Ok(Some(event::read()?))
         } else {

@@ -19,6 +19,7 @@ pub struct App<S> {
     width: usize,
     height: usize,
     animation: Option<ScrollAnimation>,
+    scroll_duration: Duration,
     /// Current scroll position as a float (row offset from top of document).
     /// This is the "rendered" position — the last integer position we drew.
     rendered_offset: f64,
@@ -39,12 +40,30 @@ impl<S: Screen> App<S> {
             width,
             height,
             animation: None,
+            scroll_duration: SCROLL_ANIMATION_DURATION,
             rendered_offset: 0.0,
             needs_full_redraw: true,
         })
     }
 
+    pub fn set_scroll_duration(&mut self, duration: Duration) {
+        self.scroll_duration = duration;
+    }
+
+    pub fn into_screen(self) -> S {
+        self.screen
+    }
+
     pub fn run(&mut self) -> io::Result<()> {
+        // Initial draw
+        screen::draw_full_page(
+            &mut self.screen,
+            &self.doc,
+            self.state.rows(),
+            self.width,
+        )?;
+        self.needs_full_redraw = false;
+
         loop {
             // 1. Poll input
             let timeout = if self.animation.is_some() {
@@ -158,7 +177,7 @@ impl<S: Screen> App<S> {
         self.animation = Some(ScrollAnimation::new(
             start,
             target,
-            SCROLL_ANIMATION_DURATION,
+            self.scroll_duration,
         ));
     }
 
