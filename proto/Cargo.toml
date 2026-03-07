@@ -1,0 +1,11 @@
+[package]
+name = "toss-proto"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+crossterm = "0.28"
+unicode-width = "0.2"
+
+[dev-dependencies]
+pretty_assertions = "1"
