@@ -135,6 +135,17 @@ impl ScreenState {
         true
     }
 
+    /// Jump to the end of the document so that the last line is at the bottom.
+    pub fn jump_to_end(&mut self, doc: &Document) -> bool {
+        let height = self.rows.len();
+        let new_rows = Self::build_rows_backward_from_end(doc, self.width, height);
+        if new_rows == self.rows {
+            return false;
+        }
+        self.rows = new_rows;
+        true
+    }
+
     /// Update width and rebuild screen from current top position.
     pub fn resize(&mut self, doc: &Document, width: usize, height: usize) {
         let top = self.rows.first().copied().unwrap_or(ScreenRow {
@@ -173,6 +184,43 @@ impl ScreenState {
             wrap_idx = 0;
         }
 
+        rows
+    }
+
+    /// Build rows from the end of the document, filling up to `count` rows.
+    fn build_rows_backward_from_end(
+        doc: &Document,
+        width: usize,
+        count: usize,
+    ) -> Vec<ScreenRow> {
+        let line_count = doc.line_count();
+        if line_count == 0 {
+            return vec![];
+        }
+
+        let mut rows = Vec::with_capacity(count);
+        let mut line_idx = line_count - 1;
+
+        loop {
+            let line = doc.line(line_idx).unwrap();
+            let wrap_count = line.row_count(width);
+            for wrap_idx in (0..wrap_count).rev() {
+                rows.push(ScreenRow {
+                    line_index: line_idx,
+                    wrap_index: wrap_idx,
+                });
+                if rows.len() >= count {
+                    rows.reverse();
+                    return rows;
+                }
+            }
+            if line_idx == 0 {
+                break;
+            }
+            line_idx -= 1;
+        }
+
+        rows.reverse();
         rows
     }
 
@@ -460,5 +508,49 @@ mod tests {
         let doc = make_doc(&["a", "b"]);
         let state = ScreenState::new(&doc, 80, 5);
         assert_eq!(state.rows().len(), 2);
+    }
+
+    #[test]
+    fn jump_to_end() {
+        let doc = make_doc(&["a", "b", "c", "d", "e"]);
+        let mut state = ScreenState::new(&doc, 80, 3);
+        let changed = state.jump_to_end(&doc);
+
+        assert!(changed);
+        assert_eq!(
+            state.rows(),
+            &[
+                ScreenRow { line_index: 2, wrap_index: 0 },
+                ScreenRow { line_index: 3, wrap_index: 0 },
+                ScreenRow { line_index: 4, wrap_index: 0 },
+            ]
+        );
+    }
+
+    #[test]
+    fn jump_to_end_with_wrap() {
+        // Last line "abcdefgh" wraps to 2 rows at width 5
+        let doc = make_doc(&["a", "b", "abcdefgh"]);
+        let mut state = ScreenState::new(&doc, 5, 3);
+        let changed = state.jump_to_end(&doc);
+
+        assert!(changed);
+        assert_eq!(
+            state.rows(),
+            &[
+                ScreenRow { line_index: 1, wrap_index: 0 },
+                ScreenRow { line_index: 2, wrap_index: 0 },
+                ScreenRow { line_index: 2, wrap_index: 1 },
+            ]
+        );
+    }
+
+    #[test]
+    fn jump_to_end_fewer_lines_than_height() {
+        let doc = make_doc(&["a", "b"]);
+        let mut state = ScreenState::new(&doc, 80, 5);
+        let changed = state.jump_to_end(&doc);
+        // Already showing everything, no change
+        assert!(!changed);
     }
 }

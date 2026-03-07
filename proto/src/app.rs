@@ -120,8 +120,7 @@ impl<S: Screen> App<S> {
             }
             KeyCode::Char('G') => {
                 self.animation = None;
-                let last_line = self.doc.line_count().saturating_sub(1);
-                if self.state.jump_to(&self.doc, last_line) {
+                if self.state.jump_to_end(&self.doc) {
                     self.needs_full_redraw = true;
                 }
             }
