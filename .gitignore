@@ -1,4 +1,4 @@
 /target/
-old/target/
+/old/target/
 
 *.log
