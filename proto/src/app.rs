@@ -163,7 +163,7 @@ impl<S: Screen> App<S> {
                 &mut self.screen,
                 &self.doc,
                 &plan,
-                self.height,
+                &self.state,
                 self.width,
             )?;
             self.rendered_offset += rows as f64;
@@ -211,7 +211,7 @@ impl<S: Screen> App<S> {
                     &mut self.screen,
                     &self.doc,
                     &plan,
-                    self.height,
+                    &self.state,
                     self.width,
                 )?;
             }

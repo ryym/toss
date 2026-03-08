@@ -16,7 +16,6 @@ fn run_test(content: &str, width: u16, height: u16, events: Vec<Event>) -> Strin
     let mut screen = MockScreen::new(width, height);
     screen.set_events(events);
     let mut app = App::new(screen, doc).unwrap();
-    // Disable animation for deterministic tests
     app.set_scroll_duration(Duration::ZERO);
     app.run().unwrap();
     app.into_screen().out().to_string()
@@ -115,7 +114,6 @@ fn cannot_scroll_past_boundaries() {
         3,
         vec![key('k'), key('j'), key('q')],
     );
-    // k at top: no change, no snapshot. j at bottom: no change, no snapshot.
     assert_eq!(
         out,
         "\
@@ -138,8 +136,6 @@ fn smooth_scroll_half_page() {
         4,
         vec![key('d'), key('u'), key('q')],
     );
-    // With duration=0, animation completes instantly in one frame.
-    // d scrolls down height/2 = 2 rows, u scrolls up 2 rows.
     assert_eq!(
         out,
         "\
@@ -166,10 +162,9 @@ line 4
 }
 
 #[test]
-fn scroll_with_wrapping() {
-    // "abcdefgh" wraps to 2 rows at width 5: "abcde" + "fgh"
-    // Total screen rows: short(1) + abcde(1) + fgh(1) + end(1) = 4
-    // Screen height is 3, so 1 row of scroll room.
+fn scroll_with_soft_wrap() {
+    // "abcdefgh" wraps to "abcde" + "fgh" at width 5.
+    // Initial display shows them with soft wrap marker '>'.
     let out = run_test(
         "short\nabcdefgh\nend",
         5,
@@ -180,19 +175,156 @@ fn scroll_with_wrapping() {
         out,
         "\
 short
-abcde
+abcde>
 fgh
 -----
 [EVENT]:char:j
-abcde
+abcde>
 fgh
 end
 -----
 [EVENT]:char:j
 [EVENT]:char:k
 short
-abcde
+abcde>
 fgh
+-----
+[EVENT]:char:q
+"
+    );
+}
+
+#[test]
+fn scroll_down_reveals_wrap_continuation() {
+    // When scrolling down reveals a new wrap row, the entire visible
+    // portion of that line is redrawn to maintain soft wraps.
+    // Line "aaabbbccc" wraps to 3 rows at width 3.
+    let out = run_test(
+        "xx\naaabbbccc\nyy",
+        3,
+        4,
+        vec![key('j'), key('j'), key('q')],
+    );
+    // Initial: xx, aaa>, bbb>, ccc (line 1 wraps to 3 rows)
+    // After j: aaa>, bbb>, ccc, yy
+    // After j: bbb>, ccc, yy, (empty) - but yy is last, can't scroll
+    assert_eq!(
+        out,
+        "\
+xx
+aaa>
+bbb>
+ccc
+-----
+[EVENT]:char:j
+aaa>
+bbb>
+ccc
+yy
+-----
+[EVENT]:char:j
+[EVENT]:char:q
+"
+    );
+}
+
+#[test]
+fn scroll_up_reveals_wrap_start() {
+    // Scrolling up to reveal a new wrap row that has the same line as rows below.
+    let out = run_test(
+        "xx\nabcdefgh\nyy",
+        5,
+        3,
+        vec![key('j'), key('j'), key('k'), key('q')],
+    );
+    // "abcdefgh" wraps to "abcde" + "fgh"
+    // Initial: xx, abcde>, fgh
+    // j: abcde>, fgh, yy
+    // j: fgh, yy, (empty) - can't scroll
+    // k from [abcde>, fgh, yy]: back to [xx, abcde>, fgh]
+    assert_eq!(
+        out,
+        "\
+xx
+abcde>
+fgh
+-----
+[EVENT]:char:j
+abcde>
+fgh
+yy
+-----
+[EVENT]:char:j
+[EVENT]:char:k
+xx
+abcde>
+fgh
+-----
+[EVENT]:char:q
+"
+    );
+}
+
+#[test]
+fn wrap_midline_at_top_of_screen() {
+    // When the top of the screen shows the middle of a wrapped line,
+    // visible wrap rows should still be soft-wrapped together.
+    // "abcdefghijk" wraps to "abcde" + "fghij" + "k" at width 5.
+    let out = run_test(
+        "abcdefghijk\nend",
+        5,
+        3,
+        vec![key('j'), key('q')],
+    );
+    // Initial: abcde>, fghij>, k
+    // j: fghij>, k, end
+    // Even though "abcde" is off-screen, "fghij" and "k" should be
+    // soft-wrapped together.
+    assert_eq!(
+        out,
+        "\
+abcde>
+fghij>
+k
+-----
+[EVENT]:char:j
+fghij>
+k
+end
+-----
+[EVENT]:char:q
+"
+    );
+}
+
+#[test]
+fn jump_to_end_with_wrap() {
+    let out = run_test(
+        "line1\nline2\nabcdefgh",
+        5,
+        3,
+        vec![key('G'), key('g'), key('q')],
+    );
+    // "abcdefgh" wraps to "abcde" + "fgh"
+    // Initial: line1, line2, abcde (fgh off-screen, no soft wrap)
+    // G: line2, abcde>, fgh (both visible, soft wrapped)
+    // g: line1, line2, abcde (fgh off-screen again)
+    assert_eq!(
+        out,
+        "\
+line1
+line2
+abcde
+-----
+[EVENT]:char:G
+line2
+abcde>
+fgh
+-----
+[EVENT]:char:g
+line1
+line2
+abcde
 -----
 [EVENT]:char:q
 "

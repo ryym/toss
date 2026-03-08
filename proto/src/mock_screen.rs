@@ -1,27 +1,43 @@
 use std::io;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use unicode_width::UnicodeWidthChar;
 
 use crate::screen::Screen;
 use crate::screen_state::{Direction, ScrollPlan};
 
+#[derive(Debug, Clone)]
+struct GridRow {
+    text: String,
+    /// True if this row overflowed and wraps to the next row (soft wrap).
+    soft_wrapped: bool,
+}
+
+impl GridRow {
+    fn new() -> Self {
+        Self {
+            text: String::new(),
+            soft_wrapped: false,
+        }
+    }
+}
+
 /// In-memory screen for e2e testing.
 /// Tracks a grid of cells and logs output on each flush.
+/// Simulates soft wrapping: when write_at overflows a row, it continues
+/// to the next row and marks the overflow row with '>'.
 pub struct MockScreen {
     width: u16,
     height: u16,
-    /// Current screen contents, one string per row.
-    grid: Vec<String>,
-    /// Pre-set events to return from poll_event.
+    grid: Vec<GridRow>,
     events: Vec<Event>,
     event_index: usize,
-    /// Accumulated output log.
     out: String,
 }
 
 impl MockScreen {
     pub fn new(width: u16, height: u16) -> Self {
-        let grid = vec![String::new(); height as usize];
+        let grid = vec![GridRow::new(); height as usize];
         Self {
             width,
             height,
@@ -57,7 +73,10 @@ impl MockScreen {
 
     fn snapshot(&mut self) {
         for row in &self.grid {
-            self.out.push_str(row);
+            self.out.push_str(&row.text);
+            if row.soft_wrapped {
+                self.out.push('>');
+            }
             self.out.push('\n');
         }
         self.out.push_str("-----\n");
@@ -73,13 +92,11 @@ impl Screen for MockScreen {
         if self.event_index < self.events.len() {
             let event = self.events[self.event_index].clone();
             self.event_index += 1;
-            // Log the event
             if let Event::Key(ref key) = event {
                 self.log_key(key);
             }
             Ok(Some(event))
         } else {
-            // Safety fallback: quit if no more events
             Ok(Some(Event::Key(KeyEvent::new(
                 KeyCode::Char('q'),
                 KeyModifiers::NONE,
@@ -87,10 +104,32 @@ impl Screen for MockScreen {
         }
     }
 
-    fn draw_row(&mut self, screen_y: u16, text: &str) -> io::Result<()> {
+    fn clear_row(&mut self, screen_y: u16) -> io::Result<()> {
         let y = screen_y as usize;
         if y < self.grid.len() {
-            self.grid[y] = text.to_string();
+            self.grid[y] = GridRow::new();
+        }
+        Ok(())
+    }
+
+    fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()> {
+        let width = self.width as usize;
+        let mut y = screen_y as usize;
+        let mut col = 0;
+
+        for ch in text.chars() {
+            let ch_w = ch.width().unwrap_or(0);
+            if col > 0 && col + ch_w > width {
+                // Overflow: mark current row as soft-wrapped, move to next
+                self.grid[y].soft_wrapped = true;
+                y += 1;
+                col = 0;
+                if y >= self.height as usize {
+                    break;
+                }
+            }
+            self.grid[y].text.push(ch);
+            col += ch_w;
         }
         Ok(())
     }
@@ -102,26 +141,26 @@ impl Screen for MockScreen {
             Direction::Down => {
                 for _ in 0..n {
                     self.grid.remove(0);
-                    self.grid.push(String::new());
+                    self.grid.push(GridRow::new());
                 }
             }
             Direction::Up => {
                 for _ in 0..n {
                     self.grid.pop();
-                    self.grid.insert(0, String::new());
+                    self.grid.insert(0, GridRow::new());
                 }
             }
         }
         self.grid.truncate(h);
         while self.grid.len() < h {
-            self.grid.push(String::new());
+            self.grid.push(GridRow::new());
         }
         Ok(())
     }
 
-    fn clear_and_flush(&mut self) -> io::Result<()> {
+    fn clear_all(&mut self) -> io::Result<()> {
         let h = self.height as usize;
-        self.grid = vec![String::new(); h];
+        self.grid = vec![GridRow::new(); h];
         Ok(())
     }
 

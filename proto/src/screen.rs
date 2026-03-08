@@ -7,16 +7,24 @@ use crossterm::{
     terminal::{self, ClearType},
 };
 
-use crate::screen_state::{Direction, ScrollPlan, ScreenRow};
 use crate::document::Document;
+use crate::screen_state::{Direction, ScrollPlan, ScreenRow, ScreenState};
 
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {
     fn size(&self) -> io::Result<(u16, u16)>;
     fn poll_event(&mut self, timeout: std::time::Duration) -> io::Result<Option<Event>>;
-    fn draw_row(&mut self, screen_y: u16, text: &str) -> io::Result<()>;
+
+    /// Clear a single row.
+    fn clear_row(&mut self, screen_y: u16) -> io::Result<()>;
+
+    /// Write text starting at (0, screen_y). If the text overflows the terminal
+    /// width, the terminal wraps it to subsequent rows as soft wraps.
+    /// Caller must clear target rows beforehand.
+    fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()>;
+
     fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()>;
-    fn clear_and_flush(&mut self) -> io::Result<()>;
+    fn clear_all(&mut self) -> io::Result<()>;
     fn flush(&mut self) -> io::Result<()>;
 }
 
@@ -62,11 +70,18 @@ impl Screen for TermScreen {
         }
     }
 
-    fn draw_row(&mut self, screen_y: u16, text: &str) -> io::Result<()> {
+    fn clear_row(&mut self, screen_y: u16) -> io::Result<()> {
         queue!(
             self.stdout,
             cursor::MoveTo(0, screen_y),
             terminal::Clear(ClearType::CurrentLine),
+        )
+    }
+
+    fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()> {
+        queue!(
+            self.stdout,
+            cursor::MoveTo(0, screen_y),
             Print(text),
         )
     }
@@ -87,8 +102,8 @@ impl Screen for TermScreen {
         Ok(())
     }
 
-    fn clear_and_flush(&mut self) -> io::Result<()> {
-        execute!(
+    fn clear_all(&mut self) -> io::Result<()> {
+        queue!(
             self.stdout,
             terminal::Clear(ClearType::All),
         )
@@ -99,6 +114,43 @@ impl Screen for TermScreen {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Rendering helpers
+// ---------------------------------------------------------------------------
+
+/// Draw a range of screen rows, grouping consecutive rows from the same
+/// logical line and writing them as a single continuous string so the
+/// terminal treats line-internal wraps as soft wraps.
+fn draw_rows_grouped<S: Screen>(
+    screen: &mut S,
+    doc: &Document,
+    all_rows: &[ScreenRow],
+    from: usize,
+    to: usize,
+    width: usize,
+) -> io::Result<()> {
+    let mut i = from;
+    while i < to {
+        let line_idx = all_rows[i].line_index;
+        let group_start = i;
+        while i < to && all_rows[i].line_index == line_idx {
+            i += 1;
+        }
+        // Clear each row in the group
+        for j in group_start..i {
+            screen.clear_row(j as u16)?;
+        }
+        // Write the combined text for this group as one continuous piece
+        if let Some(line) = doc.line(line_idx) {
+            let text: String = (group_start..i)
+                .map(|j| line.wrap_row_text(width, all_rows[j].wrap_index))
+                .collect();
+            screen.write_at(group_start as u16, &text)?;
+        }
+    }
+    Ok(())
+}
+
 /// Render a full page (used on initial draw and resize).
 pub fn draw_full_page<S: Screen>(
     screen: &mut S,
@@ -106,22 +158,21 @@ pub fn draw_full_page<S: Screen>(
     rows: &[ScreenRow],
     width: usize,
 ) -> io::Result<()> {
-    screen.clear_and_flush()?;
-    for (i, row) in rows.iter().enumerate() {
-        if let Some(line) = doc.line(row.line_index) {
-            let text = line.wrap_row_text(width, row.wrap_index);
-            screen.draw_row(i as u16, text)?;
-        }
-    }
+    screen.clear_all()?;
+    draw_rows_grouped(screen, doc, rows, 0, rows.len(), width)?;
     screen.flush()
 }
 
-/// Apply a scroll plan: scroll the terminal, then draw only new rows.
+/// Apply a scroll plan with soft-wrap-aware rendering.
+///
+/// After terminal scroll, we determine the "dirty range": the new rows plus
+/// any adjacent existing rows that belong to the same logical line. The dirty
+/// range is then redrawn with grouped continuous writes to maintain soft wraps.
 pub fn apply_scroll<S: Screen>(
     screen: &mut S,
     doc: &Document,
     plan: &ScrollPlan,
-    total_height: usize,
+    state: &ScreenState,
     width: usize,
 ) -> io::Result<()> {
     if plan.terminal_scroll == 0 {
@@ -130,16 +181,31 @@ pub fn apply_scroll<S: Screen>(
 
     screen.scroll_terminal(plan)?;
 
-    let new_count = plan.new_rows.len();
-    for (i, row) in plan.new_rows.iter().enumerate() {
-        let screen_y = match plan.direction {
-            Direction::Down => (total_height - new_count + i) as u16,
-            Direction::Up => i as u16,
-        };
-        if let Some(line) = doc.line(row.line_index) {
-            let text = line.wrap_row_text(width, row.wrap_index);
-            screen.draw_row(screen_y, text)?;
+    let rows = state.rows();
+    let height = rows.len();
+    let n_new = plan.new_rows.len();
+
+    let (draw_from, draw_to) = match plan.direction {
+        Direction::Down => {
+            let new_start = height - n_new;
+            // Extend backwards: include existing rows of the same line
+            let mut from = new_start;
+            while from > 0 && rows[from - 1].line_index == rows[new_start].line_index {
+                from -= 1;
+            }
+            (from, height)
         }
-    }
+        Direction::Up => {
+            let new_end = n_new;
+            // Extend forwards: include existing rows of the same line
+            let mut to = new_end;
+            while to < height && rows[to].line_index == rows[new_end - 1].line_index {
+                to += 1;
+            }
+            (0, to)
+        }
+    };
+
+    draw_rows_grouped(screen, doc, rows, draw_from, draw_to, width)?;
     screen.flush()
 }
