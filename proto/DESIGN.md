@@ -81,8 +81,10 @@ crossterm's `poll(timeout)` provides non-blocking event detection.
 - [x] App: frame-driven event loop with key handling
 - [x] Smooth scroll animation (d/u/f/b with easing)
 - [x] Line wrapping (in Line and ScreenState, integrated with scroll)
+- [x] Soft wrapping (continuous writes for correct copy-paste)
+- [x] Stdin pipe support
 
-No search, no sticky header, no stdin support, no ANSI escape handling.
+No search, no sticky header, no ANSI escape handling.
 Keep it simple to validate the architecture.
 
 ### Phase 2 (future): Search + Sticky Header
