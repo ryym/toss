@@ -10,28 +10,38 @@ mod scroll;
 #[cfg(test)]
 mod app_tests;
 
-use std::env;
+use std::io::{self, IsTerminal};
 use std::path::Path;
 use std::process;
 
+use app::App;
 use document::Document;
 use screen::TermScreen;
-use app::App;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Usage: toss-proto <file>");
-        process::exit(1);
-    }
+    let args: Vec<String> = std::env::args().skip(1).collect();
 
-    let path = Path::new(&args[1]);
-    let doc = match Document::from_file(path) {
-        Ok(doc) => doc,
-        Err(e) => {
-            eprintln!("Error reading {}: {e}", path.display());
-            process::exit(1);
+    let doc = if !args.is_empty() {
+        let path = Path::new(&args[0]);
+        match Document::from_file(path) {
+            Ok(doc) => doc,
+            Err(e) => {
+                eprintln!("Error reading {}: {e}", path.display());
+                process::exit(1);
+            }
         }
+    } else if !io::stdin().is_terminal() {
+        match Document::from_reader(&mut io::stdin().lock()) {
+            Ok(doc) => doc,
+            Err(e) => {
+                eprintln!("Error reading stdin: {e}");
+                process::exit(1);
+            }
+        }
+    } else {
+        eprintln!("Usage: toss-proto <file>");
+        eprintln!("       command | toss-proto");
+        process::exit(1);
     };
 
     let screen = match TermScreen::new() {

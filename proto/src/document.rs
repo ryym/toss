@@ -1,5 +1,5 @@
 use std::fs;
-use std::io;
+use std::io::{self, Read};
 use std::path::Path;
 
 use crate::line::Line;
@@ -14,6 +14,12 @@ pub struct Document {
 impl Document {
     pub fn from_file(path: &Path) -> io::Result<Self> {
         let content = fs::read_to_string(path)?;
+        Ok(Self::from_string(content))
+    }
+
+    pub fn from_reader(reader: &mut impl Read) -> io::Result<Self> {
+        let mut content = String::new();
+        reader.read_to_string(&mut content)?;
         Ok(Self::from_string(content))
     }
 
