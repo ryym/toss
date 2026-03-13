@@ -3,6 +3,7 @@ mod app;
 mod document;
 mod line;
 mod line_cache;
+mod line_editor;
 mod line_index;
 mod logger;
 #[cfg(test)]
