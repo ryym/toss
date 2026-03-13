@@ -45,11 +45,6 @@ impl ScreenState {
         &self.rows
     }
 
-    /// The screen height (number of rows).
-    pub fn height(&self) -> usize {
-        self.rows.len()
-    }
-
     /// Scroll down by n screen rows. Returns a plan for incremental rendering.
     pub fn scroll_down(&mut self, n: usize, doc: &Document) -> ScrollPlan {
         if n == 0 || self.rows.is_empty() {
