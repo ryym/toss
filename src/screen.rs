@@ -7,8 +7,10 @@ use crossterm::{
     style::Print,
     terminal::{self, ClearType},
 };
+use regex::Regex;
 
 use crate::document::Document;
+use crate::highlight;
 use crate::screen_state::{Direction, ScreenRow, ScreenState, ScrollPlan};
 use crate::status_line::StatusLine;
 
@@ -105,6 +107,11 @@ impl Screen for TermScreen {
 // Rendering helpers
 // ---------------------------------------------------------------------------
 
+/// Search context for highlighting matches during rendering.
+pub struct SearchHighlight<'a> {
+    pub query: &'a Regex,
+}
+
 /// Draw a range of screen rows, grouping consecutive rows from the same
 /// logical line and writing them as a single continuous string so the
 /// terminal treats line-internal wraps as soft wraps.
@@ -115,6 +122,7 @@ fn draw_rows_grouped<S: Screen>(
     from: usize,
     to: usize,
     width: usize,
+    search: Option<&SearchHighlight<'_>>,
 ) -> io::Result<()> {
     let mut i = from;
     while i < to {
@@ -129,9 +137,38 @@ fn draw_rows_grouped<S: Screen>(
         }
         // Write the combined text for this group as one continuous piece
         if let Some(line) = doc.line(line_idx) {
-            let text: String = (group_start..i)
-                .map(|j| line.wrap_row_text(width, all_rows[j].wrap_index))
-                .collect();
+            let text = match search {
+                Some(sh) => {
+                    let matches = line.find_matches(sh.query);
+                    if matches.is_empty() {
+                        // No matches: use original text as-is
+                        (group_start..i)
+                            .map(|j| {
+                                line.wrap_row_text(width, all_rows[j].wrap_index)
+                                    .to_string()
+                            })
+                            .collect::<String>()
+                    } else {
+                        let positions = highlight::build_highlight_positions(
+                            &matches,
+                            line.plain_to_raw(),
+                            line.raw().len(),
+                        );
+                        (group_start..i)
+                            .map(|j| {
+                                let range = line.wrap_row_range(width, all_rows[j].wrap_index);
+                                highlight::apply_highlight_to_range(line.raw(), range, &positions)
+                            })
+                            .collect::<String>()
+                    }
+                }
+                None => (group_start..i)
+                    .map(|j| {
+                        line.wrap_row_text(width, all_rows[j].wrap_index)
+                            .to_string()
+                    })
+                    .collect::<String>(),
+            };
             screen.write_at(group_start as u16, &text)?;
         }
     }
@@ -154,10 +191,11 @@ pub fn draw_full_page<S: Screen>(
     doc: &mut Document,
     state: &ScreenState,
     status: &StatusLine,
+    search: Option<&SearchHighlight<'_>>,
 ) -> io::Result<()> {
     let rows = state.rows();
     screen.clear_all()?;
-    draw_rows_grouped(screen, doc, rows, 0, rows.len(), state.width())?;
+    draw_rows_grouped(screen, doc, rows, 0, rows.len(), state.width(), search)?;
     draw_status_line(screen, status, rows.len() as u16)?;
     screen.flush()
 }
@@ -173,6 +211,7 @@ pub fn apply_scroll<S: Screen>(
     plan: &ScrollPlan,
     state: &ScreenState,
     status: &StatusLine,
+    search: Option<&SearchHighlight<'_>>,
 ) -> io::Result<()> {
     if plan.terminal_scroll == 0 {
         return Ok(());
@@ -205,7 +244,7 @@ pub fn apply_scroll<S: Screen>(
         }
     };
 
-    draw_rows_grouped(screen, doc, rows, draw_from, draw_to, state.width())?;
+    draw_rows_grouped(screen, doc, rows, draw_from, draw_to, state.width(), search)?;
     draw_status_line(screen, status, rows.len() as u16)?;
     screen.flush()
 }
