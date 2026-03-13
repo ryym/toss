@@ -40,6 +40,11 @@ impl ScreenState {
         Self { rows, width }
     }
 
+    /// Screen width used for wrapping calculations.
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
     /// Current screen rows.
     pub fn rows(&self) -> &[ScreenRow] {
         &self.rows

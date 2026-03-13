@@ -66,14 +66,7 @@ impl<S: Screen> App<S> {
 
     pub fn run(&mut self) -> io::Result<()> {
         // Initial draw
-        screen::draw_full_page(
-            &mut self.screen,
-            &mut self.doc,
-            self.state.rows(),
-            &self.status,
-            self.height,
-            self.width,
-        )?;
+        screen::draw_full_page(&mut self.screen, &mut self.doc, &self.state, &self.status)?;
         self.needs_full_redraw = false;
 
         loop {
@@ -107,14 +100,7 @@ impl<S: Screen> App<S> {
 
             // 3. Render if needed
             if self.needs_full_redraw {
-                screen::draw_full_page(
-                    &mut self.screen,
-                    &mut self.doc,
-                    self.state.rows(),
-                    &self.status,
-                    self.height,
-                    self.width,
-                )?;
+                screen::draw_full_page(&mut self.screen, &mut self.doc, &self.state, &self.status)?;
                 self.needs_full_redraw = false;
             }
         }
@@ -180,8 +166,6 @@ impl<S: Screen> App<S> {
                 &plan,
                 &self.state,
                 &self.status,
-                self.height,
-                self.width,
             )?;
             self.rendered_offset += rows as f64;
         }
@@ -226,8 +210,6 @@ impl<S: Screen> App<S> {
                     &plan,
                     &self.state,
                     &self.status,
-                    self.height,
-                    self.width,
                 )?;
             }
 

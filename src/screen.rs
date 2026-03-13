@@ -152,14 +152,13 @@ fn draw_status_line<S: Screen>(
 pub fn draw_full_page<S: Screen>(
     screen: &mut S,
     doc: &mut Document,
-    rows: &[ScreenRow],
+    state: &ScreenState,
     status: &StatusLine,
-    height: usize,
-    width: usize,
 ) -> io::Result<()> {
+    let rows = state.rows();
     screen.clear_all()?;
-    draw_rows_grouped(screen, doc, rows, 0, rows.len(), width)?;
-    draw_status_line(screen, status, (height - 1) as u16)?;
+    draw_rows_grouped(screen, doc, rows, 0, rows.len(), state.width())?;
+    draw_status_line(screen, status, rows.len() as u16)?;
     screen.flush()
 }
 
@@ -174,8 +173,6 @@ pub fn apply_scroll<S: Screen>(
     plan: &ScrollPlan,
     state: &ScreenState,
     status: &StatusLine,
-    height: usize,
-    width: usize,
 ) -> io::Result<()> {
     if plan.terminal_scroll == 0 {
         return Ok(());
@@ -208,7 +205,7 @@ pub fn apply_scroll<S: Screen>(
         }
     };
 
-    draw_rows_grouped(screen, doc, rows, draw_from, draw_to, width)?;
-    draw_status_line(screen, status, (height - 1) as u16)?;
+    draw_rows_grouped(screen, doc, rows, draw_from, draw_to, state.width())?;
+    draw_status_line(screen, status, rows.len() as u16)?;
     screen.flush()
 }
