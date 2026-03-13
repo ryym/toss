@@ -1,4 +1,5 @@
 mod cannot_scroll_past_boundaries;
+mod display_ansi_escape_sequences;
 mod jump_to_end_with_wrap;
 mod navigate_top_bottom;
 mod navigate_up_down;

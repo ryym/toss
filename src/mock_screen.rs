@@ -3,6 +3,7 @@ use std::io;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use unicode_width::UnicodeWidthChar;
 
+use crate::ansi;
 use crate::screen::Screen;
 use crate::screen_state::{Direction, ScrollPlan};
 
@@ -117,19 +118,33 @@ impl Screen for MockScreen {
         let mut y = screen_y as usize;
         let mut col = 0;
 
-        for ch in text.chars() {
-            let ch_w = ch.width().unwrap_or(0);
-            if col > 0 && col + ch_w > width {
-                // Overflow: mark current row as soft-wrapped, move to next
-                self.grid[y].soft_wrapped = true;
-                y += 1;
-                col = 0;
-                if y >= self.height as usize {
-                    break;
+        for part in ansi::parse_text(text) {
+            match part {
+                ansi::Text::Control(s) => {
+                    // Control sequences have zero display width; append as-is.
+                    if y < self.height as usize {
+                        self.grid[y].text.push_str(s);
+                    }
+                }
+                ansi::Text::Plain(s) => {
+                    for ch in s.chars() {
+                        let ch_w = ch.width().unwrap_or(0);
+                        if col > 0 && col + ch_w > width {
+                            self.grid[y].soft_wrapped = true;
+                            y += 1;
+                            col = 0;
+                            if y >= self.height as usize {
+                                break;
+                            }
+                        }
+                        if y >= self.height as usize {
+                            break;
+                        }
+                        self.grid[y].text.push(ch);
+                        col += ch_w;
+                    }
                 }
             }
-            self.grid[y].text.push(ch);
-            col += ch_w;
         }
         Ok(())
     }
