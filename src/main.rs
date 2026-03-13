@@ -2,6 +2,7 @@ mod ansi;
 mod app;
 mod document;
 mod line;
+mod line_index;
 mod logger;
 #[cfg(test)]
 mod mock_screen;
