@@ -25,10 +25,10 @@ line 5",
     assert_eq!(
         screen.last_snapshot(),
         "\
+line 3
 target {reverse}foo{/reverse} here
 line 5
 :
-
 "
     );
 }
@@ -159,10 +159,10 @@ foo 3",
     assert_eq!(
         screen.last_snapshot(),
         "\
+{reverse}foo{/reverse} 2
+baz
 {reverse}foo{/reverse} 3
 :
-
-
 "
     );
 }

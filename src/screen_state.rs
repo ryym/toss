@@ -141,7 +141,11 @@ impl ScreenState {
     /// Returns None if the position hasn't changed.
     pub fn jump_to(&mut self, doc: &mut Document, line_index: usize) -> bool {
         let height = self.rows.len();
-        let new_rows = Self::build_rows_forward(doc, self.width, line_index, 0, height);
+        let mut new_rows = Self::build_rows_forward(doc, self.width, line_index, 0, height);
+        if new_rows.len() < height {
+            // Near end of document: back-fill from the end to keep the screen full.
+            new_rows = Self::build_rows_backward_from_end(doc, self.width, height);
+        }
         if new_rows == self.rows {
             return false;
         }
