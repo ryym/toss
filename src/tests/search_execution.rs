@@ -1,7 +1,7 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test, run_test_screen};
+use super::{TestCase, key, run_test_screen};
 
 fn enter() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
@@ -36,7 +36,7 @@ line 5
 // Backward search: ?top + Enter from the bottom jumps back to match.
 #[test]
 fn backward_search_jumps_to_match() {
-    let out = run_test(TestCase {
+    let out = run_test_screen(TestCase {
         screen_width: 20,
         screen_height: 4,
         content: "\
@@ -53,7 +53,8 @@ line 5",
             key('p'),
             enter(),
         ],
-    });
+    })
+    .out();
     assert_eq!(
         out,
         "\

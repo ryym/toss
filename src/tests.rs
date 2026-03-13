@@ -32,10 +32,6 @@ pub struct TestCase {
     pub events: Vec<Event>,
 }
 
-pub fn run_test(tc: TestCase) -> String {
-    run_test_screen(tc).out()
-}
-
 pub fn run_test_screen(tc: TestCase) -> MockScreen {
     let doc = Document::from_string(tc.content.to_string());
     let mut screen = MockScreen::new(tc.screen_width, tc.screen_height);

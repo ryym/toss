@@ -1,6 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test};
+use super::{TestCase, key, run_test_screen};
 
 // Lines with ANSI escape sequences should display correctly.
 // Escape sequences have zero display width, so wrapping is based on
@@ -11,7 +11,7 @@ fn run() {
     // Line 1 visible: "Hello" (5 cols, fits in width 5)
     // Line 2 visible: "abcdefgh" (8 cols, wraps to "abcde" + "fgh" at width 5)
     // Line 3 visible: "end" (3 cols)
-    let out = run_test(TestCase {
+    let out = run_test_screen(TestCase {
         screen_width: 5,
         screen_height: 5,
         content: "\
@@ -19,7 +19,8 @@ fn run() {
 \x1b[31mabcde\x1b[0mfgh
 end",
         events: vec![key('q')],
-    });
+    })
+    .out();
     assert_eq!(
         out,
         "\

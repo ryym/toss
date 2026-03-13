@@ -1,11 +1,11 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test};
+use super::{TestCase, key, run_test_screen};
 
 // Verify the status line appears on the last row and survives scroll operations.
 #[test]
 fn run() {
-    let out = run_test(TestCase {
+    let out = run_test_screen(TestCase {
         screen_width: 10,
         screen_height: 4,
         content: "\
@@ -15,7 +15,8 @@ line 3
 line 4
 line 5",
         events: vec![key('j'), key('k'), key('q')],
-    });
+    })
+    .out();
     assert_eq!(
         out,
         "\

@@ -1,10 +1,10 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test};
+use super::{TestCase, key, run_test_screen};
 
 #[test]
 fn run() {
-    let out = run_test(TestCase {
+    let out = run_test_screen(TestCase {
         screen_width: 5,
         screen_height: 4,
         content: "\
@@ -12,7 +12,8 @@ line1
 line2
 abcdefgh",
         events: vec![key('G'), key('g'), key('q')],
-    });
+    })
+    .out();
     // "abcdefgh" wraps to "abcde" + "fgh"
     // Initial: line1, line2, abcde (fgh off-screen, no soft wrap)
     // G: line2, abcde>, fgh

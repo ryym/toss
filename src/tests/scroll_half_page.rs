@@ -1,10 +1,10 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test};
+use super::{TestCase, key, run_test_screen};
 
 #[test]
 fn run() {
-    let out = run_test(TestCase {
+    let out = run_test_screen(TestCase {
         screen_width: 10,
         screen_height: 5,
         content: "\
@@ -17,7 +17,8 @@ line 6
 line 7
 line 8",
         events: vec![key('d'), key('u'), key('q')],
-    });
+    })
+    .out();
     assert_eq!(
         out,
         "\
