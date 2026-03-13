@@ -1,7 +1,7 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test, run_test_app};
+use super::{TestCase, key, run_test, run_test_screen};
 
 fn enter() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
@@ -11,7 +11,7 @@ fn enter() -> Event {
 // and highlights the match with reverse video.
 #[test]
 fn forward_search_jumps_to_match() {
-    let result = run_test_app(TestCase {
+    let screen = run_test_screen(TestCase {
         screen_width: 20,
         screen_height: 4,
         content: "\
@@ -23,7 +23,7 @@ line 5",
         events: vec![key('/'), key('f'), key('o'), key('o'), enter()],
     });
     assert_eq!(
-        result.last_snapshot,
+        screen.last_snapshot(),
         "\
 target {reverse}foo{/reverse} here
 line 5
@@ -105,7 +105,7 @@ line 3
 // n key: jump to next match in search direction.
 #[test]
 fn next_match_navigation() {
-    let result = run_test_app(TestCase {
+    let screen = run_test_screen(TestCase {
         screen_width: 20,
         screen_height: 4,
         content: "\
@@ -124,7 +124,7 @@ foo 3",
         ],
     });
     assert_eq!(
-        result.last_snapshot,
+        screen.last_snapshot(),
         "\
 {reverse}foo{/reverse} 2
 baz
@@ -137,7 +137,7 @@ baz
 // N key: jump to previous match (reverse direction).
 #[test]
 fn prev_match_navigation() {
-    let result = run_test_app(TestCase {
+    let screen = run_test_screen(TestCase {
         screen_width: 20,
         screen_height: 4,
         content: "\
@@ -156,7 +156,7 @@ foo 3",
         ],
     });
     assert_eq!(
-        result.last_snapshot,
+        screen.last_snapshot(),
         "\
 {reverse}foo{/reverse} 3
 :
@@ -169,7 +169,7 @@ foo 3",
 // No match: position stays the same.
 #[test]
 fn no_match_stays_in_place() {
-    let result = run_test_app(TestCase {
+    let screen = run_test_screen(TestCase {
         screen_width: 20,
         screen_height: 4,
         content: "\
@@ -180,7 +180,7 @@ line 4",
         events: vec![key('/'), key('z'), key('z'), key('z'), enter()],
     });
     assert_eq!(
-        result.last_snapshot,
+        screen.last_snapshot(),
         "\
 line 1
 line 2
@@ -193,7 +193,7 @@ line 3
 // Wrap around: search wraps from end to beginning.
 #[test]
 fn search_wraps_around() {
-    let result = run_test_app(TestCase {
+    let screen = run_test_screen(TestCase {
         screen_width: 20,
         screen_height: 4,
         content: "\
@@ -215,7 +215,7 @@ line 5",
         ],
     });
     assert_eq!(
-        result.last_snapshot,
+        screen.last_snapshot(),
         "\
 {reverse}target{/reverse} here
 line 2
@@ -228,7 +228,7 @@ line 3
 // Highlighting with ANSI escape sequences: match spans across escape sequences.
 #[test]
 fn highlight_with_ansi_escapes() {
-    let result = run_test_app(TestCase {
+    let screen = run_test_screen(TestCase {
         screen_width: 30,
         screen_height: 4,
         content: "line 1\nThis is \x1b[1mCargo\x1b[0m.toml\nline 3\nline 4",
@@ -246,7 +246,7 @@ fn highlight_with_ansi_escapes() {
     // reset (\x1b[0m) follows it. The match end position in raw text
     // falls after the reset, so the reset appears inside the highlighted span.
     assert_eq!(
-        result.last_snapshot,
+        screen.last_snapshot(),
         "\
 This is {bold}{reverse}Cargo{reset}{/reverse}.toml
 line 3
@@ -259,7 +259,7 @@ line 4
 // Multiple matches on the same line are all highlighted.
 #[test]
 fn multiple_matches_same_line() {
-    let result = run_test_app(TestCase {
+    let screen = run_test_screen(TestCase {
         screen_width: 30,
         screen_height: 4,
         content: "\
@@ -270,7 +270,7 @@ line 4",
         events: vec![key('/'), key('f'), key('o'), key('o'), enter()],
     });
     assert_eq!(
-        result.last_snapshot,
+        screen.last_snapshot(),
         "\
 {reverse}foo{/reverse} bar {reverse}foo{/reverse} baz {reverse}foo{/reverse}
 line 2

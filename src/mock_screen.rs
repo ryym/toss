@@ -23,6 +23,14 @@ impl GridRow {
     }
 }
 
+/// Recorded output entry from MockScreen.
+enum OutputEntry {
+    /// Key event log line (e.g. "[EVENT]:char:j\n").
+    Event(String),
+    /// Grid snapshot taken on flush.
+    Snapshot(String),
+}
+
 /// In-memory screen for e2e testing.
 /// Tracks a grid of cells and logs output on each flush.
 /// Simulates soft wrapping: when write_at overflows a row, it continues
@@ -33,9 +41,7 @@ pub struct MockScreen {
     grid: Vec<GridRow>,
     events: Vec<Event>,
     event_index: usize,
-    out: String,
-    /// Individual snapshots taken on each flush.
-    snapshots: Vec<String>,
+    entries: Vec<OutputEntry>,
 }
 
 impl MockScreen {
@@ -47,8 +53,7 @@ impl MockScreen {
             grid,
             events: Vec::new(),
             event_index: 0,
-            out: String::new(),
-            snapshots: Vec::new(),
+            entries: Vec::new(),
         }
     }
 
@@ -57,30 +62,50 @@ impl MockScreen {
         self.event_index = 0;
     }
 
-    pub fn out(&self) -> &str {
-        &self.out
+    /// Build the full output log by concatenating all entries.
+    /// Each snapshot is followed by a "-----" separator.
+    pub fn out(&self) -> String {
+        let mut out = String::new();
+        for entry in &self.entries {
+            match entry {
+                OutputEntry::Event(s) => out.push_str(s),
+                OutputEntry::Snapshot(s) => {
+                    out.push_str(s);
+                    out.push_str("-----\n");
+                }
+            }
+        }
+        out
+    }
+
+    /// Returns the last grid snapshot taken on flush.
+    pub fn last_snapshot(&self) -> &str {
+        self.entries
+            .iter()
+            .rev()
+            .find_map(|e| match e {
+                OutputEntry::Snapshot(s) => Some(s.as_str()),
+                _ => None,
+            })
+            .unwrap_or("")
     }
 
     fn log_key(&mut self, key: &KeyEvent) {
-        match key.code {
+        let text = match key.code {
             KeyCode::Char(ch) => {
                 if ch.is_control() {
-                    self.out.push_str(&format!("[EVENT]:char:{ch:?}\n"));
+                    format!("[EVENT]:char:{ch:?}\n")
                 } else {
-                    self.out.push_str(&format!("[EVENT]:char:{ch}\n"));
+                    format!("[EVENT]:char:{ch}\n")
                 }
             }
-            KeyCode::Esc => self.out.push_str("[EVENT]:esc\n"),
-            _ => self.out.push_str("[EVENT]:other\n"),
-        }
+            KeyCode::Esc => "[EVENT]:esc\n".to_string(),
+            _ => "[EVENT]:other\n".to_string(),
+        };
+        self.entries.push(OutputEntry::Event(text));
     }
 
-    /// Returns the last snapshot taken on flush.
-    pub fn last_snapshot(&self) -> &str {
-        self.snapshots.last().map(|s| s.as_str()).unwrap_or("")
-    }
-
-    fn snapshot(&mut self) {
+    fn take_snapshot(&mut self) {
         let mut snap = String::new();
         for row in &self.grid {
             snap.push_str(&visualize_escapes(&row.text));
@@ -89,9 +114,7 @@ impl MockScreen {
             }
             snap.push('\n');
         }
-        self.snapshots.push(snap.clone());
-        self.out.push_str(&snap);
-        self.out.push_str("-----\n");
+        self.entries.push(OutputEntry::Snapshot(snap));
     }
 }
 
@@ -232,7 +255,7 @@ impl Screen for MockScreen {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.snapshot();
+        self.take_snapshot();
         Ok(())
     }
 }
