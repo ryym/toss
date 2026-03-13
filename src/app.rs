@@ -5,30 +5,20 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::document::Document;
 use crate::line_editor::LineEditor;
-use crate::screen::{self, Screen};
+use crate::screen::{self, Screen, SearchHighlight};
+
+/// Build a SearchHighlight from an optional search state.
+fn search_highlight(search: &Option<SearchState>) -> Option<SearchHighlight<'_>> {
+    search.as_ref().map(|s| SearchHighlight { query: &s.query })
+}
 use crate::screen_state::ScreenState;
 use crate::scroll::ScrollAnimation;
+use crate::search::{SearchDirection, SearchState};
 use crate::status_line::StatusLine;
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
 const SCROLL_ANIMATION_DURATION: Duration = Duration::from_millis(200);
-
-/// Direction of search.
-#[derive(Debug, Clone, Copy)]
-enum SearchDirection {
-    Forward,
-    Backward,
-}
-
-impl SearchDirection {
-    fn prompt(&self) -> &'static str {
-        match self {
-            SearchDirection::Forward => "/",
-            SearchDirection::Backward => "?",
-        }
-    }
-}
 
 /// Current input mode of the application.
 enum AppMode {
@@ -45,6 +35,7 @@ pub struct App<S> {
     state: ScreenState,
     status: StatusLine,
     mode: AppMode,
+    search: Option<SearchState>,
     animation: Option<ScrollAnimation>,
     scroll_duration: Duration,
     /// Current scroll position as a float (row offset from top of document).
@@ -65,6 +56,7 @@ impl<S: Screen> App<S> {
             state,
             status: StatusLine::new(),
             mode: AppMode::View,
+            search: None,
             animation: None,
             scroll_duration: SCROLL_ANIMATION_DURATION,
             rendered_offset: 0.0,
@@ -85,7 +77,14 @@ impl<S: Screen> App<S> {
 
     pub fn run(&mut self) -> io::Result<()> {
         // Initial draw
-        screen::draw_full_page(&mut self.screen, &mut self.doc, &self.state, &self.status)?;
+        let sh = search_highlight(&self.search);
+        screen::draw_full_page(
+            &mut self.screen,
+            &mut self.doc,
+            &self.state,
+            &self.status,
+            sh.as_ref(),
+        )?;
         self.needs_full_redraw = false;
 
         loop {
@@ -116,7 +115,14 @@ impl<S: Screen> App<S> {
 
             // 3. Render if needed
             if self.needs_full_redraw {
-                screen::draw_full_page(&mut self.screen, &mut self.doc, &self.state, &self.status)?;
+                let sh = search_highlight(&self.search);
+                screen::draw_full_page(
+                    &mut self.screen,
+                    &mut self.doc,
+                    &self.state,
+                    &self.status,
+                    sh.as_ref(),
+                )?;
                 self.needs_full_redraw = false;
                 self.needs_status_redraw = false;
             } else if self.needs_status_redraw {
@@ -185,6 +191,12 @@ impl<S: Screen> App<S> {
             KeyCode::Char('?') => {
                 self.enter_search_mode(SearchDirection::Backward);
             }
+            KeyCode::Char('n') => {
+                self.jump_to_next_match(false);
+            }
+            KeyCode::Char('N') => {
+                self.jump_to_next_match(true);
+            }
             _ => {}
         }
         Ok(false)
@@ -209,7 +221,7 @@ impl<S: Screen> App<S> {
     fn handle_key_search(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Enter => {
-                self.exit_search_mode();
+                self.submit_search();
             }
             KeyCode::Esc => {
                 self.exit_search_mode();
@@ -240,6 +252,77 @@ impl<S: Screen> App<S> {
         }
     }
 
+    /// Execute search on Enter: build regex, find match, jump to it.
+    fn submit_search(&mut self) {
+        if let AppMode::Search {
+            direction, editor, ..
+        } = &self.mode
+        {
+            let input = editor.input();
+            let direction = *direction;
+
+            if !input.is_empty() {
+                let re = regex::Regex::new(&regex::escape(&input)).unwrap();
+                let from = self.state.rows().first().map(|r| r.line_index).unwrap_or(0);
+                let matched = crate::search::find_next_match(&mut self.doc, &re, from, direction);
+                if let Some(line_idx) = matched {
+                    self.state.jump_to(&mut self.doc, line_idx);
+                    self.needs_full_redraw = true;
+                }
+                self.search = Some(SearchState {
+                    query: re,
+                    direction,
+                    current_line: matched,
+                });
+            }
+        }
+        self.exit_search_mode();
+    }
+
+    /// Jump to next/previous match using the stored search state.
+    fn jump_to_next_match(&mut self, reverse: bool) {
+        let Some(ref search) = self.search else {
+            return;
+        };
+
+        let direction = if reverse {
+            search.direction.opposite()
+        } else {
+            search.direction
+        };
+
+        // Start from current match + 1 (or -1 for backward) to avoid re-finding the same line
+        let from = match search.current_line {
+            Some(line) => match direction {
+                SearchDirection::Forward => {
+                    if line + 1 < self.doc.line_count() {
+                        line + 1
+                    } else {
+                        0
+                    }
+                }
+                SearchDirection::Backward => {
+                    if line > 0 {
+                        line - 1
+                    } else {
+                        self.doc.line_count().saturating_sub(1)
+                    }
+                }
+            },
+            None => self.state.rows().first().map(|r| r.line_index).unwrap_or(0),
+        };
+
+        let query = search.query.clone();
+        let matched = crate::search::find_next_match(&mut self.doc, &query, from, direction);
+        if let Some(line_idx) = matched {
+            self.state.jump_to(&mut self.doc, line_idx);
+            self.needs_full_redraw = true;
+        }
+        if let Some(ref mut search) = self.search {
+            search.current_line = matched;
+        }
+    }
+
     fn scroll_immediate(&mut self, rows: isize) -> io::Result<()> {
         // Cancel any running animation
         self.animation = None;
@@ -251,12 +334,14 @@ impl<S: Screen> App<S> {
         };
 
         if plan.terminal_scroll > 0 {
+            let sh = search_highlight(&self.search);
             screen::apply_scroll(
                 &mut self.screen,
                 &mut self.doc,
                 &plan,
                 &self.state,
                 &self.status,
+                sh.as_ref(),
             )?;
             self.rendered_offset += rows as f64;
         }
@@ -295,12 +380,14 @@ impl<S: Screen> App<S> {
             };
 
             if plan.terminal_scroll > 0 {
+                let sh = search_highlight(&self.search);
                 screen::apply_scroll(
                     &mut self.screen,
                     &mut self.doc,
                     &plan,
                     &self.state,
                     &self.status,
+                    sh.as_ref(),
                 )?;
             }
 
