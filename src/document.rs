@@ -136,4 +136,36 @@ mod tests {
         assert!(doc.line(2).is_none());
         assert!(doc.line(100).is_none());
     }
+
+    #[test]
+    fn from_file_loads_lines_on_demand() {
+        let dir = Path::new(".local/test");
+        std::fs::create_dir_all(dir).unwrap();
+        let path = dir.join("test_lazy_load.txt");
+        std::fs::write(&path, "aaa\nbbb\nccc\n").unwrap();
+
+        let mut doc = Document::from_file(&path).unwrap();
+        assert_eq!(doc.line_count(), 3);
+        assert_eq!(doc.line(0).unwrap().text(), "aaa");
+        assert_eq!(doc.line(2).unwrap().text(), "ccc");
+        assert_eq!(doc.line(1).unwrap().text(), "bbb");
+        assert!(doc.line(3).is_none());
+
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn from_file_no_trailing_newline() {
+        let dir = Path::new(".local/test");
+        std::fs::create_dir_all(dir).unwrap();
+        let path = dir.join("test_no_trailing.txt");
+        std::fs::write(&path, "hello\nworld").unwrap();
+
+        let mut doc = Document::from_file(&path).unwrap();
+        assert_eq!(doc.line_count(), 2);
+        assert_eq!(doc.line(0).unwrap().text(), "hello");
+        assert_eq!(doc.line(1).unwrap().text(), "world");
+
+        std::fs::remove_file(&path).unwrap();
+    }
 }
