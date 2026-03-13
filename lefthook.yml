@@ -12,3 +12,6 @@ pre-commit:
       glob:
         - "src/*"
         - "Cargo.toml"
+commit-msg:
+  jobs:
+    - run: scripts/check-git-message-format {1}

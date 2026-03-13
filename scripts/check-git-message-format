@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Validate commit message format based on dev/docs/conventions/git.md.
+# Also allows Git auto-messages (Merge, Revert, Reapply) and
+# temporary commit markers like fixup!, squash!, etc.
+
+msg_file="$1"
+first_line=$(head -n 1 "$msg_file")
+
+# Allow Git auto-generated messages
+if [[ "$first_line" =~ ^(Merge|Revert|Reapply) ]]; then
+  exit 0
+fi
+
+# Allow temporary commit markers (fixup!, squash!, amend!, etc.)
+if [[ "$first_line" =~ ^[a-z]+!' ' ]]; then
+  exit 0
+fi
+
+# Check for valid conventional commit prefix
+pattern='^(feat|fix|refactor|docs|chore|perf)(\(.+\))?: '
+if [[ "$first_line" =~ $pattern ]]; then
+  exit 0
+fi
+
+echo "ERROR: Invalid commit message format."
+echo "  Message: $first_line"
+echo "  Expected format: <prefix>: <description>"
+echo "  Valid prefixes: feat, fix, refactor, docs, chore, perf"
+exit 1
