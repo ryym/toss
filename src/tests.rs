@@ -8,6 +8,7 @@ mod scroll_top_bottom_with_wrap;
 mod scroll_up_down;
 mod scroll_up_reveals_wrap_start;
 mod scroll_with_soft_wrap;
+mod search_input;
 mod status_line;
 mod wrap_midline_at_top_of_screen;
 
