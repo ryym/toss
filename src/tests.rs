@@ -5,9 +5,9 @@ mod navigate_top_bottom;
 mod navigate_up_down;
 mod open_and_quit;
 mod scroll_down_reveals_wrap_continuation;
+mod scroll_half_page;
 mod scroll_up_reveals_wrap_start;
 mod scroll_with_soft_wrap;
-mod smooth_scroll_half_page;
 mod wrap_midline_at_top_of_screen;
 
 use std::time::Duration;
