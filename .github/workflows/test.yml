@@ -22,6 +22,5 @@ jobs:
     - run: cargo +stable version --verbose
     - run: cargo +nightly version --verbose
 
-    - run: cargo +stable build
-    - run: cargo +stable test -- --no-capture
-    - run: scripts/bench
+    - run: cargo +stable test
+    - run: cargo +nightly test
