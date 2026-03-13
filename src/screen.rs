@@ -139,7 +139,7 @@ fn draw_rows_grouped<S: Screen>(
 }
 
 /// Draw the status line at the given screen row.
-fn draw_status_line<S: Screen>(
+pub fn draw_status_line<S: Screen>(
     screen: &mut S,
     status: &StatusLine,
     screen_y: u16,

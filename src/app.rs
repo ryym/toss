@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::document::Document;
+use crate::line_editor::LineEditor;
 use crate::screen::{self, Screen};
 use crate::screen_state::ScreenState;
 use crate::scroll::ScrollAnimation;
@@ -13,17 +14,44 @@ const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
 const SCROLL_ANIMATION_DURATION: Duration = Duration::from_millis(200);
 
+/// Direction of search.
+#[derive(Debug, Clone, Copy)]
+enum SearchDirection {
+    Forward,
+    Backward,
+}
+
+impl SearchDirection {
+    fn prompt(&self) -> &'static str {
+        match self {
+            SearchDirection::Forward => "/",
+            SearchDirection::Backward => "?",
+        }
+    }
+}
+
+/// Current input mode of the application.
+enum AppMode {
+    View,
+    Search {
+        direction: SearchDirection,
+        editor: LineEditor,
+    },
+}
+
 pub struct App<S> {
     screen: S,
     doc: Document,
     state: ScreenState,
     status: StatusLine,
+    mode: AppMode,
     animation: Option<ScrollAnimation>,
     scroll_duration: Duration,
     /// Current scroll position as a float (row offset from top of document).
     /// This is the "rendered" position — the last integer position we drew.
     rendered_offset: f64,
     needs_full_redraw: bool,
+    needs_status_redraw: bool,
 }
 
 impl<S: Screen> App<S> {
@@ -36,10 +64,12 @@ impl<S: Screen> App<S> {
             doc,
             state,
             status: StatusLine::new(),
+            mode: AppMode::View,
             animation: None,
             scroll_duration: SCROLL_ANIMATION_DURATION,
             rendered_offset: 0.0,
             needs_full_redraw: true,
+            needs_status_redraw: false,
         })
     }
 
@@ -88,12 +118,31 @@ impl<S: Screen> App<S> {
             if self.needs_full_redraw {
                 screen::draw_full_page(&mut self.screen, &mut self.doc, &self.state, &self.status)?;
                 self.needs_full_redraw = false;
+                self.needs_status_redraw = false;
+            } else if self.needs_status_redraw {
+                screen::draw_status_line(
+                    &mut self.screen,
+                    &self.status,
+                    self.state.rows().len() as u16,
+                )?;
+                self.screen.flush()?;
+                self.needs_status_redraw = false;
             }
         }
     }
 
     /// Returns true if the app should quit.
     fn handle_key(&mut self, key: KeyEvent) -> io::Result<bool> {
+        match self.mode {
+            AppMode::View => self.handle_key_view(key),
+            AppMode::Search { .. } => {
+                self.handle_key_search(key);
+                Ok(false)
+            }
+        }
+    }
+
+    fn handle_key_view(&mut self, key: KeyEvent) -> io::Result<bool> {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => return Ok(true),
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -130,9 +179,65 @@ impl<S: Screen> App<S> {
                     self.needs_full_redraw = true;
                 }
             }
+            KeyCode::Char('/') => {
+                self.enter_search_mode(SearchDirection::Forward);
+            }
+            KeyCode::Char('?') => {
+                self.enter_search_mode(SearchDirection::Backward);
+            }
             _ => {}
         }
         Ok(false)
+    }
+
+    fn enter_search_mode(&mut self, direction: SearchDirection) {
+        self.animation = None;
+        self.status.set_content(direction.prompt().to_string());
+        self.mode = AppMode::Search {
+            direction,
+            editor: LineEditor::new(),
+        };
+        self.needs_status_redraw = true;
+    }
+
+    fn exit_search_mode(&mut self) {
+        self.mode = AppMode::View;
+        self.status.set_content(":".to_string());
+        self.needs_status_redraw = true;
+    }
+
+    fn handle_key_search(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Enter => {
+                self.exit_search_mode();
+            }
+            KeyCode::Esc => {
+                self.exit_search_mode();
+            }
+            KeyCode::Backspace => {
+                if let AppMode::Search {
+                    direction, editor, ..
+                } = &mut self.mode
+                {
+                    editor.backspace();
+                    self.status
+                        .set_content(format!("{}{}", direction.prompt(), editor.input()));
+                    self.needs_status_redraw = true;
+                }
+            }
+            KeyCode::Char(ch) => {
+                if let AppMode::Search {
+                    direction, editor, ..
+                } = &mut self.mode
+                {
+                    editor.insert(ch);
+                    self.status
+                        .set_content(format!("{}{}", direction.prompt(), editor.input()));
+                    self.needs_status_redraw = true;
+                }
+            }
+            _ => {}
+        }
     }
 
     fn scroll_immediate(&mut self, rows: isize) -> io::Result<()> {
