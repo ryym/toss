@@ -23,8 +23,8 @@ end",
     assert_eq!(
         out,
         "\
-\x1b[1mHello\x1b[0m
-\x1b[31mabcde\x1b[0m>
+{bold}Hello{reset}
+{red}abcde{reset}>
 fgh
 end
 -----

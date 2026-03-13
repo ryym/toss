@@ -74,13 +74,54 @@ impl MockScreen {
 
     fn snapshot(&mut self) {
         for row in &self.grid {
-            self.out.push_str(&row.text);
+            self.out.push_str(&visualize_escapes(&row.text));
             if row.soft_wrapped {
                 self.out.push('>');
             }
             self.out.push('\n');
         }
         self.out.push_str("-----\n");
+    }
+}
+
+/// Replace ANSI escape sequences with readable plain text for test output.
+/// This makes test failure diffs much easier to read since raw escape sequences
+/// would be interpreted by the terminal.
+fn visualize_escapes(text: &str) -> String {
+    let mut result = String::new();
+    for part in ansi::parse_text(text) {
+        match part {
+            ansi::Text::Control(s) => {
+                result.push_str(&escape_to_label(s));
+            }
+            ansi::Text::Plain(s) => {
+                result.push_str(s);
+            }
+        }
+    }
+    result
+}
+
+/// Convert a known escape sequence to a human-readable label.
+/// Unknown sequences are shown as their debug representation.
+fn escape_to_label(seq: &str) -> String {
+    match seq {
+        "\x1b[0m" => "{reset}".into(),
+        "\x1b[1m" => "{bold}".into(),
+        "\x1b[2m" => "{dim}".into(),
+        "\x1b[3m" => "{italic}".into(),
+        "\x1b[4m" => "{underline}".into(),
+        "\x1b[7m" => "{reverse}".into(),
+        "\x1b[27m" => "{/reverse}".into(),
+        "\x1b[30m" => "{black}".into(),
+        "\x1b[31m" => "{red}".into(),
+        "\x1b[32m" => "{green}".into(),
+        "\x1b[33m" => "{yellow}".into(),
+        "\x1b[34m" => "{blue}".into(),
+        "\x1b[35m" => "{magenta}".into(),
+        "\x1b[36m" => "{cyan}".into(),
+        "\x1b[37m" => "{white}".into(),
+        _ => format!("{{ESC:{}}}", seq.escape_debug()),
     }
 }
 
