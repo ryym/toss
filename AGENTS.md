@@ -24,6 +24,9 @@ See dev/adr/001-redesign-architecture.md for the motivation.
 - Follow `dev/docs/conventions/rust.md` when writing Rust code.
 - Follow `dev/docs/conventions/git.md` when using Git.
 
+Whenever you develop, commit changes as you progress.
+When you finish work, all your changes must be committed.
+
 ### Common Commands
 
 ```bash
