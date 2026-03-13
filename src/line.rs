@@ -1,3 +1,6 @@
+use std::ops::Range;
+
+use regex::Regex;
 use unicode_width::UnicodeWidthChar;
 
 use crate::ansi;
@@ -126,14 +129,28 @@ impl Line {
     /// Get the raw text slice for a specific wrapped row, including any
     /// embedded escape sequences.
     pub fn wrap_row_text(&self, width: usize, wrap_index: usize) -> &str {
+        let range = self.wrap_row_range(width, wrap_index);
+        &self.raw[range]
+    }
+
+    /// Get the byte range in raw text for a specific wrapped row.
+    pub fn wrap_row_range(&self, width: usize, wrap_index: usize) -> Range<usize> {
         let ends = self.wrap_end_positions(width);
         let start = if wrap_index == 0 {
             0
         } else {
             ends[wrap_index - 1]
         };
-        let end = ends[wrap_index];
-        &self.raw[start..end]
+        start..ends[wrap_index]
+    }
+
+    /// Find all matches of a regex in the plain text.
+    /// Returns a list of (start, end) byte ranges in the plain text.
+    pub fn find_matches(&self, query: &Regex) -> Vec<(usize, usize)> {
+        query
+            .find_iter(&self.plain)
+            .map(|m| (m.start(), m.end()))
+            .collect()
     }
 }
 
