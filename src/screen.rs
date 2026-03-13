@@ -1,14 +1,15 @@
 use std::io::{self, Stdout, Write};
 
 use crossterm::{
-    cursor, execute, queue,
+    cursor,
     event::{self, Event},
+    execute, queue,
     style::Print,
     terminal::{self, ClearType},
 };
 
 use crate::document::Document;
-use crate::screen_state::{Direction, ScrollPlan, ScreenRow, ScreenState};
+use crate::screen_state::{Direction, ScreenRow, ScreenState, ScrollPlan};
 
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {
@@ -37,22 +38,14 @@ impl TermScreen {
     pub fn new() -> io::Result<Self> {
         let mut stdout = io::stdout();
         terminal::enable_raw_mode()?;
-        execute!(
-            stdout,
-            terminal::EnterAlternateScreen,
-            cursor::Hide,
-        )?;
+        execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide,)?;
         Ok(Self { stdout })
     }
 }
 
 impl Drop for TermScreen {
     fn drop(&mut self) {
-        let _ = execute!(
-            self.stdout,
-            cursor::Show,
-            terminal::LeaveAlternateScreen,
-        );
+        let _ = execute!(self.stdout, cursor::Show, terminal::LeaveAlternateScreen,);
         let _ = terminal::disable_raw_mode();
     }
 }
@@ -79,11 +72,7 @@ impl Screen for TermScreen {
     }
 
     fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()> {
-        queue!(
-            self.stdout,
-            cursor::MoveTo(0, screen_y),
-            Print(text),
-        )
+        queue!(self.stdout, cursor::MoveTo(0, screen_y), Print(text),)
     }
 
     fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()> {
@@ -103,10 +92,7 @@ impl Screen for TermScreen {
     }
 
     fn clear_all(&mut self) -> io::Result<()> {
-        queue!(
-            self.stdout,
-            terminal::Clear(ClearType::All),
-        )
+        queue!(self.stdout, terminal::Clear(ClearType::All),)
     }
 
     fn flush(&mut self) -> io::Result<()> {

@@ -73,7 +73,10 @@ mod tests {
     fn easing_fast_start() {
         // At t=0.5, ease-out-cubic should be past 0.5 (fast start)
         let mid = ease_out_cubic(0.5);
-        assert!(mid > 0.5, "ease-out should progress quickly at first: {mid}");
+        assert!(
+            mid > 0.5,
+            "ease-out should progress quickly at first: {mid}"
+        );
     }
 
     #[test]

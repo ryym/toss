@@ -56,12 +56,7 @@ impl<S: Screen> App<S> {
 
     pub fn run(&mut self) -> io::Result<()> {
         // Initial draw
-        screen::draw_full_page(
-            &mut self.screen,
-            &self.doc,
-            self.state.rows(),
-            self.width,
-        )?;
+        screen::draw_full_page(&mut self.screen, &self.doc, self.state.rows(), self.width)?;
         self.needs_full_redraw = false;
 
         loop {
@@ -94,12 +89,7 @@ impl<S: Screen> App<S> {
 
             // 3. Render if needed
             if self.needs_full_redraw {
-                screen::draw_full_page(
-                    &mut self.screen,
-                    &self.doc,
-                    self.state.rows(),
-                    self.width,
-                )?;
+                screen::draw_full_page(&mut self.screen, &self.doc, self.state.rows(), self.width)?;
                 self.needs_full_redraw = false;
             }
         }
@@ -159,13 +149,7 @@ impl<S: Screen> App<S> {
         };
 
         if plan.terminal_scroll > 0 {
-            screen::apply_scroll(
-                &mut self.screen,
-                &self.doc,
-                &plan,
-                &self.state,
-                self.width,
-            )?;
+            screen::apply_scroll(&mut self.screen, &self.doc, &plan, &self.state, self.width)?;
             self.rendered_offset += rows as f64;
         }
         Ok(())
@@ -174,11 +158,7 @@ impl<S: Screen> App<S> {
     fn start_scroll_animation(&mut self, total_rows: isize) {
         let start = self.rendered_offset;
         let target = start + total_rows as f64;
-        self.animation = Some(ScrollAnimation::new(
-            start,
-            target,
-            self.scroll_duration,
-        ));
+        self.animation = Some(ScrollAnimation::new(start, target, self.scroll_duration));
     }
 
     fn update_animation(&mut self) -> io::Result<()> {
@@ -207,13 +187,7 @@ impl<S: Screen> App<S> {
             };
 
             if plan.terminal_scroll > 0 {
-                screen::apply_scroll(
-                    &mut self.screen,
-                    &self.doc,
-                    &plan,
-                    &self.state,
-                    self.width,
-                )?;
+                screen::apply_scroll(&mut self.screen, &self.doc, &plan, &self.state, self.width)?;
             }
 
             self.rendered_offset = current_row as f64;

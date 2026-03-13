@@ -188,11 +188,7 @@ impl ScreenState {
     }
 
     /// Build rows from the end of the document, filling up to `count` rows.
-    fn build_rows_backward_from_end(
-        doc: &Document,
-        width: usize,
-        count: usize,
-    ) -> Vec<ScreenRow> {
+    fn build_rows_backward_from_end(doc: &Document, width: usize, count: usize) -> Vec<ScreenRow> {
         let line_count = doc.line_count();
         if line_count == 0 {
             return vec![];
@@ -225,12 +221,7 @@ impl ScreenState {
     }
 
     /// Advance forward from `after` by `n` screen rows.
-    fn advance_forward(
-        doc: &Document,
-        width: usize,
-        after: ScreenRow,
-        n: usize,
-    ) -> Vec<ScreenRow> {
+    fn advance_forward(doc: &Document, width: usize, after: ScreenRow, n: usize) -> Vec<ScreenRow> {
         let mut rows = Vec::with_capacity(n);
         let mut line_idx = after.line_index;
         let mut wrap_idx = after.wrap_index;
@@ -317,9 +308,18 @@ mod tests {
         assert_eq!(
             state.rows(),
             &[
-                ScreenRow { line_index: 0, wrap_index: 0 },
-                ScreenRow { line_index: 1, wrap_index: 0 },
-                ScreenRow { line_index: 2, wrap_index: 0 },
+                ScreenRow {
+                    line_index: 0,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 1,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 2,
+                    wrap_index: 0
+                },
             ]
         );
     }
@@ -332,9 +332,18 @@ mod tests {
         assert_eq!(
             state.rows(),
             &[
-                ScreenRow { line_index: 0, wrap_index: 0 },
-                ScreenRow { line_index: 0, wrap_index: 1 },
-                ScreenRow { line_index: 1, wrap_index: 0 },
+                ScreenRow {
+                    line_index: 0,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 0,
+                    wrap_index: 1
+                },
+                ScreenRow {
+                    line_index: 1,
+                    wrap_index: 0
+                },
             ]
         );
     }
@@ -347,13 +356,28 @@ mod tests {
 
         assert_eq!(plan.terminal_scroll, 1);
         assert_eq!(plan.direction, Direction::Down);
-        assert_eq!(plan.new_rows, vec![ScreenRow { line_index: 3, wrap_index: 0 }]);
+        assert_eq!(
+            plan.new_rows,
+            vec![ScreenRow {
+                line_index: 3,
+                wrap_index: 0
+            }]
+        );
         assert_eq!(
             state.rows(),
             &[
-                ScreenRow { line_index: 1, wrap_index: 0 },
-                ScreenRow { line_index: 2, wrap_index: 0 },
-                ScreenRow { line_index: 3, wrap_index: 0 },
+                ScreenRow {
+                    line_index: 1,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 2,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 3,
+                    wrap_index: 0
+                },
             ]
         );
     }
@@ -376,7 +400,13 @@ mod tests {
         let doc = make_doc(&["short", "abcdefgh", "end"]);
         let mut state = ScreenState::new(&doc, 5, 3);
         // Initial: [short/0, abcde/0, fgh/1]
-        assert_eq!(state.rows()[0], ScreenRow { line_index: 0, wrap_index: 0 });
+        assert_eq!(
+            state.rows()[0],
+            ScreenRow {
+                line_index: 0,
+                wrap_index: 0
+            }
+        );
 
         let plan = state.scroll_down(1, &doc);
         assert_eq!(plan.terminal_scroll, 1);
@@ -384,9 +414,18 @@ mod tests {
         assert_eq!(
             state.rows(),
             &[
-                ScreenRow { line_index: 1, wrap_index: 0 },
-                ScreenRow { line_index: 1, wrap_index: 1 },
-                ScreenRow { line_index: 2, wrap_index: 0 },
+                ScreenRow {
+                    line_index: 1,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 1,
+                    wrap_index: 1
+                },
+                ScreenRow {
+                    line_index: 2,
+                    wrap_index: 0
+                },
             ]
         );
     }
@@ -401,13 +440,28 @@ mod tests {
         let plan = state.scroll_up(1, &doc);
         assert_eq!(plan.terminal_scroll, 1);
         assert_eq!(plan.direction, Direction::Up);
-        assert_eq!(plan.new_rows, vec![ScreenRow { line_index: 0, wrap_index: 0 }]);
+        assert_eq!(
+            plan.new_rows,
+            vec![ScreenRow {
+                line_index: 0,
+                wrap_index: 0
+            }]
+        );
         assert_eq!(
             state.rows(),
             &[
-                ScreenRow { line_index: 0, wrap_index: 0 },
-                ScreenRow { line_index: 1, wrap_index: 0 },
-                ScreenRow { line_index: 2, wrap_index: 0 },
+                ScreenRow {
+                    line_index: 0,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 1,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 2,
+                    wrap_index: 0
+                },
             ]
         );
     }
@@ -432,13 +486,25 @@ mod tests {
 
         let plan = state.scroll_up(1, &doc);
         assert_eq!(plan.terminal_scroll, 1);
-        assert_eq!(plan.new_rows, vec![ScreenRow { line_index: 0, wrap_index: 0 }]);
+        assert_eq!(
+            plan.new_rows,
+            vec![ScreenRow {
+                line_index: 0,
+                wrap_index: 0
+            }]
+        );
         // Back to: [abcde/0, fgh/1]
         assert_eq!(
             state.rows(),
             &[
-                ScreenRow { line_index: 0, wrap_index: 0 },
-                ScreenRow { line_index: 0, wrap_index: 1 },
+                ScreenRow {
+                    line_index: 0,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 0,
+                    wrap_index: 1
+                },
             ]
         );
     }
@@ -453,9 +519,18 @@ mod tests {
         assert_eq!(
             state.rows(),
             &[
-                ScreenRow { line_index: 3, wrap_index: 0 },
-                ScreenRow { line_index: 4, wrap_index: 0 },
-                ScreenRow { line_index: 5, wrap_index: 0 },
+                ScreenRow {
+                    line_index: 3,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 4,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 5,
+                    wrap_index: 0
+                },
             ]
         );
     }
@@ -471,9 +546,18 @@ mod tests {
         assert_eq!(
             state.rows(),
             &[
-                ScreenRow { line_index: 1, wrap_index: 0 },
-                ScreenRow { line_index: 2, wrap_index: 0 },
-                ScreenRow { line_index: 3, wrap_index: 0 },
+                ScreenRow {
+                    line_index: 1,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 2,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 3,
+                    wrap_index: 0
+                },
             ]
         );
     }
@@ -488,9 +572,18 @@ mod tests {
         assert_eq!(
             state.rows(),
             &[
-                ScreenRow { line_index: 2, wrap_index: 0 },
-                ScreenRow { line_index: 3, wrap_index: 0 },
-                ScreenRow { line_index: 4, wrap_index: 0 },
+                ScreenRow {
+                    line_index: 2,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 3,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 4,
+                    wrap_index: 0
+                },
             ]
         );
     }
@@ -520,9 +613,18 @@ mod tests {
         assert_eq!(
             state.rows(),
             &[
-                ScreenRow { line_index: 2, wrap_index: 0 },
-                ScreenRow { line_index: 3, wrap_index: 0 },
-                ScreenRow { line_index: 4, wrap_index: 0 },
+                ScreenRow {
+                    line_index: 2,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 3,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 4,
+                    wrap_index: 0
+                },
             ]
         );
     }
@@ -538,9 +640,18 @@ mod tests {
         assert_eq!(
             state.rows(),
             &[
-                ScreenRow { line_index: 1, wrap_index: 0 },
-                ScreenRow { line_index: 2, wrap_index: 0 },
-                ScreenRow { line_index: 2, wrap_index: 1 },
+                ScreenRow {
+                    line_index: 1,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 2,
+                    wrap_index: 0
+                },
+                ScreenRow {
+                    line_index: 2,
+                    wrap_index: 1
+                },
             ]
         );
     }
