@@ -8,7 +8,7 @@ mod screen_state;
 mod scroll;
 
 #[cfg(test)]
-mod app_tests;
+mod tests;
 
 use std::io::{self, IsTerminal};
 use std::path::Path;
