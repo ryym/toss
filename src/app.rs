@@ -18,8 +18,6 @@ pub struct App<S> {
     doc: Document,
     state: ScreenState,
     status: StatusLine,
-    width: usize,
-    height: usize,
     animation: Option<ScrollAnimation>,
     scroll_duration: Duration,
     /// Current scroll position as a float (row offset from top of document).
@@ -31,27 +29,18 @@ pub struct App<S> {
 impl<S: Screen> App<S> {
     pub fn new(screen: S, mut doc: Document) -> io::Result<Self> {
         let (w, h) = screen.size()?;
-        let width = w as usize;
-        let height = h as usize;
-        let content_height = height.saturating_sub(1);
-        let state = ScreenState::new(&mut doc, width, content_height);
+        let state = ScreenState::new(&mut doc, w as usize, h as usize);
 
         Ok(Self {
             screen,
             doc,
             state,
             status: StatusLine::new(),
-            width,
-            height,
             animation: None,
             scroll_duration: SCROLL_ANIMATION_DURATION,
             rendered_offset: 0.0,
             needs_full_redraw: true,
         })
-    }
-
-    fn content_height(&self) -> usize {
-        self.height.saturating_sub(1)
     }
 
     #[cfg(test)]
@@ -85,10 +74,7 @@ impl<S: Screen> App<S> {
                         }
                     }
                     Event::Resize(w, h) => {
-                        self.width = w as usize;
-                        self.height = h as usize;
-                        let content_height = self.content_height();
-                        self.state.resize(&mut self.doc, self.width, content_height);
+                        self.state.resize(&mut self.doc, w as usize, h as usize);
                         self.needs_full_redraw = true;
                     }
                     _ => {}
@@ -120,16 +106,16 @@ impl<S: Screen> App<S> {
                 self.scroll_immediate(-1)?;
             }
             KeyCode::Char('d') => {
-                self.start_scroll_animation(self.content_height() as isize / 2);
+                self.start_scroll_animation(self.state.content_height() as isize / 2);
             }
             KeyCode::Char('u') => {
-                self.start_scroll_animation(-(self.content_height() as isize / 2));
+                self.start_scroll_animation(-(self.state.content_height() as isize / 2));
             }
             KeyCode::Char('f') | KeyCode::Char(' ') => {
-                self.start_scroll_animation(self.content_height() as isize);
+                self.start_scroll_animation(self.state.content_height() as isize);
             }
             KeyCode::Char('b') => {
-                self.start_scroll_animation(-(self.content_height() as isize));
+                self.start_scroll_animation(-(self.state.content_height() as isize));
             }
             KeyCode::Char('g') => {
                 self.animation = None;

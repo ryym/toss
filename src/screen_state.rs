@@ -29,20 +29,34 @@ pub struct ScrollPlan {
 pub struct ScreenState {
     /// What each screen row currently shows.
     rows: Vec<ScreenRow>,
-    /// Screen width (for wrapping calculations).
+    /// Full terminal width.
     width: usize,
+    /// Full terminal height (content area + status line).
+    height: usize,
 }
 
 impl ScreenState {
     /// Build initial screen state from the top of the document.
+    /// `width` and `height` are the full terminal dimensions.
+    /// The bottom row is reserved for the status line.
     pub fn new(doc: &mut Document, width: usize, height: usize) -> Self {
-        let rows = Self::build_rows_forward(doc, width, 0, 0, height);
-        Self { rows, width }
+        let content_height = height.saturating_sub(1);
+        let rows = Self::build_rows_forward(doc, width, 0, 0, content_height);
+        Self {
+            rows,
+            width,
+            height,
+        }
     }
 
-    /// Screen width used for wrapping calculations.
+    /// Full terminal width.
     pub fn width(&self) -> usize {
         self.width
+    }
+
+    /// Number of rows available for document content (excludes the status line).
+    pub fn content_height(&self) -> usize {
+        self.height.saturating_sub(1)
     }
 
     /// Current screen rows.
@@ -146,14 +160,18 @@ impl ScreenState {
         true
     }
 
-    /// Update width and rebuild screen from current top position.
+    /// Update dimensions and rebuild screen from current top position.
+    /// `width` and `height` are the full terminal dimensions.
     pub fn resize(&mut self, doc: &mut Document, width: usize, height: usize) {
         let top = self.rows.first().copied().unwrap_or(ScreenRow {
             line_index: 0,
             wrap_index: 0,
         });
         self.width = width;
-        self.rows = Self::build_rows_forward(doc, width, top.line_index, top.wrap_index, height);
+        self.height = height;
+        let content_height = self.content_height();
+        self.rows =
+            Self::build_rows_forward(doc, width, top.line_index, top.wrap_index, content_height);
     }
 
     /// Build rows starting from (line_index, wrap_index), going forward.
@@ -313,7 +331,7 @@ mod tests {
     #[test]
     fn initial_state_simple() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc", "ddd", "eee"]);
-        let state = ScreenState::new(&mut doc, 80, 3);
+        let state = ScreenState::new(&mut doc, 80, 4);
         assert_eq!(
             state.rows(),
             &[
@@ -337,7 +355,7 @@ mod tests {
     fn initial_state_with_wrapping() {
         // "abcdefgh" wraps to 2 rows at width 5
         let mut doc = make_doc(&["abcdefgh", "xy"]);
-        let state = ScreenState::new(&mut doc, 5, 4);
+        let state = ScreenState::new(&mut doc, 5, 5);
         assert_eq!(
             state.rows(),
             &[
@@ -360,7 +378,7 @@ mod tests {
     #[test]
     fn scroll_down_one() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc", "ddd"]);
-        let mut state = ScreenState::new(&mut doc, 80, 3);
+        let mut state = ScreenState::new(&mut doc, 80, 4);
         let plan = state.scroll_down(1, &mut doc);
 
         assert_eq!(plan.terminal_scroll, 1);
@@ -394,7 +412,7 @@ mod tests {
     #[test]
     fn scroll_down_at_end() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc"]);
-        let mut state = ScreenState::new(&mut doc, 80, 3);
+        let mut state = ScreenState::new(&mut doc, 80, 4);
         let plan = state.scroll_down(1, &mut doc);
 
         assert_eq!(plan.terminal_scroll, 0);
@@ -407,7 +425,7 @@ mod tests {
     fn scroll_down_with_wrap() {
         // Line "abcdefgh" wraps to 2 rows at width 5
         let mut doc = make_doc(&["short", "abcdefgh", "end"]);
-        let mut state = ScreenState::new(&mut doc, 5, 3);
+        let mut state = ScreenState::new(&mut doc, 5, 4);
         // Initial: [short/0, abcde/0, fgh/1]
         assert_eq!(
             state.rows()[0],
@@ -442,7 +460,7 @@ mod tests {
     #[test]
     fn scroll_up_one() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc", "ddd"]);
-        let mut state = ScreenState::new(&mut doc, 80, 3);
+        let mut state = ScreenState::new(&mut doc, 80, 4);
         state.scroll_down(1, &mut doc);
         // Now: [bbb, ccc, ddd]
 
@@ -478,7 +496,7 @@ mod tests {
     #[test]
     fn scroll_up_at_top() {
         let mut doc = make_doc(&["aaa", "bbb"]);
-        let mut state = ScreenState::new(&mut doc, 80, 2);
+        let mut state = ScreenState::new(&mut doc, 80, 3);
         let plan = state.scroll_up(1, &mut doc);
 
         assert_eq!(plan.terminal_scroll, 0);
@@ -488,7 +506,7 @@ mod tests {
     #[test]
     fn scroll_up_with_wrap() {
         let mut doc = make_doc(&["abcdefgh", "short"]);
-        let mut state = ScreenState::new(&mut doc, 5, 2);
+        let mut state = ScreenState::new(&mut doc, 5, 3);
         // Initial: [abcde/0, fgh/1]
         state.scroll_down(1, &mut doc);
         // Now: [fgh/1, short/0]
@@ -521,7 +539,7 @@ mod tests {
     #[test]
     fn scroll_down_multiple() {
         let mut doc = make_doc(&["a", "b", "c", "d", "e", "f"]);
-        let mut state = ScreenState::new(&mut doc, 80, 3);
+        let mut state = ScreenState::new(&mut doc, 80, 4);
         let plan = state.scroll_down(3, &mut doc);
 
         assert_eq!(plan.terminal_scroll, 3);
@@ -547,7 +565,7 @@ mod tests {
     #[test]
     fn scroll_down_clamps_at_end() {
         let mut doc = make_doc(&["a", "b", "c", "d"]);
-        let mut state = ScreenState::new(&mut doc, 80, 3);
+        let mut state = ScreenState::new(&mut doc, 80, 4);
         // Try to scroll down by 10, but only 1 row available
         let plan = state.scroll_down(10, &mut doc);
 
@@ -574,7 +592,7 @@ mod tests {
     #[test]
     fn jump_to_line() {
         let mut doc = make_doc(&["a", "b", "c", "d", "e"]);
-        let mut state = ScreenState::new(&mut doc, 80, 3);
+        let mut state = ScreenState::new(&mut doc, 80, 4);
         let changed = state.jump_to(&mut doc, 2);
 
         assert!(changed);
@@ -600,7 +618,7 @@ mod tests {
     #[test]
     fn jump_to_same_position() {
         let mut doc = make_doc(&["a", "b", "c"]);
-        let mut state = ScreenState::new(&mut doc, 80, 3);
+        let mut state = ScreenState::new(&mut doc, 80, 4);
         let changed = state.jump_to(&mut doc, 0);
         assert!(!changed);
     }
@@ -608,14 +626,14 @@ mod tests {
     #[test]
     fn fewer_lines_than_height() {
         let mut doc = make_doc(&["a", "b"]);
-        let state = ScreenState::new(&mut doc, 80, 5);
+        let state = ScreenState::new(&mut doc, 80, 6);
         assert_eq!(state.rows().len(), 2);
     }
 
     #[test]
     fn jump_to_end() {
         let mut doc = make_doc(&["a", "b", "c", "d", "e"]);
-        let mut state = ScreenState::new(&mut doc, 80, 3);
+        let mut state = ScreenState::new(&mut doc, 80, 4);
         let changed = state.jump_to_end(&mut doc);
 
         assert!(changed);
@@ -642,7 +660,7 @@ mod tests {
     fn jump_to_end_with_wrap() {
         // Last line "abcdefgh" wraps to 2 rows at width 5
         let mut doc = make_doc(&["a", "b", "abcdefgh"]);
-        let mut state = ScreenState::new(&mut doc, 5, 3);
+        let mut state = ScreenState::new(&mut doc, 5, 4);
         let changed = state.jump_to_end(&mut doc);
 
         assert!(changed);
@@ -668,7 +686,7 @@ mod tests {
     #[test]
     fn jump_to_end_fewer_lines_than_height() {
         let mut doc = make_doc(&["a", "b"]);
-        let mut state = ScreenState::new(&mut doc, 80, 5);
+        let mut state = ScreenState::new(&mut doc, 80, 6);
         let changed = state.jump_to_end(&mut doc);
         // Already showing everything, no change
         assert!(!changed);
