@@ -30,11 +30,6 @@ impl LineEditor {
     pub fn input(&self) -> String {
         self.input.iter().collect()
     }
-
-    /// Return the cursor position (character offset).
-    pub fn cursor_position(&self) -> usize {
-        self.cursor
-    }
 }
 
 #[cfg(test)]
@@ -48,11 +43,11 @@ mod tests {
         editor.insert('b');
         editor.insert('c');
         assert_eq!(editor.input(), "abc");
-        assert_eq!(editor.cursor_position(), 3);
+        assert_eq!(editor.cursor, 3);
 
         editor.backspace();
         assert_eq!(editor.input(), "ab");
-        assert_eq!(editor.cursor_position(), 2);
+        assert_eq!(editor.cursor, 2);
     }
 
     #[test]
@@ -60,6 +55,6 @@ mod tests {
         let mut editor = LineEditor::new();
         editor.backspace();
         assert_eq!(editor.input(), "");
-        assert_eq!(editor.cursor_position(), 0);
+        assert_eq!(editor.cursor, 0);
     }
 }
