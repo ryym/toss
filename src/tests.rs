@@ -9,6 +9,7 @@ mod scroll_up_down;
 mod scroll_up_reveals_wrap_start;
 mod scroll_with_soft_wrap;
 mod search_execution;
+mod search_highlight_wrapped_line;
 mod search_input;
 mod search_jump_near_end;
 mod status_line;

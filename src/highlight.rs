@@ -129,7 +129,7 @@ pub fn apply_highlight_to_range(
     let slice = &raw_text[raw_range.clone()];
 
     // Find positions relevant to this range and track if we start inside a highlight.
-    let mut i_pos_from = 0;
+    let mut i_pos_from = positions.positions.len();
     let mut active_style = None;
     for (i, pos) in positions.positions.iter().enumerate() {
         if raw_range.start <= pos.index {
