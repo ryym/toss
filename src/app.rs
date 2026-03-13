@@ -7,6 +7,7 @@ use crate::document::Document;
 use crate::screen::{self, Screen};
 use crate::screen_state::ScreenState;
 use crate::scroll::ScrollAnimation;
+use crate::status_line::StatusLine;
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
@@ -16,6 +17,7 @@ pub struct App<S> {
     screen: S,
     doc: Document,
     state: ScreenState,
+    status: StatusLine,
     width: usize,
     height: usize,
     animation: Option<ScrollAnimation>,
@@ -31,12 +33,14 @@ impl<S: Screen> App<S> {
         let (w, h) = screen.size()?;
         let width = w as usize;
         let height = h as usize;
-        let state = ScreenState::new(&mut doc, width, height);
+        let content_height = height.saturating_sub(1);
+        let state = ScreenState::new(&mut doc, width, content_height);
 
         Ok(Self {
             screen,
             doc,
             state,
+            status: StatusLine::new(),
             width,
             height,
             animation: None,
@@ -44,6 +48,10 @@ impl<S: Screen> App<S> {
             rendered_offset: 0.0,
             needs_full_redraw: true,
         })
+    }
+
+    fn content_height(&self) -> usize {
+        self.height.saturating_sub(1)
     }
 
     #[cfg(test)]
@@ -62,6 +70,8 @@ impl<S: Screen> App<S> {
             &mut self.screen,
             &mut self.doc,
             self.state.rows(),
+            &self.status,
+            self.height,
             self.width,
         )?;
         self.needs_full_redraw = false;
@@ -84,7 +94,8 @@ impl<S: Screen> App<S> {
                     Event::Resize(w, h) => {
                         self.width = w as usize;
                         self.height = h as usize;
-                        self.state.resize(&mut self.doc, self.width, self.height);
+                        let content_height = self.content_height();
+                        self.state.resize(&mut self.doc, self.width, content_height);
                         self.needs_full_redraw = true;
                     }
                     _ => {}
@@ -100,6 +111,8 @@ impl<S: Screen> App<S> {
                     &mut self.screen,
                     &mut self.doc,
                     self.state.rows(),
+                    &self.status,
+                    self.height,
                     self.width,
                 )?;
                 self.needs_full_redraw = false;
@@ -121,16 +134,16 @@ impl<S: Screen> App<S> {
                 self.scroll_immediate(-1)?;
             }
             KeyCode::Char('d') => {
-                self.start_scroll_animation(self.height as isize / 2);
+                self.start_scroll_animation(self.content_height() as isize / 2);
             }
             KeyCode::Char('u') => {
-                self.start_scroll_animation(-(self.height as isize / 2));
+                self.start_scroll_animation(-(self.content_height() as isize / 2));
             }
             KeyCode::Char('f') | KeyCode::Char(' ') => {
-                self.start_scroll_animation(self.height as isize);
+                self.start_scroll_animation(self.content_height() as isize);
             }
             KeyCode::Char('b') => {
-                self.start_scroll_animation(-(self.height as isize));
+                self.start_scroll_animation(-(self.content_height() as isize));
             }
             KeyCode::Char('g') => {
                 self.animation = None;
@@ -166,6 +179,8 @@ impl<S: Screen> App<S> {
                 &mut self.doc,
                 &plan,
                 &self.state,
+                &self.status,
+                self.height,
                 self.width,
             )?;
             self.rendered_offset += rows as f64;
@@ -210,6 +225,8 @@ impl<S: Screen> App<S> {
                     &mut self.doc,
                     &plan,
                     &self.state,
+                    &self.status,
+                    self.height,
                     self.width,
                 )?;
             }

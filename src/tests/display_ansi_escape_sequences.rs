@@ -13,7 +13,7 @@ fn run() {
     // Line 3 visible: "end" (3 cols)
     let out = run_test(TestCase {
         screen_width: 5,
-        screen_height: 4,
+        screen_height: 5,
         content: "\
 \x1b[1mHello\x1b[0m
 \x1b[31mabcde\x1b[0mfgh
@@ -27,6 +27,7 @@ end",
 {red}abcde{reset}>
 fgh
 end
+:
 -----
 [EVENT]:char:q
 "

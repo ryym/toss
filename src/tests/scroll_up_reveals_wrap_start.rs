@@ -7,7 +7,7 @@ use super::{TestCase, key, run_test};
 fn run() {
     let out = run_test(TestCase {
         screen_width: 5,
-        screen_height: 3,
+        screen_height: 4,
         content: "\
 xx
 abcdefgh
@@ -17,7 +17,7 @@ yy",
     // "abcdefgh" wraps to "abcde" + "fgh"
     // Initial: xx, abcde>, fgh
     // j: abcde>, fgh, yy
-    // j: fgh, yy, (empty) - can't scroll
+    // j: can't scroll (yy is last)
     // k from [abcde>, fgh, yy]: back to [xx, abcde>, fgh]
     assert_eq!(
         out,
@@ -25,17 +25,20 @@ yy",
 xx
 abcde>
 fgh
+:
 -----
 [EVENT]:char:j
 abcde>
 fgh
 yy
+:
 -----
 [EVENT]:char:j
 [EVENT]:char:k
 xx
 abcde>
 fgh
+:
 -----
 [EVENT]:char:q
 "

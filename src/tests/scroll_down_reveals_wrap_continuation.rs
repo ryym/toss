@@ -9,16 +9,16 @@ use super::{TestCase, key, run_test};
 fn run() {
     let out = run_test(TestCase {
         screen_width: 3,
-        screen_height: 4,
+        screen_height: 5,
         content: "\
 xx
 aaabbbccc
 yy",
         events: vec![key('j'), key('j'), key('q')],
     });
-    // Initial: xx, aaa>, bbb>, ccc (line 1 wraps to 3 rows)
+    // Initial: xx, aaa>, bbb>, ccc
     // After j: aaa>, bbb>, ccc, yy
-    // After j: bbb>, ccc, yy, (empty) - but yy is last, can't scroll
+    // After j: can't scroll (yy is last)
     assert_eq!(
         out,
         "\
@@ -26,12 +26,14 @@ xx
 aaa>
 bbb>
 ccc
+:
 -----
 [EVENT]:char:j
 aaa>
 bbb>
 ccc
 yy
+:
 -----
 [EVENT]:char:j
 [EVENT]:char:q

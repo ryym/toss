@@ -10,6 +10,7 @@ use crossterm::{
 
 use crate::document::Document;
 use crate::screen_state::{Direction, ScreenRow, ScreenState, ScrollPlan};
+use crate::status_line::StatusLine;
 
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {
@@ -137,15 +138,28 @@ fn draw_rows_grouped<S: Screen>(
     Ok(())
 }
 
+/// Draw the status line at the given screen row.
+fn draw_status_line<S: Screen>(
+    screen: &mut S,
+    status: &StatusLine,
+    screen_y: u16,
+) -> io::Result<()> {
+    screen.clear_row(screen_y)?;
+    screen.write_at(screen_y, status.render())
+}
+
 /// Render a full page (used on initial draw and resize).
 pub fn draw_full_page<S: Screen>(
     screen: &mut S,
     doc: &mut Document,
     rows: &[ScreenRow],
+    status: &StatusLine,
+    height: usize,
     width: usize,
 ) -> io::Result<()> {
     screen.clear_all()?;
     draw_rows_grouped(screen, doc, rows, 0, rows.len(), width)?;
+    draw_status_line(screen, status, (height - 1) as u16)?;
     screen.flush()
 }
 
@@ -159,6 +173,8 @@ pub fn apply_scroll<S: Screen>(
     doc: &mut Document,
     plan: &ScrollPlan,
     state: &ScreenState,
+    status: &StatusLine,
+    height: usize,
     width: usize,
 ) -> io::Result<()> {
     if plan.terminal_scroll == 0 {
@@ -168,24 +184,24 @@ pub fn apply_scroll<S: Screen>(
     screen.scroll_terminal(plan)?;
 
     let rows = state.rows();
-    let height = rows.len();
+    let content_height = rows.len();
     let n_new = plan.new_rows.len();
 
     let (draw_from, draw_to) = match plan.direction {
         Direction::Down => {
-            let new_start = height - n_new;
+            let new_start = content_height - n_new;
             // Extend backwards: include existing rows of the same line
             let mut from = new_start;
             while from > 0 && rows[from - 1].line_index == rows[new_start].line_index {
                 from -= 1;
             }
-            (from, height)
+            (from, content_height)
         }
         Direction::Up => {
             let new_end = n_new;
             // Extend forwards: include existing rows of the same line
             let mut to = new_end;
-            while to < height && rows[to].line_index == rows[new_end - 1].line_index {
+            while to < content_height && rows[to].line_index == rows[new_end - 1].line_index {
                 to += 1;
             }
             (0, to)
@@ -193,5 +209,6 @@ pub fn apply_scroll<S: Screen>(
     };
 
     draw_rows_grouped(screen, doc, rows, draw_from, draw_to, width)?;
+    draw_status_line(screen, status, (height - 1) as u16)?;
     screen.flush()
 }

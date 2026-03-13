@@ -6,7 +6,7 @@ use super::{TestCase, key, run_test};
 fn run() {
     let out = run_test(TestCase {
         screen_width: 10,
-        screen_height: 3,
+        screen_height: 4,
         content: "\
 line 1
 line 2
@@ -24,16 +24,19 @@ line 8",
 line 1
 line 2
 line 3
+:
 -----
 [EVENT]:char:G
 line 6
 line 7
 line 8
+:
 -----
 [EVENT]:char:g
 line 1
 line 2
 line 3
+:
 -----
 [EVENT]:char:q
 "

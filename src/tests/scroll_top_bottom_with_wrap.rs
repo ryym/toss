@@ -6,7 +6,7 @@ use super::{TestCase, key, run_test};
 fn run() {
     let out = run_test(TestCase {
         screen_width: 5,
-        screen_height: 3,
+        screen_height: 4,
         content: "\
 line1
 line2
@@ -15,7 +15,7 @@ abcdefgh",
     });
     // "abcdefgh" wraps to "abcde" + "fgh"
     // Initial: line1, line2, abcde (fgh off-screen, no soft wrap)
-    // G: line2, abcde>, fgh (both visible, soft wrapped)
+    // G: line2, abcde>, fgh
     // g: line1, line2, abcde (fgh off-screen again)
     assert_eq!(
         out,
@@ -23,16 +23,19 @@ abcdefgh",
 line1
 line2
 abcde
+:
 -----
 [EVENT]:char:G
 line2
 abcde>
 fgh
+:
 -----
 [EVENT]:char:g
 line1
 line2
 abcde
+:
 -----
 [EVENT]:char:q
 "

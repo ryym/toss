@@ -10,6 +10,7 @@ mod mock_screen;
 mod screen;
 mod screen_state;
 mod scroll;
+mod status_line;
 
 #[cfg(test)]
 mod tests;

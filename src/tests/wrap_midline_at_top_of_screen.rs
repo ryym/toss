@@ -9,7 +9,7 @@ use super::{TestCase, key, run_test};
 fn run() {
     let out = run_test(TestCase {
         screen_width: 5,
-        screen_height: 3,
+        screen_height: 4,
         content: "\
 abcdefghijk
 end",
@@ -25,11 +25,13 @@ end",
 abcde>
 fghij>
 k
+:
 -----
 [EVENT]:char:j
 fghij>
 k
 end
+:
 -----
 [EVENT]:char:q
 "
