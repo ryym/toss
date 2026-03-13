@@ -65,6 +65,7 @@ impl Line {
     }
 
     /// Returns the original raw text including ANSI escape sequences.
+    #[cfg(test)]
     pub fn text(&self) -> &str {
         &self.raw
     }
