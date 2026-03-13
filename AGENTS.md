@@ -21,6 +21,7 @@ See dev/adr/001-redesign-architecture.md for the motivation.
 
 ## Development
 
+- Follow `dev/docs/conventions/rust.md` when writing Rust code.
 - Follow `dev/docs/conventions/git.md` when using Git.
 
 ### Common Commands

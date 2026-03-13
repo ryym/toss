@@ -1,4 +1,4 @@
-# Git Usage
+# Git Conventions
 
 - Commit only if Git pre-commit check passes which runs linters, formatters, etc (see `lefthook.yml` for details).
 - Commit changes in focused chunks per intention. Avoid large commits that mix multiple concerns.
