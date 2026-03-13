@@ -27,11 +27,11 @@ pub struct App<S> {
 }
 
 impl<S: Screen> App<S> {
-    pub fn new(screen: S, doc: Document) -> io::Result<Self> {
+    pub fn new(screen: S, mut doc: Document) -> io::Result<Self> {
         let (w, h) = screen.size()?;
         let width = w as usize;
         let height = h as usize;
-        let state = ScreenState::new(&doc, width, height);
+        let state = ScreenState::new(&mut doc, width, height);
 
         Ok(Self {
             screen,
@@ -58,7 +58,12 @@ impl<S: Screen> App<S> {
 
     pub fn run(&mut self) -> io::Result<()> {
         // Initial draw
-        screen::draw_full_page(&mut self.screen, &self.doc, self.state.rows(), self.width)?;
+        screen::draw_full_page(
+            &mut self.screen,
+            &mut self.doc,
+            self.state.rows(),
+            self.width,
+        )?;
         self.needs_full_redraw = false;
 
         loop {
@@ -79,7 +84,7 @@ impl<S: Screen> App<S> {
                     Event::Resize(w, h) => {
                         self.width = w as usize;
                         self.height = h as usize;
-                        self.state.resize(&self.doc, self.width, self.height);
+                        self.state.resize(&mut self.doc, self.width, self.height);
                         self.needs_full_redraw = true;
                     }
                     _ => {}
@@ -91,7 +96,12 @@ impl<S: Screen> App<S> {
 
             // 3. Render if needed
             if self.needs_full_redraw {
-                screen::draw_full_page(&mut self.screen, &self.doc, self.state.rows(), self.width)?;
+                screen::draw_full_page(
+                    &mut self.screen,
+                    &mut self.doc,
+                    self.state.rows(),
+                    self.width,
+                )?;
                 self.needs_full_redraw = false;
             }
         }
@@ -124,14 +134,14 @@ impl<S: Screen> App<S> {
             }
             KeyCode::Char('g') => {
                 self.animation = None;
-                if self.state.jump_to(&self.doc, 0) {
+                if self.state.jump_to(&mut self.doc, 0) {
                     self.rendered_offset = 0.0;
                     self.needs_full_redraw = true;
                 }
             }
             KeyCode::Char('G') => {
                 self.animation = None;
-                if self.state.jump_to_end(&self.doc) {
+                if self.state.jump_to_end(&mut self.doc) {
                     self.needs_full_redraw = true;
                 }
             }
@@ -145,13 +155,19 @@ impl<S: Screen> App<S> {
         self.animation = None;
 
         let plan = if rows > 0 {
-            self.state.scroll_down(rows as usize, &self.doc)
+            self.state.scroll_down(rows as usize, &mut self.doc)
         } else {
-            self.state.scroll_up((-rows) as usize, &self.doc)
+            self.state.scroll_up((-rows) as usize, &mut self.doc)
         };
 
         if plan.terminal_scroll > 0 {
-            screen::apply_scroll(&mut self.screen, &self.doc, &plan, &self.state, self.width)?;
+            screen::apply_scroll(
+                &mut self.screen,
+                &mut self.doc,
+                &plan,
+                &self.state,
+                self.width,
+            )?;
             self.rendered_offset += rows as f64;
         }
         Ok(())
@@ -183,13 +199,19 @@ impl<S: Screen> App<S> {
 
         if delta != 0 {
             let plan = if delta > 0 {
-                self.state.scroll_down(delta as usize, &self.doc)
+                self.state.scroll_down(delta as usize, &mut self.doc)
             } else {
-                self.state.scroll_up((-delta) as usize, &self.doc)
+                self.state.scroll_up((-delta) as usize, &mut self.doc)
             };
 
             if plan.terminal_scroll > 0 {
-                screen::apply_scroll(&mut self.screen, &self.doc, &plan, &self.state, self.width)?;
+                screen::apply_scroll(
+                    &mut self.screen,
+                    &mut self.doc,
+                    &plan,
+                    &self.state,
+                    self.width,
+                )?;
             }
 
             self.rendered_offset = current_row as f64;

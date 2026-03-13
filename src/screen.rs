@@ -109,7 +109,7 @@ impl Screen for TermScreen {
 /// terminal treats line-internal wraps as soft wraps.
 fn draw_rows_grouped<S: Screen>(
     screen: &mut S,
-    doc: &Document,
+    doc: &mut Document,
     all_rows: &[ScreenRow],
     from: usize,
     to: usize,
@@ -140,7 +140,7 @@ fn draw_rows_grouped<S: Screen>(
 /// Render a full page (used on initial draw and resize).
 pub fn draw_full_page<S: Screen>(
     screen: &mut S,
-    doc: &Document,
+    doc: &mut Document,
     rows: &[ScreenRow],
     width: usize,
 ) -> io::Result<()> {
@@ -156,7 +156,7 @@ pub fn draw_full_page<S: Screen>(
 /// range is then redrawn with grouped continuous writes to maintain soft wraps.
 pub fn apply_scroll<S: Screen>(
     screen: &mut S,
-    doc: &Document,
+    doc: &mut Document,
     plan: &ScrollPlan,
     state: &ScreenState,
     width: usize,
