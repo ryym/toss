@@ -9,7 +9,10 @@ use crate::screen::{self, Screen, SearchHighlight};
 
 /// Build a SearchHighlight from an optional search state.
 fn search_highlight(search: &Option<SearchState>) -> Option<SearchHighlight<'_>> {
-    search.as_ref().map(|s| SearchHighlight { query: &s.query })
+    search.as_ref().map(|s| SearchHighlight {
+        query: &s.query,
+        current_line: s.current_line,
+    })
 }
 use crate::screen_state::ScreenState;
 use crate::scroll::ScrollAnimation;

@@ -5,9 +5,30 @@
 /// preserving existing styling.
 use std::ops::Range;
 
-/// Escape sequences for reverse video (highlight on/off).
-const REVERSE_ON: &str = "\x1b[7m";
-const REVERSE_OFF: &str = "\x1b[27m";
+/// Highlight style for search matches.
+#[derive(Debug, Clone, Copy)]
+pub enum HighlightStyle {
+    /// Reverse video — used for the current match.
+    Reverse,
+    /// Dim + reverse video — used for non-current matches.
+    DimReverse,
+}
+
+impl HighlightStyle {
+    fn on_seq(self) -> &'static str {
+        match self {
+            HighlightStyle::Reverse => "\x1b[7m",
+            HighlightStyle::DimReverse => "\x1b[2m\x1b[7m",
+        }
+    }
+
+    fn off_seq(self) -> &'static str {
+        match self {
+            HighlightStyle::Reverse => "\x1b[27m",
+            HighlightStyle::DimReverse => "\x1b[27m\x1b[22m",
+        }
+    }
+}
 
 /// Positions in raw text where highlight styling should be injected.
 #[derive(Debug)]
@@ -95,6 +116,7 @@ pub fn apply_highlight_to_range(
     raw_text: &str,
     raw_range: Range<usize>,
     positions: &HighlightPositions,
+    style: HighlightStyle,
 ) -> String {
     let slice = &raw_text[raw_range.clone()];
 
@@ -112,7 +134,7 @@ pub fn apply_highlight_to_range(
     let mut result = String::with_capacity(slice.len() + 32);
 
     if range_start_in_highlight {
-        result.push_str(REVERSE_ON);
+        result.push_str(style.on_seq());
     }
 
     let mut i_prev = raw_range.start;
@@ -126,11 +148,11 @@ pub fn apply_highlight_to_range(
         i_prev = pos.index;
         match pos.kind {
             HighlightPosKind::Start | HighlightPosKind::InnerControlEnd => {
-                result.push_str(REVERSE_ON);
+                result.push_str(style.on_seq());
                 range_end_in_highlight = true;
             }
             HighlightPosKind::End => {
-                result.push_str(REVERSE_OFF);
+                result.push_str(style.off_seq());
                 range_end_in_highlight = false;
             }
         }
@@ -139,7 +161,7 @@ pub fn apply_highlight_to_range(
     result.push_str(&raw_text[i_prev..raw_range.end]);
 
     if range_end_in_highlight {
-        result.push_str(REVERSE_OFF);
+        result.push_str(style.off_seq());
     }
 
     result
@@ -155,9 +177,14 @@ mod tests {
         build_highlight_positions(ranges, line.plain_to_raw(), line.raw().len())
     }
 
-    /// Helper to apply highlight to the full raw text.
+    /// Helper to apply highlight to the full raw text (using Reverse style).
     fn apply_full(line: &Line, positions: &HighlightPositions) -> String {
-        apply_highlight_to_range(line.raw(), 0..line.raw().len(), positions)
+        apply_highlight_to_range(
+            line.raw(),
+            0..line.raw().len(),
+            positions,
+            HighlightStyle::Reverse,
+        )
     }
 
     #[test]
@@ -225,11 +252,11 @@ mod tests {
         let positions = build_from_line(&line, &[(4, 6)]);
 
         // Row 0: raw 0..5 -> "abcde" with "e" highlighted
-        let r0 = apply_highlight_to_range(line.raw(), 0..5, &positions);
+        let r0 = apply_highlight_to_range(line.raw(), 0..5, &positions, HighlightStyle::Reverse);
         assert_eq!(r0, "abcd\x1b[7me\x1b[27m");
 
         // Row 1: raw 5..10 -> "fghij" with "f" highlighted
-        let r1 = apply_highlight_to_range(line.raw(), 5..10, &positions);
+        let r1 = apply_highlight_to_range(line.raw(), 5..10, &positions, HighlightStyle::Reverse);
         assert_eq!(r1, "\x1b[7mf\x1b[27mghij");
     }
 }

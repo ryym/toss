@@ -10,7 +10,7 @@ use crossterm::{
 use regex::Regex;
 
 use crate::document::Document;
-use crate::highlight;
+use crate::highlight::{self, HighlightStyle};
 use crate::screen_state::{Direction, ScreenRow, ScreenState, ScrollPlan};
 use crate::status_line::StatusLine;
 
@@ -110,6 +110,9 @@ impl Screen for TermScreen {
 /// Search context for highlighting matches during rendering.
 pub struct SearchHighlight<'a> {
     pub query: &'a Regex,
+    /// Line index of the current match (highlighted with reverse video).
+    /// Other matches use underline.
+    pub current_line: Option<usize>,
 }
 
 /// Draw a range of screen rows, grouping consecutive rows from the same
@@ -154,10 +157,20 @@ fn draw_rows_grouped<S: Screen>(
                             line.plain_to_raw(),
                             line.raw().len(),
                         );
+                        let style = if sh.current_line == Some(line_idx) {
+                            HighlightStyle::Reverse
+                        } else {
+                            HighlightStyle::DimReverse
+                        };
                         (group_start..i)
                             .map(|j| {
                                 let range = line.wrap_row_range(width, all_rows[j].wrap_index);
-                                highlight::apply_highlight_to_range(line.raw(), range, &positions)
+                                highlight::apply_highlight_to_range(
+                                    line.raw(),
+                                    range,
+                                    &positions,
+                                    style,
+                                )
                             })
                             .collect::<String>()
                     }

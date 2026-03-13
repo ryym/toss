@@ -104,6 +104,7 @@ line 3
 }
 
 // n key: jump to next match in search direction.
+// Current match uses reverse, other matches use dim reverse.
 #[test]
 fn next_match_navigation() {
     let screen = run_test_screen(TestCase {
@@ -129,7 +130,7 @@ foo 3",
         "\
 {reverse}foo{/reverse} 2
 baz
-{reverse}foo{/reverse} 3
+{dim}{reverse}foo{/reverse}{/dim} 3
 :
 "
     );
@@ -159,7 +160,7 @@ foo 3",
     assert_eq!(
         screen.last_snapshot(),
         "\
-{reverse}foo{/reverse} 2
+{dim}{reverse}foo{/reverse}{/dim} 2
 baz
 {reverse}foo{/reverse} 3
 :
