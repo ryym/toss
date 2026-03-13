@@ -33,7 +33,12 @@ fn open_and_quit() {
     let out = run_test(TestCase {
         screen_width: 10,
         screen_height: 3,
-        content: "line 1\nline 2\nline 3\nline 4\nline 5",
+        content: "\
+line 1
+line 2
+line 3
+line 4
+line 5",
         events: vec![key('q')],
     });
     assert_eq!(
@@ -53,7 +58,12 @@ fn navigate_up_down() {
     let out = run_test(TestCase {
         screen_width: 10,
         screen_height: 3,
-        content: "line 1\nline 2\nline 3\nline 4\nline 5",
+        content: "\
+line 1
+line 2
+line 3
+line 4
+line 5",
         events: vec![key('j'), key('j'), key('k'), key('q')],
     });
     assert_eq!(
@@ -88,7 +98,15 @@ fn navigate_top_bottom() {
     let out = run_test(TestCase {
         screen_width: 10,
         screen_height: 3,
-        content: "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8",
+        content: "\
+line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8",
         events: vec![key('G'), key('g'), key('q')],
     });
     assert_eq!(
@@ -118,7 +136,10 @@ fn cannot_scroll_past_boundaries() {
     let out = run_test(TestCase {
         screen_width: 10,
         screen_height: 3,
-        content: "line 1\nline 2\nline 3",
+        content: "\
+line 1
+line 2
+line 3",
         events: vec![key('k'), key('j'), key('q')],
     });
     assert_eq!(
@@ -140,7 +161,15 @@ fn smooth_scroll_half_page() {
     let out = run_test(TestCase {
         screen_width: 10,
         screen_height: 4,
-        content: "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8",
+        content: "\
+line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8",
         events: vec![key('d'), key('u'), key('q')],
     });
     assert_eq!(
@@ -175,7 +204,10 @@ fn scroll_with_soft_wrap() {
     let out = run_test(TestCase {
         screen_width: 5,
         screen_height: 3,
-        content: "short\nabcdefgh\nend",
+        content: "\
+short
+abcdefgh
+end",
         events: vec![key('j'), key('j'), key('k'), key('q')],
     });
     assert_eq!(
@@ -209,7 +241,10 @@ fn scroll_down_reveals_wrap_continuation() {
     let out = run_test(TestCase {
         screen_width: 3,
         screen_height: 4,
-        content: "xx\naaabbbccc\nyy",
+        content: "\
+xx
+aaabbbccc
+yy",
         events: vec![key('j'), key('j'), key('q')],
     });
     // Initial: xx, aaa>, bbb>, ccc (line 1 wraps to 3 rows)
@@ -241,7 +276,10 @@ fn scroll_up_reveals_wrap_start() {
     let out = run_test(TestCase {
         screen_width: 5,
         screen_height: 3,
-        content: "xx\nabcdefgh\nyy",
+        content: "\
+xx
+abcdefgh
+yy",
         events: vec![key('j'), key('j'), key('k'), key('q')],
     });
     // "abcdefgh" wraps to "abcde" + "fgh"
@@ -280,7 +318,9 @@ fn wrap_midline_at_top_of_screen() {
     let out = run_test(TestCase {
         screen_width: 5,
         screen_height: 3,
-        content: "abcdefghijk\nend",
+        content: "\
+abcdefghijk
+end",
         events: vec![key('j'), key('q')],
     });
     // Initial: abcde>, fghij>, k
@@ -309,7 +349,10 @@ fn jump_to_end_with_wrap() {
     let out = run_test(TestCase {
         screen_width: 5,
         screen_height: 3,
-        content: "line1\nline2\nabcdefgh",
+        content: "\
+line1
+line2
+abcdefgh",
         events: vec![key('G'), key('g'), key('q')],
     });
     // "abcdefgh" wraps to "abcde" + "fgh"
