@@ -258,7 +258,8 @@ line 4
     );
 }
 
-// Multiple matches on the same line are all highlighted.
+// Multiple matches on the same line: the current match (first) uses reverse,
+// other matches on the same line use dim reverse.
 #[test]
 fn multiple_matches_same_line() {
     let screen = run_test_screen(TestCase {
@@ -274,7 +275,7 @@ line 4",
     assert_eq!(
         screen.last_snapshot(),
         "\
-{reverse}foo{/reverse} bar {reverse}foo{/reverse} baz {reverse}foo{/reverse}
+{reverse}foo{/reverse} bar {dim}{reverse}foo{/reverse}{/dim} baz {dim}{reverse}foo{/reverse}{/dim}
 line 2
 line 3
 :

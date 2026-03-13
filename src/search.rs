@@ -28,12 +28,19 @@ impl SearchDirection {
     }
 }
 
+/// Position of a specific match: line index and match index within that line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MatchPosition {
+    pub line: usize,
+    pub match_index: usize,
+}
+
 /// Active search state, preserved across search submissions.
 pub struct SearchState {
     pub query: Regex,
     pub direction: SearchDirection,
-    /// Line index of the current match position.
-    pub current_line: Option<usize>,
+    /// Current match position (line and which match within the line).
+    pub current: Option<MatchPosition>,
 }
 
 /// Find the next match from `from_line` in the given direction.
@@ -43,7 +50,7 @@ pub fn find_next_match(
     query: &Regex,
     from_line: usize,
     direction: SearchDirection,
-) -> Option<usize> {
+) -> Option<MatchPosition> {
     let line_count = doc.line_count();
     if line_count == 0 {
         return None;
@@ -53,26 +60,26 @@ pub fn find_next_match(
         SearchDirection::Forward => {
             // Search from_line..end, then 0..from_line (wrap around)
             for i in from_line..line_count {
-                if has_match(doc, query, i) {
-                    return Some(i);
+                if let Some(pos) = first_match(doc, query, i, direction) {
+                    return Some(pos);
                 }
             }
             for i in 0..from_line {
-                if has_match(doc, query, i) {
-                    return Some(i);
+                if let Some(pos) = first_match(doc, query, i, direction) {
+                    return Some(pos);
                 }
             }
         }
         SearchDirection::Backward => {
             // Search from_line..0 (reverse), then end..from_line (reverse, wrap around)
             for i in (0..=from_line).rev() {
-                if has_match(doc, query, i) {
-                    return Some(i);
+                if let Some(pos) = first_match(doc, query, i, direction) {
+                    return Some(pos);
                 }
             }
             for i in (from_line + 1..line_count).rev() {
-                if has_match(doc, query, i) {
-                    return Some(i);
+                if let Some(pos) = first_match(doc, query, i, direction) {
+                    return Some(pos);
                 }
             }
         }
@@ -81,11 +88,51 @@ pub fn find_next_match(
     None
 }
 
-/// Check if a line has any match for the query.
-fn has_match(doc: &mut Document, query: &Regex, line_index: usize) -> bool {
-    doc.line(line_index)
-        .map(|line| query.is_match(line.plain()))
-        .unwrap_or(false)
+/// Find the next match within the same line after `match_index`.
+/// Returns None if there are no more matches on this line in the given direction.
+pub fn find_next_match_in_line(
+    doc: &mut Document,
+    query: &Regex,
+    current: MatchPosition,
+    direction: SearchDirection,
+) -> Option<usize> {
+    let line = doc.line(current.line)?;
+    let match_count = line.find_matches(query).len();
+    match direction {
+        SearchDirection::Forward => {
+            let next = current.match_index + 1;
+            if next < match_count { Some(next) } else { None }
+        }
+        SearchDirection::Backward => {
+            if current.match_index > 0 {
+                Some(current.match_index - 1)
+            } else {
+                None
+            }
+        }
+    }
+}
+
+/// Return the first match position on a line (first for forward, last for backward).
+fn first_match(
+    doc: &mut Document,
+    query: &Regex,
+    line_index: usize,
+    direction: SearchDirection,
+) -> Option<MatchPosition> {
+    let line = doc.line(line_index)?;
+    let match_count = line.find_matches(query).len();
+    if match_count == 0 {
+        return None;
+    }
+    let match_index = match direction {
+        SearchDirection::Forward => 0,
+        SearchDirection::Backward => match_count - 1,
+    };
+    Some(MatchPosition {
+        line: line_index,
+        match_index,
+    })
 }
 
 #[cfg(test)]
@@ -100,13 +147,17 @@ mod tests {
         Regex::new(&regex::escape(pattern)).unwrap()
     }
 
+    fn pos(line: usize, match_index: usize) -> Option<MatchPosition> {
+        Some(MatchPosition { line, match_index })
+    }
+
     #[test]
     fn forward_finds_first_match() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc", "bbb"]);
         let query = make_query("bbb");
         assert_eq!(
             find_next_match(&mut doc, &query, 0, SearchDirection::Forward),
-            Some(1)
+            pos(1, 0)
         );
     }
 
@@ -117,7 +168,7 @@ mod tests {
         // Starting from line 2, should wrap to line 0
         assert_eq!(
             find_next_match(&mut doc, &query, 2, SearchDirection::Forward),
-            Some(0)
+            pos(0, 0)
         );
     }
 
@@ -127,7 +178,7 @@ mod tests {
         let query = make_query("bbb");
         assert_eq!(
             find_next_match(&mut doc, &query, 3, SearchDirection::Backward),
-            Some(3)
+            pos(3, 0)
         );
     }
 
@@ -138,7 +189,7 @@ mod tests {
         // Starting from line 0, should wrap to line 2
         assert_eq!(
             find_next_match(&mut doc, &query, 0, SearchDirection::Backward),
-            Some(2)
+            pos(2, 0)
         );
     }
 
@@ -169,7 +220,7 @@ mod tests {
         // Start from line 2, forward: checks 2, then wraps to 0, 1 -> finds 1
         assert_eq!(
             find_next_match(&mut doc, &query, 2, SearchDirection::Forward),
-            Some(1)
+            pos(1, 0)
         );
     }
 }

@@ -42,15 +42,16 @@ struct HighlightPos {
     /// Byte position in the raw text.
     index: usize,
     kind: HighlightPosKind,
+    style: HighlightStyle,
 }
 
 #[derive(Debug)]
 enum HighlightPosKind {
-    /// Match start: turn reverse video on.
+    /// Match start: turn highlight on.
     Start,
-    /// After an escape sequence inside a match: re-apply reverse video.
+    /// After an escape sequence inside a match: re-apply highlight.
     InnerControlEnd,
-    /// Match end: turn reverse video off.
+    /// Match end: turn highlight off.
     End,
 }
 
@@ -60,22 +61,28 @@ enum HighlightPosKind {
 /// positions. Detects escape sequences within matches by checking for gaps in
 /// the mapping and inserts `InnerControlEnd` markers so highlighting is
 /// re-applied after each internal escape sequence.
+///
+/// `styles` must have the same length as `plain_ranges`, one style per match.
 pub fn build_highlight_positions(
     plain_ranges: &[(usize, usize)],
+    styles: &[HighlightStyle],
     plain_to_raw: &[usize],
     raw_len: usize,
 ) -> HighlightPositions {
     let mut positions = Vec::new();
 
-    for &(start, end) in plain_ranges {
+    for (match_idx, &(start, end)) in plain_ranges.iter().enumerate() {
         if start >= end {
             continue;
         }
+
+        let style = styles[match_idx];
 
         let i_raw = plain_to_raw[start];
         positions.push(HighlightPos {
             index: i_raw,
             kind: HighlightPosKind::Start,
+            style,
         });
 
         // Detect escape sequences within the match range by looking for gaps
@@ -88,6 +95,7 @@ pub fn build_highlight_positions(
                 positions.push(HighlightPos {
                     index: i_raw,
                     kind: HighlightPosKind::InnerControlEnd,
+                    style,
                 });
             }
             prev_i_p = i_p;
@@ -101,6 +109,7 @@ pub fn build_highlight_positions(
         positions.push(HighlightPos {
             index: end_raw,
             kind: HighlightPosKind::End,
+            style,
         });
     }
 
@@ -116,29 +125,30 @@ pub fn apply_highlight_to_range(
     raw_text: &str,
     raw_range: Range<usize>,
     positions: &HighlightPositions,
-    style: HighlightStyle,
 ) -> String {
     let slice = &raw_text[raw_range.clone()];
 
     // Find positions relevant to this range and track if we start inside a highlight.
     let mut i_pos_from = 0;
-    let mut range_start_in_highlight = false;
+    let mut active_style = None;
     for (i, pos) in positions.positions.iter().enumerate() {
         if raw_range.start <= pos.index {
             i_pos_from = i;
             break;
         }
-        range_start_in_highlight = !matches!(pos.kind, HighlightPosKind::End);
+        active_style = match pos.kind {
+            HighlightPosKind::End => None,
+            _ => Some(pos.style),
+        };
     }
 
     let mut result = String::with_capacity(slice.len() + 32);
 
-    if range_start_in_highlight {
+    if let Some(style) = active_style {
         result.push_str(style.on_seq());
     }
 
     let mut i_prev = raw_range.start;
-    let mut range_end_in_highlight = false;
 
     for pos in positions.positions.iter().skip(i_pos_from) {
         if raw_range.end <= pos.index {
@@ -148,19 +158,19 @@ pub fn apply_highlight_to_range(
         i_prev = pos.index;
         match pos.kind {
             HighlightPosKind::Start | HighlightPosKind::InnerControlEnd => {
-                result.push_str(style.on_seq());
-                range_end_in_highlight = true;
+                result.push_str(pos.style.on_seq());
+                active_style = Some(pos.style);
             }
             HighlightPosKind::End => {
-                result.push_str(style.off_seq());
-                range_end_in_highlight = false;
+                result.push_str(pos.style.off_seq());
+                active_style = None;
             }
         }
     }
 
     result.push_str(&raw_text[i_prev..raw_range.end]);
 
-    if range_end_in_highlight {
+    if let Some(style) = active_style {
         result.push_str(style.off_seq());
     }
 
@@ -172,19 +182,15 @@ mod tests {
     use super::*;
     use crate::line::Line;
 
-    /// Helper to build positions from a line and plain-text ranges.
+    /// Helper to build positions from a line and plain-text ranges (all Reverse).
     fn build_from_line(line: &Line, ranges: &[(usize, usize)]) -> HighlightPositions {
-        build_highlight_positions(ranges, line.plain_to_raw(), line.raw().len())
+        let styles = vec![HighlightStyle::Reverse; ranges.len()];
+        build_highlight_positions(ranges, &styles, line.plain_to_raw(), line.raw().len())
     }
 
-    /// Helper to apply highlight to the full raw text (using Reverse style).
+    /// Helper to apply highlight to the full raw text.
     fn apply_full(line: &Line, positions: &HighlightPositions) -> String {
-        apply_highlight_to_range(
-            line.raw(),
-            0..line.raw().len(),
-            positions,
-            HighlightStyle::Reverse,
-        )
+        apply_highlight_to_range(line.raw(), 0..line.raw().len(), positions)
     }
 
     #[test]
@@ -252,11 +258,11 @@ mod tests {
         let positions = build_from_line(&line, &[(4, 6)]);
 
         // Row 0: raw 0..5 -> "abcde" with "e" highlighted
-        let r0 = apply_highlight_to_range(line.raw(), 0..5, &positions, HighlightStyle::Reverse);
+        let r0 = apply_highlight_to_range(line.raw(), 0..5, &positions);
         assert_eq!(r0, "abcd\x1b[7me\x1b[27m");
 
         // Row 1: raw 5..10 -> "fghij" with "f" highlighted
-        let r1 = apply_highlight_to_range(line.raw(), 5..10, &positions, HighlightStyle::Reverse);
+        let r1 = apply_highlight_to_range(line.raw(), 5..10, &positions);
         assert_eq!(r1, "\x1b[7mf\x1b[27mghij");
     }
 }

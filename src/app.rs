@@ -11,12 +11,12 @@ use crate::screen::{self, Screen, SearchHighlight};
 fn search_highlight(search: &Option<SearchState>) -> Option<SearchHighlight<'_>> {
     search.as_ref().map(|s| SearchHighlight {
         query: &s.query,
-        current_line: s.current_line,
+        current: s.current,
     })
 }
 use crate::screen_state::ScreenState;
 use crate::scroll::ScrollAnimation;
-use crate::search::{SearchDirection, SearchState};
+use crate::search::{MatchPosition, SearchDirection, SearchState};
 use crate::status_line::StatusLine;
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
@@ -268,14 +268,14 @@ impl<S: Screen> App<S> {
                 let re = regex::Regex::new(&regex::escape(&input)).unwrap();
                 let from = self.state.rows().first().map(|r| r.line_index).unwrap_or(0);
                 let matched = crate::search::find_next_match(&mut self.doc, &re, from, direction);
-                if let Some(line_idx) = matched {
-                    self.state.jump_to(&mut self.doc, line_idx);
+                if let Some(ref pos) = matched {
+                    self.state.jump_to(&mut self.doc, pos.line);
                     self.needs_full_redraw = true;
                 }
                 self.search = Some(SearchState {
                     query: re,
                     direction,
-                    current_line: matched,
+                    current: matched,
                 });
             }
         }
@@ -294,19 +294,36 @@ impl<S: Screen> App<S> {
             search.direction
         };
 
-        // Start from current match + 1 (or -1 for backward) to avoid re-finding the same line
-        let from = match search.current_line {
-            Some(line) => match direction {
+        // Try to move to the next match within the same line first.
+        if let Some(current) = search.current {
+            let query = search.query.clone();
+            if let Some(next_mi) =
+                crate::search::find_next_match_in_line(&mut self.doc, &query, current, direction)
+            {
+                if let Some(ref mut search) = self.search {
+                    search.current = Some(MatchPosition {
+                        line: current.line,
+                        match_index: next_mi,
+                    });
+                }
+                self.needs_full_redraw = true;
+                return;
+            }
+        }
+
+        // No more matches on the current line; search the next line.
+        let from = match search.current {
+            Some(pos) => match direction {
                 SearchDirection::Forward => {
-                    if line + 1 < self.doc.line_count() {
-                        line + 1
+                    if pos.line + 1 < self.doc.line_count() {
+                        pos.line + 1
                     } else {
                         0
                     }
                 }
                 SearchDirection::Backward => {
-                    if line > 0 {
-                        line - 1
+                    if pos.line > 0 {
+                        pos.line - 1
                     } else {
                         self.doc.line_count().saturating_sub(1)
                     }
@@ -317,12 +334,12 @@ impl<S: Screen> App<S> {
 
         let query = search.query.clone();
         let matched = crate::search::find_next_match(&mut self.doc, &query, from, direction);
-        if let Some(line_idx) = matched {
-            self.state.jump_to(&mut self.doc, line_idx);
+        if let Some(ref pos) = matched {
+            self.state.jump_to(&mut self.doc, pos.line);
             self.needs_full_redraw = true;
         }
         if let Some(ref mut search) = self.search {
-            search.current_line = matched;
+            search.current = matched;
         }
     }
 
