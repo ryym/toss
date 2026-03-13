@@ -1,6 +1,7 @@
 # Git Conventions
 
 - Commit only if Git pre-commit check passes which runs linters, formatters, etc (see `lefthook.yml` for details).
+  - Never use `-n` or `--no-verify` on commit. If your change breaks pre-commit check, fix code or tests and commit them together.
 - Commit changes in focused chunks per intention. Avoid large commits that mix multiple concerns.
 
 ## Commit message format
