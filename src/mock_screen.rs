@@ -34,6 +34,8 @@ pub struct MockScreen {
     events: Vec<Event>,
     event_index: usize,
     out: String,
+    /// Individual snapshots taken on each flush.
+    snapshots: Vec<String>,
 }
 
 impl MockScreen {
@@ -46,6 +48,7 @@ impl MockScreen {
             events: Vec::new(),
             event_index: 0,
             out: String::new(),
+            snapshots: Vec::new(),
         }
     }
 
@@ -72,14 +75,22 @@ impl MockScreen {
         }
     }
 
+    /// Returns the last snapshot taken on flush.
+    pub fn last_snapshot(&self) -> &str {
+        self.snapshots.last().map(|s| s.as_str()).unwrap_or("")
+    }
+
     fn snapshot(&mut self) {
+        let mut snap = String::new();
         for row in &self.grid {
-            self.out.push_str(&visualize_escapes(&row.text));
+            snap.push_str(&visualize_escapes(&row.text));
             if row.soft_wrapped {
-                self.out.push('>');
+                snap.push('>');
             }
-            self.out.push('\n');
+            snap.push('\n');
         }
+        self.snapshots.push(snap.clone());
+        self.out.push_str(&snap);
         self.out.push_str("-----\n");
     }
 }

@@ -33,11 +33,25 @@ pub struct TestCase {
 }
 
 pub fn run_test(tc: TestCase) -> String {
+    run_test_app(tc).out
+}
+
+/// Result of running a test case, providing access to full output and snapshots.
+pub struct TestResult {
+    pub out: String,
+    pub last_snapshot: String,
+}
+
+pub fn run_test_app(tc: TestCase) -> TestResult {
     let doc = Document::from_string(tc.content.to_string());
     let mut screen = MockScreen::new(tc.screen_width, tc.screen_height);
     screen.set_events(tc.events);
     let mut app = App::new(screen, doc).unwrap();
     app.set_scroll_duration(Duration::ZERO);
     app.run().unwrap();
-    app.into_screen().out().to_string()
+    let screen = app.into_screen();
+    TestResult {
+        out: screen.out().to_string(),
+        last_snapshot: screen.last_snapshot().to_string(),
+    }
 }
