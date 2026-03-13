@@ -1,6 +1,7 @@
 mod app;
 mod document;
 mod line;
+mod logger;
 #[cfg(test)]
 mod mock_screen;
 mod screen;
@@ -19,10 +20,20 @@ use document::Document;
 use screen::TermScreen;
 
 fn main() {
+    let _log_guard = match logger::setup_file_logger() {
+        Ok(guard) => guard,
+        Err(e) => {
+            eprintln!("Error setting up logger: {e}");
+            process::exit(1);
+        }
+    };
+
     let args: Vec<String> = std::env::args().skip(1).collect();
+    log::debug!("Args: {args:?}");
 
     let doc = if !args.is_empty() {
         let path = Path::new(&args[0]);
+        log::debug!("Read file: {}", path.display());
         match Document::from_file(path) {
             Ok(doc) => doc,
             Err(e) => {
@@ -31,6 +42,7 @@ fn main() {
             }
         }
     } else if !io::stdin().is_terminal() {
+        log::debug!("Read from stdin");
         match Document::from_reader(&mut io::stdin().lock()) {
             Ok(doc) => doc,
             Err(e) => {

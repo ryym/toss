@@ -197,6 +197,7 @@ name = "toss"
 version = "0.1.0"
 dependencies = [
  "crossterm",
+ "log",
  "pretty_assertions",
  "unicode-width",
 ]
