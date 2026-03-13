@@ -64,6 +64,11 @@ impl Line {
         }
     }
 
+    /// Returns the plain text without ANSI escape sequences.
+    pub fn plain(&self) -> &str {
+        &self.plain
+    }
+
     /// Returns the original raw text including ANSI escape sequences.
     #[cfg(test)]
     pub fn text(&self) -> &str {
