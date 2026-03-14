@@ -106,6 +106,7 @@ impl<S: Screen> App<S> {
                         }
                     }
                     Event::Resize(w, h) => {
+                        log::debug!("Resize: {w}x{h}");
                         self.state.resize(&mut self.doc, w as usize, h as usize);
                         self.needs_full_redraw = true;
                     }
@@ -142,6 +143,7 @@ impl<S: Screen> App<S> {
 
     /// Returns true if the app should quit.
     fn handle_key(&mut self, key: KeyEvent) -> io::Result<bool> {
+        log::debug!("Key: {key:?}");
         match self.mode {
             AppMode::View => self.handle_key_view(key),
             AppMode::Search { .. } => {
@@ -206,6 +208,7 @@ impl<S: Screen> App<S> {
     }
 
     fn enter_search_mode(&mut self, direction: SearchDirection) {
+        log::debug!("Enter search mode: {direction:?}");
         self.animation = None;
         self.status.set_content(direction.prompt().to_string());
         self.mode = AppMode::Search {
@@ -216,6 +219,7 @@ impl<S: Screen> App<S> {
     }
 
     fn exit_search_mode(&mut self) {
+        log::debug!("Exit search mode");
         self.mode = AppMode::View;
         self.status.set_content(":".to_string());
         self.needs_status_redraw = true;
@@ -265,9 +269,11 @@ impl<S: Screen> App<S> {
             let direction = *direction;
 
             if !input.is_empty() {
+                log::debug!("Search: query={input:?}, direction={direction:?}");
                 let re = regex::Regex::new(&regex::escape(&input)).unwrap();
                 let from = self.state.rows().first().map(|r| r.line_index).unwrap_or(0);
                 let matched = search::find_next_match(&mut self.doc, &re, from, direction);
+                log::debug!("Search result: {matched:?}");
                 if let Some(ref pos) = matched {
                     self.state.jump_to(&mut self.doc, pos.line);
                     self.needs_full_redraw = true;
@@ -285,6 +291,7 @@ impl<S: Screen> App<S> {
     /// Jump to next/previous match using the stored search state.
     fn jump_to_next_match(&mut self, reverse: bool) {
         let Some(ref search) = self.search else {
+            log::debug!("Jump to next match: no active search");
             return;
         };
 
@@ -294,12 +301,18 @@ impl<S: Screen> App<S> {
             search.direction
         };
 
+        log::debug!(
+            "Jump to next match: reverse={reverse}, direction={direction:?}, current={:?}",
+            search.current
+        );
+
         // Try to move to the next match within the same line first.
         if let Some(current) = search.current {
             let query = search.query.clone();
             if let Some(next_mi) =
                 search::find_next_match_in_line(&mut self.doc, &query, current, direction)
             {
+                log::debug!("Next match on same line: index={next_mi}");
                 if let Some(ref mut search) = self.search {
                     search.current = Some(MatchPosition {
                         line: current.line,
@@ -334,6 +347,7 @@ impl<S: Screen> App<S> {
 
         let query = search.query.clone();
         let matched = search::find_next_match(&mut self.doc, &query, from, direction);
+        log::debug!("Next match from line {from}: {matched:?}");
         if let Some(ref pos) = matched {
             self.state.jump_to(&mut self.doc, pos.line);
             self.needs_full_redraw = true;
@@ -369,6 +383,7 @@ impl<S: Screen> App<S> {
     }
 
     fn start_scroll_animation(&mut self, total_rows: isize) {
+        log::debug!("Start scroll animation: rows={total_rows}");
         let start = self.rendered_offset;
         let target = start + total_rows as f64;
         self.animation = Some(ScrollAnimation::new(start, target, self.scroll_duration));
