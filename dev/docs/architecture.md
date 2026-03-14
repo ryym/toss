@@ -38,22 +38,14 @@ Full screen redraws cause visible flicker. To avoid this, scrolling works increm
 
 Full redraws happen only on resize or mode transitions.
 
-## Line Representation: Plain/Raw Duality
+## ANSI-Aware Wrapping and Highlighting
 
-Lines coming from the source may contain ANSI escape sequences (colors, bold, etc.). These must be preserved in output but ignored for width calculation and search matching. Each `Line` therefore maintains two views:
+Source lines may contain ANSI escape sequences. The design principle is: **width calculation and search operate on escape-stripped plain text, while rendering preserves the original raw text.** `Line` maintains both views and a byte-level mapping between them (see `line.rs` for details).
 
-- **Raw text**: the original bytes including escapes, used for rendering
-- **Plain text**: escape-stripped text, used for width calculation, wrapping, and search
+This duality surfaces in two cross-cutting concerns:
 
-A **plain_to_raw mapping** (byte-level) connects the two: given a byte range in plain text, you can find the corresponding range in raw text. This mapping is the key to ANSI-aware wrapping and highlighting.
-
-### Wrapping
-
-Wrap positions are calculated on plain text (using Unicode display widths). The positions are then translated to raw byte offsets via the mapping. When rendering, wrapped rows from the same logical line are written as a single continuous string so that the terminal handles the line break as a soft wrap.
-
-### Search Highlighting
-
-Search matches are found on plain text. The match ranges are converted to raw text positions via the mapping. Reverse-video escape sequences are injected at those positions. When a match spans an existing escape sequence in the raw text, the highlight is split around it and re-applied after it.
+- **Wrapping**: Wrap positions are determined by display widths on plain text, then translated to raw byte offsets. ScreenState tracks which wrap segment of which line occupies each screen row. When rendering, wrapped rows from the same logical line are written as a single continuous string so the terminal handles line breaks as soft wraps.
+- **Search highlighting**: Matches are found on plain text, then the match ranges are mapped to raw text positions where escape sequences for highlight are injected.
 
 ## Mode System
 

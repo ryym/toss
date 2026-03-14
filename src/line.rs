@@ -1,3 +1,17 @@
+//! Line representation with ANSI-aware plain/raw duality.
+//!
+//! Source lines may contain ANSI escape sequences (colors, bold, etc.). These must
+//! be preserved in output but ignored for width calculation and search matching.
+//! Each `Line` therefore maintains two views:
+//!
+//! - **Raw text**: the original bytes including escapes, used for rendering.
+//! - **Plain text**: escape-stripped text, used for width calculation, wrapping, and search.
+//!
+//! A **plain_to_raw mapping** (byte-level) connects the two: given a byte position in
+//! plain text, you can look up the corresponding position in raw text. This mapping is
+//! how wrapping and search highlighting work correctly in the presence of escape sequences.
+//! See the `plain_to_raw` field documentation for a concrete example.
+
 use std::ops::Range;
 
 use regex::Regex;
@@ -6,9 +20,6 @@ use unicode_width::UnicodeWidthChar;
 use crate::ansi;
 
 /// A single line of text from the document.
-/// It can contain ANSI escape sequences. Wrapping and display-width calculations
-/// are based on the plain (escape-stripped) text while the raw text is preserved
-/// for rendering.
 #[derive(Debug, Clone)]
 pub struct Line {
     /// Original text including ANSI escape sequences.
