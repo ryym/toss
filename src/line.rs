@@ -72,11 +72,6 @@ impl Line {
         &self.raw
     }
 
-    /// Returns the plain text without ANSI escape sequences.
-    pub fn plain(&self) -> &str {
-        &self.plain
-    }
-
     /// Returns the byte index mapping from plain text to raw text.
     pub fn plain_to_raw(&self) -> &[usize] {
         &self.plain_to_raw
