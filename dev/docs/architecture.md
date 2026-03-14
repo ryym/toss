@@ -1,55 +1,85 @@
 # Architecture
 
-## Overview
+## Layers
 
-Toss is a terminal pager with a frame-driven event loop. The system is divided into four layers: data, display state, rendering, and animation.
+The system has four layers. Each layer has a single responsibility and depends only on the layer(s) below it.
 
 ```
-App (event loop, mode dispatch)
-  |
-  +-- Document (data layer)
-  |     +-- LineCache: cached lines read from source
-  |
-  +-- ScreenState (display state)
-  |     +-- Vec<ScreenRow>: what's currently shown on each screen row
-  |     +-- scroll_down/up -> ScrollPlan (minimal diff for rendering)
-  |
-  +-- Screen (terminal abstraction + rendering)
-  |     +-- Screen trait: abstract terminal operations
-  |     +-- draw functions: apply ScrollPlan using terminal scroll + partial redraw
-  |     +-- full redraw on resize or mode change
-  |
-  +-- ScrollAnimation (animation state)
-        +-- easing function, start/target offset, timing
+App          Event loop, mode dispatch, animation coordination
+ScreenState  What is currently displayed (row-level bookkeeping)
+Document     Line data (loading, caching, wrapping)
+Screen       Terminal I/O abstraction
 ```
 
-## Key Design Principles
+- **Document** loads lines from a file or stdin and owns the parsed data. It knows nothing about the screen.
+- **ScreenState** tracks which document lines (and which wrap segments) occupy each screen row. It computes a **ScrollPlan** — a minimal diff describing what changed — but never touches the terminal itself.
+- **Screen** is a trait that abstracts terminal operations. Production code uses crossterm; tests use an in-memory mock. Rendering functions live alongside the trait and translate a ScrollPlan into terminal commands.
+- **App** ties everything together: it runs the event loop, dispatches input by mode, drives animations, and decides when to render.
 
-1. **Separate data from display** - `Document` owns line data and knows nothing about the screen. `ScreenState` tracks what's on screen as indices into `Document`. Rendering functions in `screen` translate plans into terminal commands.
+## Frame-Driven Event Loop
 
-2. **Incremental rendering** - Instead of full screen redraws (which cause flickering), use terminal scroll commands to shift existing content and only draw newly revealed rows. `ScreenState` computes a `ScrollPlan` as a minimal diff.
+Instead of blocking on input, App runs a game-loop:
 
-3. **Frame-driven event loop** - Instead of blocking on input, use a game-loop style: poll input (non-blocking), update animation state, render if needed, sleep until next frame. This enables smooth scroll animation while remaining responsive.
+1. Poll input with a timeout (short during animation, longer when idle)
+2. Handle the event if any (key press, resize)
+3. Advance animation if one is running
+4. Render if the screen state changed
 
-## Modules
+This design exists because smooth scroll animation requires rendering intermediate frames between user inputs. A blocking-input loop cannot do this.
 
-| Module                | Responsibility                                              |
-| --------------------- | ----------------------------------------------------------- |
-| `app`                 | Event loop, input handling, mode management (View / Search) |
-| `document`            | Owns source text, provides line access with wrapping        |
-| `line_cache`          | Lazily caches lines read from stdin or file                 |
-| `line` / `line_index` | Line representation and indexing utilities                  |
-| `screen_state`        | Tracks visible rows, computes `ScrollPlan` diffs            |
-| `screen`              | Terminal abstraction (`Screen` trait) and rendering         |
-| `scroll`              | Scroll animation with easing                                |
-| `search`              | Search logic, match tracking, navigation                    |
-| `highlight`           | Search match highlighting within rendered lines             |
-| `ansi`                | ANSI escape sequence parsing and passthrough                |
-| `status_line`         | Status bar content and formatting                           |
-| `line_editor`         | Simple line editor for search input                         |
-| `logger`              | Debug logging to file                                       |
-| `mock_screen`         | Test double implementing `Screen` trait                     |
+## Incremental Rendering via ScrollPlan
 
-## Terminal Library
+Full screen redraws cause visible flicker. To avoid this, scrolling works incrementally:
 
-Toss uses `crossterm` for terminal interaction. Its `poll(timeout)` function enables the non-blocking event detection essential for the frame-driven event loop.
+1. ScreenState receives "scroll N rows down/up"
+2. It shifts its internal row array and fills in the newly exposed rows
+3. It returns a ScrollPlan: the direction, how many rows shifted, and the new row contents
+4. The rendering function issues a terminal scroll command (which shifts existing content in-place) and only draws the newly revealed rows
+
+Full redraws happen only on resize or mode transitions.
+
+## Line Representation: Plain/Raw Duality
+
+Lines coming from the source may contain ANSI escape sequences (colors, bold, etc.). These must be preserved in output but ignored for width calculation and search matching. Each `Line` therefore maintains two views:
+
+- **Raw text**: the original bytes including escapes, used for rendering
+- **Plain text**: escape-stripped text, used for width calculation, wrapping, and search
+
+A **plain_to_raw mapping** (byte-level) connects the two: given a byte range in plain text, you can find the corresponding range in raw text. This mapping is the key to ANSI-aware wrapping and highlighting.
+
+### Wrapping
+
+Wrap positions are calculated on plain text (using Unicode display widths). The positions are then translated to raw byte offsets via the mapping. When rendering, wrapped rows from the same logical line are written as a single continuous string so that the terminal handles the line break as a soft wrap.
+
+### Search Highlighting
+
+Search matches are found on plain text. The match ranges are converted to raw text positions via the mapping. Reverse-video escape sequences are injected at those positions. When a match spans an existing escape sequence in the raw text, the highlight is split around it and re-applied after it.
+
+## Mode System
+
+App has two modes: **View** and **Search**.
+
+- **View**: Normal paging. Keys scroll, 'n'/'N' navigate search matches, '/' and '?' enter search mode.
+- **Search**: A line editor captures the query. Each keystroke triggers an incremental search from the current position, updating a **preview** highlight. On Enter the preview becomes the committed search state. On Esc the screen returns to the saved position and the preview is discarded.
+
+The committed search state (`App.search`) persists across mode transitions and is used for 'n'/'N' navigation and rendering highlights in View mode. The preview state exists only inside the Search mode variant.
+
+## Scroll Animation
+
+Smooth scrolling uses float-based interpolation:
+
+- `rendered_offset` (f64) tracks the visually rendered position
+- A ScrollAnimation stores start/target offsets and timing
+- Each frame, the eased position is computed and the integer delta from the last rendered position determines how many rows to scroll
+- The float offset is decoupled from ScreenState's integer row tracking — ScreenState always works in whole rows
+
+## Data Loading
+
+Document supports two backends:
+
+- **File**: Lines are loaded on demand via byte-offset seeking. A LineIndex (built once at open by scanning newlines) enables O(1) access to any line. An LRU cache holds recently accessed parsed Line objects.
+- **In-memory** (stdin or test strings): All lines are parsed upfront and held in memory. No caching needed.
+
+## Testing
+
+The Screen trait enables end-to-end testing without a terminal. MockScreen records an in-memory grid and tracks soft-wrap markers. Tests inject a sequence of key events, run the app to completion (a 'q' key), and assert on grid snapshots. ANSI escapes in snapshots are visualized as readable tags (e.g., `{reverse}`) for easy comparison.
