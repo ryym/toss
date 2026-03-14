@@ -12,6 +12,7 @@ mod scroll_with_soft_wrap;
 mod search_execution;
 mod search_highlight_wrapped_line;
 mod search_input;
+mod search_jump_beyond_bottom;
 mod search_jump_near_end;
 mod status_line;
 mod wrap_midline_at_top_of_screen;

@@ -259,6 +259,123 @@ line 4
     );
 }
 
+// Re-searching with a different keyword replaces the highlights.
+#[test]
+fn re_search_with_different_keyword() {
+    let out = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 4,
+        content: "\
+line 1
+line 2
+line 3
+line 4
+line 5
+line 6",
+        events: vec![
+            // Search by "li".
+            key('/'),
+            key('l'),
+            key('i'),
+            enter(),
+            // Navigate down.
+            key('j'),
+            key('j'),
+            // Search by "ne" (replaces "li").
+            key('/'),
+            key('n'),
+            key('e'),
+            enter(),
+            // Navigate and verify new highlights.
+            key('j'),
+            key('k'),
+        ],
+    })
+    .out();
+    assert_eq!(
+        out,
+        "\
+line 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:/
+line 1
+line 2
+line 3
+/
+-----
+[EVENT]:char:l
+{reverse}l{/reverse}ine 1
+{dim}{reverse}l{/reverse}{/dim}ine 2
+{dim}{reverse}l{/reverse}{/dim}ine 3
+/l
+-----
+[EVENT]:char:i
+{reverse}li{/reverse}ne 1
+{dim}{reverse}li{/reverse}{/dim}ne 2
+{dim}{reverse}li{/reverse}{/dim}ne 3
+/li
+-----
+[EVENT]:other
+{reverse}li{/reverse}ne 1
+{dim}{reverse}li{/reverse}{/dim}ne 2
+{dim}{reverse}li{/reverse}{/dim}ne 3
+:
+-----
+[EVENT]:char:j
+{dim}{reverse}li{/reverse}{/dim}ne 2
+{dim}{reverse}li{/reverse}{/dim}ne 3
+{dim}{reverse}li{/reverse}{/dim}ne 4
+:
+-----
+[EVENT]:char:j
+{dim}{reverse}li{/reverse}{/dim}ne 3
+{dim}{reverse}li{/reverse}{/dim}ne 4
+{dim}{reverse}li{/reverse}{/dim}ne 5
+:
+-----
+[EVENT]:char:/
+{dim}{reverse}li{/reverse}{/dim}ne 3
+{dim}{reverse}li{/reverse}{/dim}ne 4
+{dim}{reverse}li{/reverse}{/dim}ne 5
+/
+-----
+[EVENT]:char:n
+li{reverse}n{/reverse}e 3
+li{dim}{reverse}n{/reverse}{/dim}e 4
+li{dim}{reverse}n{/reverse}{/dim}e 5
+/n
+-----
+[EVENT]:char:e
+li{reverse}ne{/reverse} 3
+li{dim}{reverse}ne{/reverse}{/dim} 4
+li{dim}{reverse}ne{/reverse}{/dim} 5
+/ne
+-----
+[EVENT]:other
+li{reverse}ne{/reverse} 3
+li{dim}{reverse}ne{/reverse}{/dim} 4
+li{dim}{reverse}ne{/reverse}{/dim} 5
+:
+-----
+[EVENT]:char:j
+li{dim}{reverse}ne{/reverse}{/dim} 4
+li{dim}{reverse}ne{/reverse}{/dim} 5
+li{dim}{reverse}ne{/reverse}{/dim} 6
+:
+-----
+[EVENT]:char:k
+li{reverse}ne{/reverse} 3
+li{dim}{reverse}ne{/reverse}{/dim} 4
+li{dim}{reverse}ne{/reverse}{/dim} 5
+:
+-----
+"
+    );
+}
+
 // Multiple matches on the same line: the current match (first) uses reverse,
 // other matches on the same line use dim reverse.
 #[test]

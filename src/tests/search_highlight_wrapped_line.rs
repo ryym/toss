@@ -7,6 +7,54 @@ fn enter() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
 }
 
+// Search match spans across the wrap boundary.
+// The line "01234abcde" wraps at width 6 into "01234a" and "bcde".
+// The match "ab" starts at the end of the first row and continues in the second.
+#[test]
+fn match_spanning_wrap_boundary() {
+    let screen = run_test_screen(TestCase {
+        screen_width: 6,
+        screen_height: 4,
+        content: "\
+line 1
+01234abcde
+line 3",
+        events: vec![key('/'), key('a'), key('b'), enter()],
+    });
+    assert_eq!(
+        screen.last_snapshot(),
+        "\
+01234{reverse}a{/reverse}{reverse}>
+b{/reverse}cde
+line 3
+:
+"
+    );
+}
+
+// Search match in the second row of a wrapped line (after the wrap boundary).
+#[test]
+fn match_in_second_row_of_wrapped_line() {
+    let screen = run_test_screen(TestCase {
+        screen_width: 6,
+        screen_height: 4,
+        content: "\
+line 1
+01234abcde
+line 3",
+        events: vec![key('/'), key('c'), key('d'), key('e'), enter()],
+    });
+    assert_eq!(
+        screen.last_snapshot(),
+        "\
+01234a>
+b{reverse}cde{/reverse}
+line 3
+:
+"
+    );
+}
+
 // Search match in the first row of a wrapped line.
 // The line "abcde_XX_fghij" wraps at width 10 into "abcde_XX_f" and "ghij".
 // The match "XX" is only in the first row; the second row must render without error.
