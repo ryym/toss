@@ -12,12 +12,8 @@ Instead, Toss will have these modern features:
 
 ## Status
 
-The development is still in an early stage and we are redesigning the app.
-
-- The `old/` directory contains the previous prototype which implements smooth scroll and basic search.
-- The root directory contains new implementations.
-
-See dev/adr/001-redesign-architecture.md for the motivation.
+The development is still in an early stage.
+See `dev/docs/architecture.md` for the overall design.
 
 ## Development
 
