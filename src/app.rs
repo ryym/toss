@@ -16,7 +16,7 @@ fn search_highlight(search: &Option<SearchState>) -> Option<SearchHighlight<'_>>
 }
 use crate::screen_state::ScreenState;
 use crate::scroll::ScrollAnimation;
-use crate::search::{MatchPosition, SearchDirection, SearchState};
+use crate::search::{self, MatchPosition, SearchDirection, SearchState};
 use crate::status_line::StatusLine;
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
@@ -267,7 +267,7 @@ impl<S: Screen> App<S> {
             if !input.is_empty() {
                 let re = regex::Regex::new(&regex::escape(&input)).unwrap();
                 let from = self.state.rows().first().map(|r| r.line_index).unwrap_or(0);
-                let matched = crate::search::find_next_match(&mut self.doc, &re, from, direction);
+                let matched = search::find_next_match(&mut self.doc, &re, from, direction);
                 if let Some(ref pos) = matched {
                     self.state.jump_to(&mut self.doc, pos.line);
                     self.needs_full_redraw = true;
@@ -298,7 +298,7 @@ impl<S: Screen> App<S> {
         if let Some(current) = search.current {
             let query = search.query.clone();
             if let Some(next_mi) =
-                crate::search::find_next_match_in_line(&mut self.doc, &query, current, direction)
+                search::find_next_match_in_line(&mut self.doc, &query, current, direction)
             {
                 if let Some(ref mut search) = self.search {
                     search.current = Some(MatchPosition {
@@ -333,7 +333,7 @@ impl<S: Screen> App<S> {
         };
 
         let query = search.query.clone();
-        let matched = crate::search::find_next_match(&mut self.doc, &query, from, direction);
+        let matched = search::find_next_match(&mut self.doc, &query, from, direction);
         if let Some(ref pos) = matched {
             self.state.jump_to(&mut self.doc, pos.line);
             self.needs_full_redraw = true;
