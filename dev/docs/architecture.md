@@ -64,15 +64,6 @@ App has two modes: **View** and **Search**.
 
 The committed search state (`App.search`) persists across mode transitions and is used for 'n'/'N' navigation and rendering highlights in View mode. The preview state exists only inside the Search mode variant.
 
-## Scroll Animation
-
-Smooth scrolling uses float-based interpolation:
-
-- `rendered_offset` (f64) tracks the visually rendered position
-- A ScrollAnimation stores start/target offsets and timing
-- Each frame, the eased position is computed and the integer delta from the last rendered position determines how many rows to scroll
-- The float offset is decoupled from ScreenState's integer row tracking — ScreenState always works in whole rows
-
 ## Data Loading
 
 Document supports two backends:
