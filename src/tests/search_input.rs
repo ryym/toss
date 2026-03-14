@@ -16,8 +16,8 @@ fn backspace() -> Event {
 }
 
 // Typing / enters search mode and shows "/" on the status line.
-// Typing characters shows them after the prompt.
-// Esc cancels and returns to view mode with ":".
+// Typing characters triggers incremental search.
+// Esc cancels and restores the original position.
 #[test]
 fn forward_search_input_and_cancel() {
     let out = run_test_screen(TestCase {
@@ -31,6 +31,8 @@ line 4",
         events: vec![key('/'), key('a'), key('b'), esc()],
     })
     .out();
+    // No match for "a" or "ab" so position stays the same.
+    // Esc restores original position.
     assert_eq!(
         out,
         "\

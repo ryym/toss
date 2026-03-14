@@ -7,9 +7,20 @@ use crate::document::Document;
 use crate::line_editor::LineEditor;
 use crate::screen::{self, Screen, SearchHighlight};
 
+/// Resolve which SearchState is active: preview (during search) or committed.
+fn active_search<'a>(
+    mode: &'a AppMode,
+    committed: &'a Option<SearchState>,
+) -> Option<&'a SearchState> {
+    match mode {
+        AppMode::Search { preview, .. } => preview.as_ref(),
+        _ => committed.as_ref(),
+    }
+}
+
 /// Build a SearchHighlight from an optional search state.
-fn search_highlight(search: &Option<SearchState>) -> Option<SearchHighlight<'_>> {
-    search.as_ref().map(|s| SearchHighlight {
+fn search_highlight(search: Option<&SearchState>) -> Option<SearchHighlight<'_>> {
+    search.map(|s| SearchHighlight {
         query: &s.query,
         current: s.current,
     })
@@ -29,6 +40,10 @@ enum AppMode {
     Search {
         direction: SearchDirection,
         editor: LineEditor,
+        /// Top line before search started, for restoring on cancel.
+        saved_top_line: usize,
+        /// Live search result updated on each keystroke.
+        preview: Option<SearchState>,
     },
 }
 
@@ -80,7 +95,7 @@ impl<S: Screen> App<S> {
 
     pub fn run(&mut self) -> io::Result<()> {
         // Initial draw
-        let sh = search_highlight(&self.search);
+        let sh = search_highlight(active_search(&self.mode, &self.search));
         screen::draw_full_page(
             &mut self.screen,
             &mut self.doc,
@@ -119,7 +134,7 @@ impl<S: Screen> App<S> {
 
             // 3. Render if needed
             if self.needs_full_redraw {
-                let sh = search_highlight(&self.search);
+                let sh = search_highlight(active_search(&self.mode, &self.search));
                 screen::draw_full_page(
                     &mut self.screen,
                     &mut self.doc,
@@ -210,10 +225,13 @@ impl<S: Screen> App<S> {
     fn enter_search_mode(&mut self, direction: SearchDirection) {
         log::debug!("Enter search mode: {direction:?}");
         self.animation = None;
+        let saved_top_line = self.state.rows().first().map(|r| r.line_index).unwrap_or(0);
         self.status.set_content(direction.prompt().to_string());
         self.mode = AppMode::Search {
             direction,
             editor: LineEditor::new(),
+            saved_top_line,
+            preview: None,
         };
         self.needs_status_redraw = true;
     }
@@ -225,24 +243,78 @@ impl<S: Screen> App<S> {
         self.needs_status_redraw = true;
     }
 
+    /// Cancel search: discard preview and restore the original scroll position.
+    fn cancel_search(&mut self) {
+        if let AppMode::Search { saved_top_line, .. } = &self.mode {
+            let top = *saved_top_line;
+            self.state.jump_to(&mut self.doc, top);
+            self.needs_full_redraw = true;
+        }
+        self.exit_search_mode();
+    }
+
+    /// Update the search preview based on current input.
+    fn update_search_preview(&mut self) {
+        let (input, direction, saved_top_line) = match &self.mode {
+            AppMode::Search {
+                editor,
+                direction,
+                saved_top_line,
+                ..
+            } => (editor.input().to_string(), *direction, *saved_top_line),
+            _ => return,
+        };
+
+        if input.is_empty() {
+            // No query: clear preview and restore position.
+            if let AppMode::Search { preview, .. } = &mut self.mode {
+                *preview = None;
+            }
+            self.state.jump_to(&mut self.doc, saved_top_line);
+            self.needs_full_redraw = true;
+            return;
+        }
+
+        let re = regex::Regex::new(&regex::escape(&input)).unwrap();
+        let matched = search::find_next_match(&mut self.doc, &re, saved_top_line, direction);
+        log::debug!("Search preview: query={input:?}, result={matched:?}");
+
+        if let Some(ref pos) = matched {
+            self.state.jump_to(&mut self.doc, pos.line);
+        }
+
+        if let AppMode::Search { preview, .. } = &mut self.mode {
+            *preview = Some(SearchState {
+                query: re,
+                direction,
+                current: matched,
+            });
+        }
+        self.needs_full_redraw = true;
+    }
+
     fn handle_key_search(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Enter => {
                 self.submit_search();
             }
             KeyCode::Esc => {
-                self.exit_search_mode();
+                self.cancel_search();
             }
             KeyCode::Backspace => {
                 if let AppMode::Search {
                     direction, editor, ..
                 } = &mut self.mode
                 {
+                    if editor.input().is_empty() {
+                        self.cancel_search();
+                        return;
+                    }
                     editor.backspace();
                     self.status
                         .set_content(format!("{}{}", direction.prompt(), editor.input()));
-                    self.needs_status_redraw = true;
                 }
+                self.update_search_preview();
             }
             KeyCode::Char(ch) => {
                 if let AppMode::Search {
@@ -252,38 +324,24 @@ impl<S: Screen> App<S> {
                     editor.insert(ch);
                     self.status
                         .set_content(format!("{}{}", direction.prompt(), editor.input()));
-                    self.needs_status_redraw = true;
                 }
+                self.update_search_preview();
             }
             _ => {}
         }
     }
 
-    /// Execute search on Enter: build regex, find match, jump to it.
+    /// Commit the current search preview on Enter.
     fn submit_search(&mut self) {
-        if let AppMode::Search {
-            direction, editor, ..
-        } = &self.mode
+        if let AppMode::Search { preview, .. } = &mut self.mode
+            && let Some(preview) = preview.take()
         {
-            let input = editor.input();
-            let direction = *direction;
-
-            if !input.is_empty() {
-                log::debug!("Search: query={input:?}, direction={direction:?}");
-                let re = regex::Regex::new(&regex::escape(&input)).unwrap();
-                let from = self.state.rows().first().map(|r| r.line_index).unwrap_or(0);
-                let matched = search::find_next_match(&mut self.doc, &re, from, direction);
-                log::debug!("Search result: {matched:?}");
-                if let Some(ref pos) = matched {
-                    self.state.jump_to(&mut self.doc, pos.line);
-                    self.needs_full_redraw = true;
-                }
-                self.search = Some(SearchState {
-                    query: re,
-                    direction,
-                    current: matched,
-                });
-            }
+            log::debug!(
+                "Submit search: query={:?}, current={:?}",
+                preview.query.as_str(),
+                preview.current
+            );
+            self.search = Some(preview);
         }
         self.exit_search_mode();
     }
@@ -368,7 +426,7 @@ impl<S: Screen> App<S> {
         };
 
         if plan.terminal_scroll > 0 {
-            let sh = search_highlight(&self.search);
+            let sh = search_highlight(active_search(&self.mode, &self.search));
             screen::apply_scroll(
                 &mut self.screen,
                 &mut self.doc,
@@ -415,7 +473,7 @@ impl<S: Screen> App<S> {
             };
 
             if plan.terminal_scroll > 0 {
-                let sh = search_highlight(&self.search);
+                let sh = search_highlight(active_search(&self.mode, &self.search));
                 screen::apply_scroll(
                     &mut self.screen,
                     &mut self.doc,

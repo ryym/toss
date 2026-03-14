@@ -34,6 +34,7 @@ line 5
 }
 
 // Backward search: ?top + Enter from the bottom jumps back to match.
+// With incremental search, each keystroke triggers a search and jump.
 #[test]
 fn backward_search_jumps_to_match() {
     let out = run_test_screen(TestCase {
@@ -76,21 +77,21 @@ line 5
 ?
 -----
 [EVENT]:char:t
+{reverse}t{/reverse}op line
+line 2
 line 3
-line 4
-line 5
 ?t
 -----
 [EVENT]:char:o
+{reverse}to{/reverse}p line
+line 2
 line 3
-line 4
-line 5
 ?to
 -----
 [EVENT]:char:p
+{reverse}top{/reverse} line
+line 2
 line 3
-line 4
-line 5
 ?top
 -----
 [EVENT]:other
