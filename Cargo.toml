@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-crossterm = "0.28"
+crossterm = "0.29"
 log = { version = "0.4", features = ["std"] }
 regex = "1"
 unicode-width = "0.2"
