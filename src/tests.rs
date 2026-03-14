@@ -1,4 +1,5 @@
 mod display_ansi_escape_sequences;
+mod incremental_search;
 mod open_and_quit;
 mod scroll_cannot_past_boundaries;
 mod scroll_down_reveals_wrap_continuation;
