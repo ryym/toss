@@ -27,11 +27,16 @@ use document::Document;
 use screen::TermScreen;
 
 fn main() {
+    let code = run();
+    process::exit(code);
+}
+
+fn run() -> i32 {
     let _log_guard = match logger::setup_file_logger() {
         Ok(guard) => guard,
         Err(e) => {
             eprintln!("Error setting up logger: {e}");
-            process::exit(1);
+            return 1;
         }
     };
 
@@ -45,7 +50,7 @@ fn main() {
             Ok(doc) => doc,
             Err(e) => {
                 eprintln!("Error reading {}: {e}", path.display());
-                process::exit(1);
+                return 1;
             }
         }
     } else if !io::stdin().is_terminal() {
@@ -54,20 +59,20 @@ fn main() {
             Ok(doc) => doc,
             Err(e) => {
                 eprintln!("Error reading stdin: {e}");
-                process::exit(1);
+                return 1;
             }
         }
     } else {
-        eprintln!("Usage: toss-proto <file>");
-        eprintln!("       command | toss-proto");
-        process::exit(1);
+        eprintln!("Usage: toss <file>");
+        eprintln!("       command | toss");
+        return 1;
     };
 
     let screen = match TermScreen::new() {
         Ok(s) => s,
         Err(e) => {
             eprintln!("Error initializing terminal: {e}");
-            process::exit(1);
+            return 1;
         }
     };
 
@@ -75,12 +80,14 @@ fn main() {
         Ok(app) => app,
         Err(e) => {
             eprintln!("Error starting app: {e}");
-            process::exit(1);
+            return 1;
         }
     };
 
     if let Err(e) = app.run() {
         eprintln!("Error: {e}");
-        process::exit(1);
+        return 1;
     }
+
+    0
 }
