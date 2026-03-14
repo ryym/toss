@@ -248,12 +248,6 @@ impl Screen for MockScreen {
         Ok(())
     }
 
-    fn clear_all(&mut self) -> io::Result<()> {
-        let h = self.height as usize;
-        self.grid = vec![GridRow::new(); h];
-        Ok(())
-    }
-
     fn flush(&mut self) -> io::Result<()> {
         self.take_snapshot();
         Ok(())

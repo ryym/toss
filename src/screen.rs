@@ -29,7 +29,6 @@ pub trait Screen {
     fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()>;
 
     fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()>;
-    fn clear_all(&mut self) -> io::Result<()>;
     fn flush(&mut self) -> io::Result<()>;
 }
 
@@ -93,10 +92,6 @@ impl Screen for TermScreen {
             }
         }
         Ok(())
-    }
-
-    fn clear_all(&mut self) -> io::Result<()> {
-        queue!(self.stdout, terminal::Clear(ClearType::All),)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -213,8 +208,11 @@ pub fn draw_full_page<S: Screen>(
     search: Option<&SearchHighlight<'_>>,
 ) -> io::Result<()> {
     let rows = state.rows();
-    screen.clear_all()?;
     draw_rows_grouped(screen, doc, rows, 0, rows.len(), state.width(), search)?;
+    // Clear any rows below content that may have stale content.
+    for y in rows.len() as u16..state.content_height() as u16 {
+        screen.clear_row(y)?;
+    }
     draw_status_line(screen, status, rows.len() as u16)?;
     screen.flush()
 }
