@@ -134,33 +134,28 @@ pub struct SearchHighlight<'a> {
     pub current: Option<MatchPosition>,
 }
 
-/// Draw a range of screen rows, grouping consecutive rows from the same
-/// logical line and writing them as a single continuous string so the
-/// terminal treats line-internal wraps as soft wraps.
-///
-/// `screen_y_offset` shifts all row positions by the given amount
-/// (used to render viewport rows below the header area).
-#[allow(clippy::too_many_arguments)]
+/// Draw screen rows, grouping consecutive rows from the same logical line
+/// and writing them as a single continuous string so the terminal treats
+/// line-internal wraps as soft wraps.
+/// `screen_y` specifies the starting screen row position for drawing.
 fn draw_rows_grouped<S: Screen>(
     screen: &mut S,
     doc: &mut Document,
-    all_rows: &[ScreenRow],
-    from: usize,
-    to: usize,
+    rows: &[ScreenRow],
     width: usize,
     search: Option<&SearchHighlight<'_>>,
-    screen_y_offset: usize,
+    screen_y: usize,
 ) -> io::Result<()> {
-    let mut i = from;
-    while i < to {
-        let line_idx = all_rows[i].line_index;
+    let mut i = 0;
+    while i < rows.len() {
+        let line_idx = rows[i].line_index;
         let group_start = i;
-        while i < to && all_rows[i].line_index == line_idx {
+        while i < rows.len() && rows[i].line_index == line_idx {
             i += 1;
         }
         // Clear each row in the group
         for j in group_start..i {
-            screen.clear_row((j + screen_y_offset) as u16)?;
+            screen.clear_row((j + screen_y) as u16)?;
         }
         // Write the combined text for this group as one continuous piece
         if let Some(line) = doc.line(line_idx) {
@@ -170,10 +165,7 @@ fn draw_rows_grouped<S: Screen>(
                     if matches.is_empty() {
                         // No matches: use original text as-is
                         (group_start..i)
-                            .map(|j| {
-                                line.wrap_row_text(width, all_rows[j].wrap_index)
-                                    .to_string()
-                            })
+                            .map(|j| line.wrap_row_text(width, rows[j].wrap_index).to_string())
                             .collect::<String>()
                     } else {
                         let styles: Vec<HighlightStyle> = matches
@@ -198,20 +190,17 @@ fn draw_rows_grouped<S: Screen>(
                         );
                         (group_start..i)
                             .map(|j| {
-                                let range = line.wrap_row_range(width, all_rows[j].wrap_index);
+                                let range = line.wrap_row_range(width, rows[j].wrap_index);
                                 highlight::apply_highlight_to_range(line.raw(), range, &positions)
                             })
                             .collect::<String>()
                     }
                 }
                 None => (group_start..i)
-                    .map(|j| {
-                        line.wrap_row_text(width, all_rows[j].wrap_index)
-                            .to_string()
-                    })
+                    .map(|j| line.wrap_row_text(width, rows[j].wrap_index).to_string())
                     .collect::<String>(),
             };
-            screen.write_at((group_start + screen_y_offset) as u16, &text)?;
+            screen.write_at((group_start + screen_y) as u16, &text)?;
         }
     }
     Ok(())
@@ -243,30 +232,12 @@ pub fn draw_full_page<S: Screen>(
 
     // Draw header rows at the top of the screen.
     if header_height > 0 {
-        draw_rows_grouped(
-            screen,
-            &mut page.doc,
-            &header_rows,
-            0,
-            header_height,
-            width,
-            search,
-            0,
-        )?;
+        draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
     }
 
     // Draw viewport rows below the header.
     let rows = page.viewport.rows();
-    draw_rows_grouped(
-        screen,
-        &mut page.doc,
-        rows,
-        0,
-        rows.len(),
-        width,
-        search,
-        header_height,
-    )?;
+    draw_rows_grouped(screen, &mut page.doc, rows, width, search, header_height)?;
 
     // Clear any rows below content that may have stale content.
     for y in rows.len()..page.viewport.height() {
@@ -339,12 +310,10 @@ pub fn apply_scroll<S: Screen>(
     draw_rows_grouped(
         screen,
         &mut page.doc,
-        rows,
-        draw_from,
-        draw_to,
+        &rows[draw_from..draw_to],
         width,
         search,
-        header_height,
+        header_height + draw_from,
     )?;
     draw_status_line_no_flush(screen, page)?;
 
