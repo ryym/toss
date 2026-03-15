@@ -1,11 +1,8 @@
 mod display;
 mod incremental_search;
-mod scroll_cannot_past_boundaries;
+mod scroll;
 mod scroll_down_reveals_wrap_continuation;
-mod scroll_half_page;
-mod scroll_top_bottom;
 mod scroll_top_bottom_with_wrap;
-mod scroll_up_down;
 mod scroll_up_reveals_wrap_start;
 mod scroll_with_soft_wrap;
 mod search_execution;
