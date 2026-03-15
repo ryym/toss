@@ -7,7 +7,7 @@ use crate::document::Document;
 use crate::line_editor::LineEditor;
 use crate::options::Options;
 use crate::page::Page;
-use crate::screen::{self, Screen, SearchHighlight};
+use crate::screen::{self, Screen};
 use crate::scroll::ScrollAnimation;
 use crate::search::{self, MatchPosition, SearchDirection, SearchState};
 
@@ -71,8 +71,8 @@ impl<S: Screen> App<S> {
 
     pub fn run(&mut self) -> io::Result<()> {
         // Initial draw
-        let sh = search_highlight(active_search(&self.mode, &self.search));
-        screen::draw_full_page(&mut self.screen, &mut self.page, sh.as_ref())?;
+        let search = active_search(&self.mode, &self.search);
+        screen::draw_full_page(&mut self.screen, &mut self.page, search)?;
         self.needs_full_redraw = false;
 
         loop {
@@ -104,8 +104,8 @@ impl<S: Screen> App<S> {
 
             // 3. Render if needed
             if self.needs_full_redraw {
-                let sh = search_highlight(active_search(&self.mode, &self.search));
-                screen::draw_full_page(&mut self.screen, &mut self.page, sh.as_ref())?;
+                let search = active_search(&self.mode, &self.search);
+                screen::draw_full_page(&mut self.screen, &mut self.page, search)?;
                 self.needs_full_redraw = false;
                 self.needs_status_redraw = false;
             } else if self.needs_status_redraw {
@@ -397,8 +397,8 @@ impl<S: Screen> App<S> {
         };
 
         if plan.terminal_scroll > 0 {
-            let sh = search_highlight(active_search(&self.mode, &self.search));
-            screen::apply_scroll(&mut self.screen, &plan, &mut self.page, sh.as_ref())?;
+            let search = active_search(&self.mode, &self.search);
+            screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
             self.rendered_offset += rows as f64;
         }
         Ok(())
@@ -441,8 +441,8 @@ impl<S: Screen> App<S> {
             };
 
             if plan.terminal_scroll > 0 {
-                let sh = search_highlight(active_search(&self.mode, &self.search));
-                screen::apply_scroll(&mut self.screen, &plan, &mut self.page, sh.as_ref())?;
+                let search = active_search(&self.mode, &self.search);
+                screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
             }
 
             self.rendered_offset = current_row as f64;
@@ -465,12 +465,4 @@ fn active_search<'a>(
         AppMode::Search { preview, .. } => preview.as_ref(),
         _ => committed.as_ref(),
     }
-}
-
-/// Build a SearchHighlight from an optional search state.
-fn search_highlight(search: Option<&SearchState>) -> Option<SearchHighlight<'_>> {
-    search.map(|s| SearchHighlight {
-        query: &s.query,
-        current: s.current,
-    })
 }

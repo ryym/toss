@@ -7,13 +7,11 @@ use crossterm::{
     style::Print,
     terminal::{self, ClearType},
 };
-use regex::Regex;
-
-use crate::document::Document;
 mod highlight;
 
+use crate::document::Document;
 use crate::page::Page;
-use crate::search::MatchPosition;
+use crate::search::SearchState;
 use crate::viewport::{Direction, ScreenRow, ScrollPlan};
 use highlight::HighlightStyle;
 
@@ -126,14 +124,6 @@ impl Screen for TermScreen {
 // Rendering helpers
 // ---------------------------------------------------------------------------
 
-/// Search context for highlighting matches during rendering.
-pub struct SearchHighlight<'a> {
-    pub query: &'a Regex,
-    /// Current match position. The current match uses reverse video,
-    /// other matches use dim reverse.
-    pub current: Option<MatchPosition>,
-}
-
 /// Draw screen rows, grouping consecutive rows from the same logical line
 /// and writing them as a single continuous string so the terminal treats
 /// line-internal wraps as soft wraps.
@@ -143,7 +133,7 @@ fn draw_rows_grouped<S: Screen>(
     doc: &mut Document,
     rows: &[ScreenRow],
     width: usize,
-    search: Option<&SearchHighlight<'_>>,
+    search: Option<&SearchState>,
     screen_y: usize,
 ) -> io::Result<()> {
     let mut i = 0;
@@ -163,17 +153,17 @@ fn draw_rows_grouped<S: Screen>(
             let last_wrap = rows[i - 1].wrap_index;
             let raw_range = line.wrap_rows_range(width, first_wrap, last_wrap + 1);
 
-            let matches = search.map(|sh| line.find_matches(sh.query));
+            let matches = search.map(|sh| line.find_matches(&sh.query));
             let has_matches = matches.as_ref().is_some_and(|m| !m.is_empty());
 
             if has_matches {
-                let sh = search.unwrap();
+                let search = search.unwrap();
                 let matches = matches.unwrap();
                 let styles: Vec<HighlightStyle> = matches
                     .iter()
                     .enumerate()
                     .map(|(mi, _)| {
-                        let is_current = sh
+                        let is_current = search
                             .current
                             .is_some_and(|c| c.line == line_idx && c.match_index == mi);
                         if is_current {
@@ -217,7 +207,7 @@ fn draw_status_line_no_flush<S: Screen>(screen: &mut S, page: &mut Page) -> io::
 pub fn draw_full_page<S: Screen>(
     screen: &mut S,
     page: &mut Page,
-    search: Option<&SearchHighlight<'_>>,
+    search: Option<&SearchState>,
 ) -> io::Result<()> {
     let width = page.viewport.width();
     let header_rows = page.resolve_header();
@@ -252,7 +242,7 @@ pub fn apply_scroll<S: Screen>(
     screen: &mut S,
     plan: &ScrollPlan,
     page: &mut Page,
-    search: Option<&SearchHighlight<'_>>,
+    search: Option<&SearchState>,
 ) -> io::Result<()> {
     if plan.terminal_scroll == 0 {
         return Ok(());
