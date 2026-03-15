@@ -37,7 +37,11 @@ fn run() -> i32 {
     };
 
     let args = match cli::parse_args() {
-        Ok(args) => args,
+        Ok(cli::Action::PrintVersion) => {
+            println!("toss {}", cli::version());
+            return 0;
+        }
+        Ok(cli::Action::Run(args)) => args,
         Err(e) => {
             eprintln!("Error: {e}");
             return 1;
