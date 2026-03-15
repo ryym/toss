@@ -56,16 +56,15 @@ enum HighlightPosKind {
 }
 
 /// Build highlight positions from plain-text match ranges.
+/// The different highlight style is used for the current match specified by `current_match_index`.
 ///
 /// Uses `plain_to_raw` mapping to convert plain-text byte ranges to raw-text
 /// positions. Detects escape sequences within matches by checking for gaps in
 /// the mapping and inserts `InnerControlEnd` markers so highlighting is
 /// re-applied after each internal escape sequence.
-///
-/// `styles` must have the same length as `plain_ranges`, one style per match.
 pub fn build_highlight_positions(
     plain_ranges: &[(usize, usize)],
-    styles: &[HighlightStyle],
+    current_match_index: Option<usize>,
     plain_to_raw: &[usize],
     raw_len: usize,
 ) -> HighlightPositions {
@@ -76,7 +75,10 @@ pub fn build_highlight_positions(
             continue;
         }
 
-        let style = styles[match_idx];
+        let style = current_match_index
+            .filter(|&current| current == match_idx)
+            .map(|_| HighlightStyle::Reverse)
+            .unwrap_or(HighlightStyle::DimReverse);
 
         let i_raw = plain_to_raw[start];
         positions.push(HighlightPos {
@@ -184,8 +186,7 @@ mod tests {
 
     /// Helper to build positions from a line and plain-text ranges (all Reverse).
     fn build_from_line(line: &Line, ranges: &[(usize, usize)]) -> HighlightPositions {
-        let styles = vec![HighlightStyle::Reverse; ranges.len()];
-        build_highlight_positions(ranges, &styles, line.plain_to_raw(), line.raw().len())
+        build_highlight_positions(ranges, Some(0), line.plain_to_raw(), line.raw().len())
     }
 
     /// Helper to apply highlight to the full raw text.
@@ -206,7 +207,10 @@ mod tests {
         let line = Line::new("foo bar foo".into());
         let positions = build_from_line(&line, &[(0, 3), (8, 11)]); // both "foo"
         let result = apply_full(&line, &positions);
-        assert_eq!(result, "\x1b[7mfoo\x1b[27m bar \x1b[7mfoo\x1b[27m");
+        assert_eq!(
+            result,
+            "\x1b[7mfoo\x1b[27m bar \x1b[2m\x1b[7mfoo\x1b[27m\x1b[22m"
+        );
     }
 
     #[test]

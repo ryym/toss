@@ -13,7 +13,6 @@ use crate::document::Document;
 use crate::page::Page;
 use crate::search::SearchState;
 use crate::viewport::{Direction, ScreenRow, ScrollPlan};
-use highlight::HighlightStyle;
 
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {
@@ -156,23 +155,16 @@ fn draw_rows_grouped<S: Screen>(
             let matches = search.map(|sh| line.find_matches(&sh.query));
             match (search, matches) {
                 (Some(search), Some(matches)) if !matches.is_empty() => {
-                    let styles: Vec<HighlightStyle> = matches
-                        .iter()
-                        .enumerate()
-                        .map(|(mi, _)| {
-                            let is_current = search
-                                .current
-                                .is_some_and(|c| c.line == line_idx && c.match_index == mi);
-                            if is_current {
-                                HighlightStyle::Reverse
-                            } else {
-                                HighlightStyle::DimReverse
-                            }
-                        })
-                        .collect();
+                    let current_match_index = search.current.and_then(|current| {
+                        if current.line == line_idx {
+                            Some(current.match_index)
+                        } else {
+                            None
+                        }
+                    });
                     let positions = highlight::build_highlight_positions(
                         &matches,
-                        &styles,
+                        current_match_index,
                         line.plain_to_raw(),
                         line.raw().len(),
                     );
