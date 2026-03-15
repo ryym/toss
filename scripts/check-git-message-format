@@ -18,13 +18,19 @@ if [[ "$first_line" =~ ^[a-z]+!' ' ]]; then
 fi
 
 # Check for valid conventional commit prefix
-pattern='^(feat|fix|refactor|docs|chore|perf)(\(.+\))?: '
-if [[ "$first_line" =~ $pattern ]]; then
-  exit 0
+prefix_pattern='^(feat|fix|refactor|docs|chore|perf)(\(.+\))?: '
+if [[ ! "$first_line" =~ $prefix_pattern ]]; then
+  echo "ERROR: Invalid commit message format."
+  echo "  Message: $first_line"
+  echo "  Expected format: <prefix>: <description>"
+  echo "  Valid prefixes: feat, fix, refactor, docs, chore, perf"
+  exit 1
 fi
 
-echo "ERROR: Invalid commit message format."
-echo "  Message: $first_line"
-echo "  Expected format: <prefix>: <description>"
-echo "  Valid prefixes: feat, fix, refactor, docs, chore, perf"
-exit 1
+# Check that the description starts with an uppercase letter or digit
+description="${first_line#*: }"
+if [[ ! "$description" =~ ^[A-Z0-9] ]]; then
+  echo "ERROR: Description must start with an uppercase letter or digit."
+  echo "  Message: $first_line"
+  exit 1
+fi
