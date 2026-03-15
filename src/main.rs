@@ -4,8 +4,6 @@ mod document;
 mod line;
 mod line_editor;
 mod logger;
-#[cfg(test)]
-mod mock_screen;
 mod page;
 mod screen;
 mod scroll;

@@ -1,4 +1,5 @@
 mod display;
+mod mock_screen;
 mod scroll;
 mod scroll_wrap;
 mod search_execution;
@@ -12,7 +13,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::App;
 use crate::document::Document;
-use crate::mock_screen::MockScreen;
+use mock_screen::MockScreen;
 
 pub fn key(ch: char) -> Event {
     Event::Key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE))
