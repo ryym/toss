@@ -1,5 +1,6 @@
 mod ansi;
 mod app;
+mod cli;
 mod document;
 mod line;
 mod line_editor;
@@ -15,7 +16,6 @@ mod viewport;
 mod tests;
 
 use std::io::{self, IsTerminal};
-use std::path::Path;
 use std::process;
 
 use app::App;
@@ -36,11 +36,15 @@ fn run() -> i32 {
         }
     };
 
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    log::debug!("Args: {args:?}");
+    let args = match cli::parse_args() {
+        Ok(args) => args,
+        Err(e) => {
+            eprintln!("Error: {e}");
+            return 1;
+        }
+    };
 
-    let doc = if !args.is_empty() {
-        let path = Path::new(&args[0]);
+    let doc = if let Some(path) = &args.file {
         log::debug!("Read file: {}", path.display());
         match Document::from_file(path) {
             Ok(doc) => doc,
