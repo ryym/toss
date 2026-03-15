@@ -86,10 +86,7 @@ impl Screen for TermScreen {
     }
 
     fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()> {
-        if plan.terminal_scroll == 0 {
-            return Ok(());
-        }
-        let n = plan.terminal_scroll as u16;
+        let n = plan.terminal_scroll.get() as u16;
         match plan.direction {
             Direction::Down => {
                 queue!(self.stdout, terminal::ScrollUp(n))?;
@@ -236,10 +233,6 @@ pub fn apply_scroll<S: Screen>(
     page: &mut Page,
     search: Option<&SearchState>,
 ) -> io::Result<()> {
-    if plan.terminal_scroll == 0 {
-        return Ok(());
-    }
-
     let width = page.viewport.width();
     let header_height = page.resolve_header().len();
 

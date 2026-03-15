@@ -38,7 +38,8 @@ impl Page {
     }
 
     /// Scroll by the given number of rows (positive = down, negative = up).
-    pub fn plan_scroll(&mut self, rows: isize) -> ScrollPlan {
+    /// Returns `None` if no scrolling occurred (e.g. already at boundary).
+    pub fn plan_scroll(&mut self, rows: isize) -> Option<ScrollPlan> {
         if rows > 0 {
             self.viewport.scroll_down(rows as usize, &mut self.doc)
         } else {

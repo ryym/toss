@@ -385,9 +385,7 @@ impl<S: Screen> App<S> {
         // Cancel any running animation
         self.animation = None;
 
-        let plan = self.page.plan_scroll(rows);
-
-        if plan.terminal_scroll > 0 {
+        if let Some(plan) = self.page.plan_scroll(rows) {
             let search = active_search(&self.mode, &self.search);
             screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
             self.rendered_offset += rows as f64;
@@ -420,14 +418,9 @@ impl<S: Screen> App<S> {
         let rendered_row = self.rendered_offset.floor() as isize;
         let delta = current_row - rendered_row;
 
-        if delta != 0 {
-            let plan = self.page.plan_scroll(delta);
-
-            if plan.terminal_scroll > 0 {
-                let search = active_search(&self.mode, &self.search);
-                screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
-            }
-
+        if let Some(plan) = self.page.plan_scroll(delta) {
+            let search = active_search(&self.mode, &self.search);
+            screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
             self.rendered_offset = current_row as f64;
         }
 

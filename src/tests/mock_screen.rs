@@ -228,7 +228,7 @@ impl Screen for MockScreen {
     }
 
     fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()> {
-        let n = plan.terminal_scroll;
+        let n = plan.terminal_scroll.get();
         let (region_top, region_bottom) = match self.scroll_region {
             Some((t, b)) => (t as usize, b as usize),
             None => (0, self.height as usize - 1),
