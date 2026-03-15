@@ -20,9 +20,14 @@ impl LineCache {
         }
     }
 
-    /// Get a cached line by index.
-    pub fn get(&self, index: usize) -> Option<&Line> {
-        self.entries.get(&index)
+    /// Get a cached line by index, marking it as most recently used.
+    pub fn get(&mut self, index: usize) -> Option<&Line> {
+        if self.entries.contains_key(&index) {
+            self.touch(index);
+            self.entries.get(&index)
+        } else {
+            None
+        }
     }
 
     /// Insert a line into the cache, evicting the oldest entry if at capacity.
@@ -98,6 +103,20 @@ mod tests {
         cache.insert(2, make_line("c"));
         // Index 1 should have been evicted (it was the oldest).
         assert_eq!(cache.get(0).unwrap().text(), "a2");
+        assert!(cache.get(1).is_none());
+        assert_eq!(cache.get(2).unwrap().text(), "c");
+    }
+
+    #[test]
+    fn get_refreshes_access_order() {
+        let mut cache = LineCache::new(2);
+        cache.insert(0, make_line("a"));
+        cache.insert(1, make_line("b"));
+        // Access index 0 via get — it should be refreshed.
+        cache.get(0);
+        // Insert a new entry — index 1 (the least recently used) should be evicted.
+        cache.insert(2, make_line("c"));
+        assert_eq!(cache.get(0).unwrap().text(), "a");
         assert!(cache.get(1).is_none());
         assert_eq!(cache.get(2).unwrap().text(), "c");
     }
