@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 mod line_cache;
 mod line_index;
@@ -15,8 +15,6 @@ const LINE_CACHE_CAPACITY: usize = 1000;
 enum Source {
     /// Seekable file with lazy line loading.
     File {
-        #[allow(dead_code)]
-        path: PathBuf,
         file: File,
         index: LineIndex,
         cache: LineCache,
@@ -39,7 +37,6 @@ impl Document {
         let file = File::open(path)?;
         Ok(Self {
             source: Source::File {
-                path: path.to_path_buf(),
                 file,
                 index,
                 cache: LineCache::new(LINE_CACHE_CAPACITY),
