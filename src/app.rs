@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::document::Document;
+use crate::header::Header;
 use crate::line_editor::LineEditor;
 use crate::options::Options;
 use crate::page::Page;
@@ -46,21 +47,17 @@ pub struct App<S> {
 
 impl<S: Screen> App<S> {
     pub fn new(screen: S, mut doc: Document, options: Options) -> io::Result<Self> {
-        if options.header > 0 {
-            log::warn!(
-                "--header is not yet implemented (header={})",
-                options.header
-            );
-        }
-
         let (w, h) = screen.size()?;
-        let content_height = (h as usize).saturating_sub(1);
-        let viewport = Viewport::new(&mut doc, w as usize, content_height);
+        let header = Header::new(options.header);
+        let header_height = header.resolve(&mut doc, w as usize).len();
+        let content_height = (h as usize).saturating_sub(1).saturating_sub(header_height);
+        let viewport = Viewport::new(&mut doc, w as usize, content_height, header.min_top_line());
 
         Ok(Self {
             screen,
             page: Page {
                 doc,
+                header,
                 viewport,
                 status: StatusLine::new(),
             },
@@ -107,7 +104,13 @@ impl<S: Screen> App<S> {
                     }
                     Event::Resize(w, h) => {
                         log::debug!("Resize: {w}x{h}");
-                        let content_height = (h as usize).saturating_sub(1);
+                        let header_height = self
+                            .page
+                            .header
+                            .resolve(&mut self.page.doc, w as usize)
+                            .len();
+                        let content_height =
+                            (h as usize).saturating_sub(1).saturating_sub(header_height);
                         self.page
                             .viewport
                             .resize(&mut self.page.doc, w as usize, content_height);

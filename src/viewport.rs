@@ -69,18 +69,24 @@ pub struct Viewport {
     width: usize,
     /// Height of the content area.
     height: usize,
+    /// Minimum line index the viewport can scroll to (lines below this
+    /// are reserved for the header).
+    min_top_line: usize,
 }
 
 impl Viewport {
     /// Build initial viewport from the top of the document.
     /// `width` and `height` are the content area dimensions
     /// (excluding status line, header, etc.).
-    pub fn new(doc: &mut Document, width: usize, height: usize) -> Self {
-        let rows = Self::build_rows_forward(doc, width, 0, 0, height);
+    /// `min_top_line` is the first line the viewport may show (lines
+    /// before it are reserved for the header).
+    pub fn new(doc: &mut Document, width: usize, height: usize, min_top_line: usize) -> Self {
+        let rows = Self::build_rows_forward(doc, width, min_top_line, 0, height);
         Self {
             rows,
             width,
             height,
+            min_top_line,
         }
     }
 
@@ -151,7 +157,7 @@ impl Viewport {
         }
 
         let first = self.rows[0];
-        let new_rows = Self::advance_backward(doc, self.width, first, n);
+        let new_rows = Self::advance_backward(doc, self.width, first, n, self.min_top_line);
         let actual = new_rows.len();
 
         if actual == 0 {
@@ -180,11 +186,13 @@ impl Viewport {
     /// Jump to a specific line, rebuilding the screen from there.
     /// Returns None if the position hasn't changed.
     pub fn jump_to(&mut self, doc: &mut Document, line_index: usize) -> bool {
+        let line_index = line_index.max(self.min_top_line);
         let height = self.rows.len();
         let mut new_rows = Self::build_rows_forward(doc, self.width, line_index, 0, height);
         if new_rows.len() < height {
             // Near end of document: back-fill from the end to keep the screen full.
-            new_rows = Self::build_rows_backward_from_end(doc, self.width, height);
+            new_rows =
+                Self::build_rows_backward_from_end(doc, self.width, height, self.min_top_line);
         }
         if new_rows == self.rows {
             return false;
@@ -196,7 +204,8 @@ impl Viewport {
     /// Jump to the end of the document so that the last line is at the bottom.
     pub fn jump_to_end(&mut self, doc: &mut Document) -> bool {
         let height = self.rows.len();
-        let new_rows = Self::build_rows_backward_from_end(doc, self.width, height);
+        let new_rows =
+            Self::build_rows_backward_from_end(doc, self.width, height, self.min_top_line);
         if new_rows == self.rows {
             return false;
         }
@@ -208,12 +217,13 @@ impl Viewport {
     /// `width` and `height` are the content area dimensions.
     pub fn resize(&mut self, doc: &mut Document, width: usize, height: usize) {
         let top = self.rows.first().copied().unwrap_or(ScreenRow {
-            line_index: 0,
+            line_index: self.min_top_line,
             wrap_index: 0,
         });
+        let top_line = top.line_index.max(self.min_top_line);
         self.width = width;
         self.height = height;
-        self.rows = Self::build_rows_forward(doc, width, top.line_index, top.wrap_index, height);
+        self.rows = Self::build_rows_forward(doc, width, top_line, top.wrap_index, height);
     }
 
     /// Build rows starting from (line_index, wrap_index), going forward.
@@ -247,9 +257,10 @@ impl Viewport {
         doc: &mut Document,
         width: usize,
         count: usize,
+        min_top_line: usize,
     ) -> Vec<ScreenRow> {
         let line_count = doc.line_count();
-        if line_count == 0 {
+        if line_count == 0 || line_count <= min_top_line {
             return vec![];
         }
         let last_line = doc.line(line_count - 1).unwrap();
@@ -262,6 +273,9 @@ impl Viewport {
             let Some(prev) = prev_row(doc, width, current) else {
                 break;
             };
+            if prev.line_index < min_top_line {
+                break;
+            }
             rows.push(prev);
             current = prev;
         }
@@ -295,6 +309,7 @@ impl Viewport {
         width: usize,
         before: ScreenRow,
         n: usize,
+        min_top_line: usize,
     ) -> Vec<ScreenRow> {
         let mut rows = Vec::with_capacity(n);
         let mut current = before;
@@ -302,6 +317,9 @@ impl Viewport {
             let Some(prev) = prev_row(doc, width, current) else {
                 break;
             };
+            if prev.line_index < min_top_line {
+                break;
+            }
             rows.push(prev);
             current = prev;
         }
@@ -322,7 +340,7 @@ mod tests {
     #[test]
     fn initial_state_simple() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc", "ddd", "eee"]);
-        let state = Viewport::new(&mut doc, 80, 3);
+        let state = Viewport::new(&mut doc, 80, 3, 0);
         assert_eq!(
             state.rows(),
             &[
@@ -346,7 +364,7 @@ mod tests {
     fn initial_state_with_wrapping() {
         // "abcdefgh" wraps to 2 rows at width 5
         let mut doc = make_doc(&["abcdefgh", "xy"]);
-        let state = Viewport::new(&mut doc, 5, 4);
+        let state = Viewport::new(&mut doc, 5, 4, 0);
         assert_eq!(
             state.rows(),
             &[
@@ -369,7 +387,7 @@ mod tests {
     #[test]
     fn scroll_down_one() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc", "ddd"]);
-        let mut state = Viewport::new(&mut doc, 80, 3);
+        let mut state = Viewport::new(&mut doc, 80, 3, 0);
         let plan = state.scroll_down(1, &mut doc);
 
         assert_eq!(plan.terminal_scroll, 1);
@@ -403,7 +421,7 @@ mod tests {
     #[test]
     fn scroll_down_at_end() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc"]);
-        let mut state = Viewport::new(&mut doc, 80, 3);
+        let mut state = Viewport::new(&mut doc, 80, 3, 0);
         let plan = state.scroll_down(1, &mut doc);
 
         assert_eq!(plan.terminal_scroll, 0);
@@ -416,7 +434,7 @@ mod tests {
     fn scroll_down_with_wrap() {
         // Line "abcdefgh" wraps to 2 rows at width 5
         let mut doc = make_doc(&["short", "abcdefgh", "end"]);
-        let mut state = Viewport::new(&mut doc, 5, 3);
+        let mut state = Viewport::new(&mut doc, 5, 3, 0);
         // Initial: [short/0, abcde/0, fgh/1]
         assert_eq!(
             state.rows()[0],
@@ -451,7 +469,7 @@ mod tests {
     #[test]
     fn scroll_up_one() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc", "ddd"]);
-        let mut state = Viewport::new(&mut doc, 80, 3);
+        let mut state = Viewport::new(&mut doc, 80, 3, 0);
         state.scroll_down(1, &mut doc);
         // Now: [bbb, ccc, ddd]
 
@@ -487,7 +505,7 @@ mod tests {
     #[test]
     fn scroll_up_at_top() {
         let mut doc = make_doc(&["aaa", "bbb"]);
-        let mut state = Viewport::new(&mut doc, 80, 2);
+        let mut state = Viewport::new(&mut doc, 80, 2, 0);
         let plan = state.scroll_up(1, &mut doc);
 
         assert_eq!(plan.terminal_scroll, 0);
@@ -497,7 +515,7 @@ mod tests {
     #[test]
     fn scroll_up_with_wrap() {
         let mut doc = make_doc(&["abcdefgh", "short"]);
-        let mut state = Viewport::new(&mut doc, 5, 2);
+        let mut state = Viewport::new(&mut doc, 5, 2, 0);
         // Initial: [abcde/0, fgh/1]
         state.scroll_down(1, &mut doc);
         // Now: [fgh/1, short/0]
@@ -530,7 +548,7 @@ mod tests {
     #[test]
     fn scroll_down_multiple() {
         let mut doc = make_doc(&["a", "b", "c", "d", "e", "f"]);
-        let mut state = Viewport::new(&mut doc, 80, 3);
+        let mut state = Viewport::new(&mut doc, 80, 3, 0);
         let plan = state.scroll_down(3, &mut doc);
 
         assert_eq!(plan.terminal_scroll, 3);
@@ -556,7 +574,7 @@ mod tests {
     #[test]
     fn scroll_down_clamps_at_end() {
         let mut doc = make_doc(&["a", "b", "c", "d"]);
-        let mut state = Viewport::new(&mut doc, 80, 3);
+        let mut state = Viewport::new(&mut doc, 80, 3, 0);
         // Try to scroll down by 10, but only 1 row available
         let plan = state.scroll_down(10, &mut doc);
 
@@ -583,7 +601,7 @@ mod tests {
     #[test]
     fn jump_to_line() {
         let mut doc = make_doc(&["a", "b", "c", "d", "e"]);
-        let mut state = Viewport::new(&mut doc, 80, 3);
+        let mut state = Viewport::new(&mut doc, 80, 3, 0);
         let changed = state.jump_to(&mut doc, 2);
 
         assert!(changed);
@@ -609,7 +627,7 @@ mod tests {
     #[test]
     fn jump_to_same_position() {
         let mut doc = make_doc(&["a", "b", "c"]);
-        let mut state = Viewport::new(&mut doc, 80, 3);
+        let mut state = Viewport::new(&mut doc, 80, 3, 0);
         let changed = state.jump_to(&mut doc, 0);
         assert!(!changed);
     }
@@ -617,14 +635,14 @@ mod tests {
     #[test]
     fn fewer_lines_than_height() {
         let mut doc = make_doc(&["a", "b"]);
-        let state = Viewport::new(&mut doc, 80, 5);
+        let state = Viewport::new(&mut doc, 80, 5, 0);
         assert_eq!(state.rows().len(), 2);
     }
 
     #[test]
     fn jump_to_end() {
         let mut doc = make_doc(&["a", "b", "c", "d", "e"]);
-        let mut state = Viewport::new(&mut doc, 80, 3);
+        let mut state = Viewport::new(&mut doc, 80, 3, 0);
         let changed = state.jump_to_end(&mut doc);
 
         assert!(changed);
@@ -651,7 +669,7 @@ mod tests {
     fn jump_to_end_with_wrap() {
         // Last line "abcdefgh" wraps to 2 rows at width 5
         let mut doc = make_doc(&["a", "b", "abcdefgh"]);
-        let mut state = Viewport::new(&mut doc, 5, 3);
+        let mut state = Viewport::new(&mut doc, 5, 3, 0);
         let changed = state.jump_to_end(&mut doc);
 
         assert!(changed);
@@ -677,7 +695,7 @@ mod tests {
     #[test]
     fn jump_to_end_fewer_lines_than_height() {
         let mut doc = make_doc(&["a", "b"]);
-        let mut state = Viewport::new(&mut doc, 80, 5);
+        let mut state = Viewport::new(&mut doc, 80, 5, 0);
         let changed = state.jump_to_end(&mut doc);
         // Already showing everything, no change
         assert!(!changed);

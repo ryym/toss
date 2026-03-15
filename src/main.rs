@@ -2,6 +2,7 @@ mod ansi;
 mod app;
 mod cli;
 mod document;
+mod header;
 mod line;
 mod line_editor;
 mod logger;
