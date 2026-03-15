@@ -64,6 +64,11 @@ impl Viewport {
         &self.rows
     }
 
+    /// Line index of the first visible row, or 0 if no rows exist.
+    pub fn top_line_index(&self) -> usize {
+        self.rows.first().map(|r| r.line_index).unwrap_or(0)
+    }
+
     /// Scroll down by n screen rows. Returns a plan for incremental rendering.
     pub fn scroll_down(&mut self, n: usize, doc: &mut Document) -> ScrollPlan {
         if n == 0 || self.rows.is_empty() {

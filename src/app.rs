@@ -199,13 +199,7 @@ impl<S: Screen> App<S> {
     fn enter_search_mode(&mut self, direction: SearchDirection) {
         log::debug!("Enter search mode: {direction:?}");
         self.animation = None;
-        let saved_top_line = self
-            .page
-            .viewport
-            .rows()
-            .first()
-            .map(|r| r.line_index)
-            .unwrap_or(0);
+        let saved_top_line = self.page.viewport.top_line_index();
         self.page.status.set_content(direction.prompt().to_string());
         self.mode = AppMode::Search {
             direction,
@@ -388,13 +382,7 @@ impl<S: Screen> App<S> {
                     }
                 }
             },
-            None => self
-                .page
-                .viewport
-                .rows()
-                .first()
-                .map(|r| r.line_index)
-                .unwrap_or(0),
+            None => self.page.viewport.top_line_index(),
         };
 
         let query = search.query.clone();
