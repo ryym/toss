@@ -1,9 +1,9 @@
 mod display;
-mod incremental_search;
 mod scroll;
 mod scroll_wrap;
 mod search_execution;
 mod search_highlight;
+mod search_incremental;
 mod search_input;
 mod search_jump;
 
