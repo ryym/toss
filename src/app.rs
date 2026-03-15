@@ -83,9 +83,8 @@ impl<S: Screen> App<S> {
 
     pub fn run(&mut self) -> io::Result<()> {
         // Initial draw
-        let header_rows = self.resolve_header();
         let sh = search_highlight(active_search(&self.mode, &self.search));
-        screen::draw_full_page(&mut self.screen, &mut self.page, &header_rows, sh.as_ref())?;
+        screen::draw_full_page(&mut self.screen, &mut self.page, sh.as_ref())?;
         self.needs_full_redraw = false;
 
         loop {
@@ -126,14 +125,8 @@ impl<S: Screen> App<S> {
 
             // 3. Render if needed
             if self.needs_full_redraw {
-                let header_rows = self.resolve_header();
                 let sh = search_highlight(active_search(&self.mode, &self.search));
-                screen::draw_full_page(
-                    &mut self.screen,
-                    &mut self.page,
-                    &header_rows,
-                    sh.as_ref(),
-                )?;
+                screen::draw_full_page(&mut self.screen, &mut self.page, sh.as_ref())?;
                 self.needs_full_redraw = false;
                 self.needs_status_redraw = false;
             } else if self.needs_status_redraw {
@@ -145,15 +138,10 @@ impl<S: Screen> App<S> {
         }
     }
 
-    /// Resolve the header rows for the current document and width.
-    fn resolve_header(&mut self) -> Vec<crate::viewport::ScreenRow> {
-        let width = self.page.viewport.width();
-        self.page.header.resolve(&mut self.page.doc, width)
-    }
-
     /// Compute the screen row where the status line should appear.
     fn status_line_y(&mut self) -> u16 {
-        let header_height = self.resolve_header().len();
+        let width = self.page.viewport.width();
+        let header_height = self.page.header.resolve(&mut self.page.doc, width).len();
         (header_height + self.page.viewport.rows().len()) as u16
     }
 
@@ -439,15 +427,8 @@ impl<S: Screen> App<S> {
         };
 
         if plan.terminal_scroll > 0 {
-            let header_height = self.resolve_header().len();
             let sh = search_highlight(active_search(&self.mode, &self.search));
-            screen::apply_scroll(
-                &mut self.screen,
-                &plan,
-                &mut self.page,
-                header_height,
-                sh.as_ref(),
-            )?;
+            screen::apply_scroll(&mut self.screen, &plan, &mut self.page, sh.as_ref())?;
             self.rendered_offset += rows as f64;
         }
         Ok(())
@@ -490,15 +471,8 @@ impl<S: Screen> App<S> {
             };
 
             if plan.terminal_scroll > 0 {
-                let header_height = self.resolve_header().len();
                 let sh = search_highlight(active_search(&self.mode, &self.search));
-                screen::apply_scroll(
-                    &mut self.screen,
-                    &plan,
-                    &mut self.page,
-                    header_height,
-                    sh.as_ref(),
-                )?;
+                screen::apply_scroll(&mut self.screen, &plan, &mut self.page, sh.as_ref())?;
             }
 
             self.rendered_offset = current_row as f64;

@@ -232,18 +232,18 @@ pub fn draw_status_line<S: Screen>(
 pub fn draw_full_page<S: Screen>(
     screen: &mut S,
     page: &mut Page,
-    header_rows: &[ScreenRow],
     search: Option<&SearchHighlight<'_>>,
 ) -> io::Result<()> {
-    let header_height = header_rows.len();
     let width = page.viewport.width();
+    let header_rows = page.header.resolve(&mut page.doc, width);
+    let header_height = header_rows.len();
 
     // Draw header rows at the top of the screen.
     if header_height > 0 {
         draw_rows_grouped(
             screen,
             &mut page.doc,
-            header_rows,
+            &header_rows,
             0,
             header_height,
             width,
@@ -281,18 +281,19 @@ pub fn draw_full_page<S: Screen>(
 /// any adjacent existing rows that belong to the same logical line. The dirty
 /// range is then redrawn with grouped continuous writes to maintain soft wraps.
 ///
-/// `header_height` is the number of screen rows occupied by the header.
-/// When non-zero, a scroll region is used to keep the header in place.
+/// When a header is present, a scroll region is used to keep it in place.
 pub fn apply_scroll<S: Screen>(
     screen: &mut S,
     plan: &ScrollPlan,
     page: &mut Page,
-    header_height: usize,
     search: Option<&SearchHighlight<'_>>,
 ) -> io::Result<()> {
     if plan.terminal_scroll == 0 {
         return Ok(());
     }
+
+    let width = page.viewport.width();
+    let header_height = page.header.resolve(&mut page.doc, width).len();
 
     // Set scroll region to exclude header and status line.
     let viewport_height = page.viewport.height();
@@ -309,7 +310,6 @@ pub fn apply_scroll<S: Screen>(
     }
 
     let rows = page.viewport.rows();
-    let width = page.viewport.width();
     let content_height = rows.len();
     let n_new = plan.new_rows.len();
 
