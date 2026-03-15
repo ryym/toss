@@ -6,25 +6,6 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use crate::document::Document;
 use crate::line_editor::LineEditor;
 use crate::screen::{self, Screen, SearchHighlight};
-
-/// Resolve which SearchState is active: preview (during search) or committed.
-fn active_search<'a>(
-    mode: &'a AppMode,
-    committed: &'a Option<SearchState>,
-) -> Option<&'a SearchState> {
-    match mode {
-        AppMode::Search { preview, .. } => preview.as_ref(),
-        _ => committed.as_ref(),
-    }
-}
-
-/// Build a SearchHighlight from an optional search state.
-fn search_highlight(search: Option<&SearchState>) -> Option<SearchHighlight<'_>> {
-    search.map(|s| SearchHighlight {
-        query: &s.query,
-        current: s.current,
-    })
-}
 use crate::screen_state::ScreenState;
 use crate::scroll::ScrollAnimation;
 use crate::search::{self, MatchPosition, SearchDirection, SearchState};
@@ -493,4 +474,23 @@ impl<S: Screen> App<S> {
 
         Ok(())
     }
+}
+
+/// Resolve which SearchState is active: preview (during search) or committed.
+fn active_search<'a>(
+    mode: &'a AppMode,
+    committed: &'a Option<SearchState>,
+) -> Option<&'a SearchState> {
+    match mode {
+        AppMode::Search { preview, .. } => preview.as_ref(),
+        _ => committed.as_ref(),
+    }
+}
+
+/// Build a SearchHighlight from an optional search state.
+fn search_highlight(search: Option<&SearchState>) -> Option<SearchHighlight<'_>> {
+    search.map(|s| SearchHighlight {
+        query: &s.query,
+        current: s.current,
+    })
 }
