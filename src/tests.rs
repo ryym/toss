@@ -1,6 +1,5 @@
-mod display_ansi_escape_sequences;
+mod display;
 mod incremental_search;
-mod open_and_quit;
 mod scroll_cannot_past_boundaries;
 mod scroll_down_reveals_wrap_continuation;
 mod scroll_half_page;
@@ -14,7 +13,6 @@ mod search_highlight_wrapped_line;
 mod search_input;
 mod search_jump_beyond_bottom;
 mod search_jump_near_end;
-mod status_line;
 mod wrap_midline_at_top_of_screen;
 
 use std::time::Duration;

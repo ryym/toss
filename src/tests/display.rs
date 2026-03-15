@@ -1,0 +1,103 @@
+use pretty_assertions::assert_eq;
+
+use super::{TestCase, key, run_test_screen};
+
+#[test]
+fn open_and_quit() {
+    let out = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content: "\
+line 1
+line 2
+line 3
+line 4
+line 5",
+        events: vec![key('q')],
+    })
+    .out();
+    assert_eq!(
+        out,
+        "\
+line 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:q
+"
+    );
+}
+
+// Lines with ANSI escape sequences should display correctly.
+// Escape sequences have zero display width, so wrapping is based on
+// visible characters only. The raw escape sequences are preserved in output.
+#[test]
+fn ansi_escape_sequences() {
+    // "\x1b[1m" = bold, "\x1b[0m" = reset, "\x1b[31m" = red
+    // Line 1 visible: "Hello" (5 cols, fits in width 5)
+    // Line 2 visible: "abcdefgh" (8 cols, wraps to "abcde" + "fgh" at width 5)
+    // Line 3 visible: "end" (3 cols)
+    let out = run_test_screen(TestCase {
+        screen_width: 5,
+        screen_height: 5,
+        content: "\
+\x1b[1mHello\x1b[0m
+\x1b[31mabcde\x1b[0mfgh
+end",
+        events: vec![key('q')],
+    })
+    .out();
+    assert_eq!(
+        out,
+        "\
+{bold}Hello{reset}
+{red}abcde{reset}>
+fgh
+end
+:
+-----
+[EVENT]:char:q
+"
+    );
+}
+
+// Verify the status line appears on the last row and survives scroll operations.
+#[test]
+fn status_line() {
+    let out = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content: "\
+line 1
+line 2
+line 3
+line 4
+line 5",
+        events: vec![key('j'), key('k'), key('q')],
+    })
+    .out();
+    assert_eq!(
+        out,
+        "\
+line 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:j
+line 2
+line 3
+line 4
+:
+-----
+[EVENT]:char:k
+line 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:q
+"
+    );
+}
