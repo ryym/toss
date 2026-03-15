@@ -3,7 +3,7 @@ mod incremental_search;
 mod scroll;
 mod scroll_wrap;
 mod search_execution;
-mod search_highlight_wrapped_line;
+mod search_highlight;
 mod search_input;
 mod search_jump;
 
