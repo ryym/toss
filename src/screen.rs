@@ -14,7 +14,6 @@ mod highlight;
 
 use crate::page::Page;
 use crate::search::MatchPosition;
-use crate::status_line::StatusLine;
 use crate::viewport::{Direction, ScreenRow, ScrollPlan};
 use highlight::HighlightStyle;
 
@@ -218,23 +217,18 @@ fn draw_rows_grouped<S: Screen>(
     Ok(())
 }
 
-/// Draw the status line at the given screen row.
-fn draw_status_line<S: Screen>(
-    screen: &mut S,
-    status: &StatusLine,
-    screen_y: u16,
-) -> io::Result<()> {
-    screen.clear_row(screen_y)?;
-    screen.write_at(screen_y, status.render())
+/// Draw the status line, computing its position from the page layout.
+pub fn draw_status_line<S: Screen>(screen: &mut S, page: &mut Page) -> io::Result<()> {
+    draw_status_line_no_flush(screen, page)?;
+    screen.flush()
 }
 
-/// Redraw only the status line, computing its position from the page layout.
-pub fn redraw_status_line<S: Screen>(screen: &mut S, page: &mut Page) -> io::Result<()> {
-    let width = page.viewport.width();
-    let header_height = page.header.resolve(&mut page.doc, width).len();
+fn draw_status_line_no_flush<S: Screen>(screen: &mut S, page: &mut Page) -> io::Result<()> {
+    let header_height = page.resolve_header().len();
     let status_y = (header_height + page.viewport.rows().len()) as u16;
-    draw_status_line(screen, &page.status, status_y)?;
-    screen.flush()
+    screen.clear_row(status_y)?;
+    screen.write_at(status_y, page.status.render())?;
+    Ok(())
 }
 
 /// Render a full page (used on initial draw and resize).
@@ -244,7 +238,7 @@ pub fn draw_full_page<S: Screen>(
     search: Option<&SearchHighlight<'_>>,
 ) -> io::Result<()> {
     let width = page.viewport.width();
-    let header_rows = page.header.resolve(&mut page.doc, width);
+    let header_rows = page.resolve_header();
     let header_height = header_rows.len();
 
     // Draw header rows at the top of the screen.
@@ -278,9 +272,8 @@ pub fn draw_full_page<S: Screen>(
     for y in rows.len()..page.viewport.height() {
         screen.clear_row((y + header_height) as u16)?;
     }
+    draw_status_line_no_flush(screen, page)?;
 
-    let status_y = (header_height + rows.len()) as u16;
-    draw_status_line(screen, &page.status, status_y)?;
     screen.flush()
 }
 
@@ -302,7 +295,7 @@ pub fn apply_scroll<S: Screen>(
     }
 
     let width = page.viewport.width();
-    let header_height = page.header.resolve(&mut page.doc, width).len();
+    let header_height = page.resolve_header().len();
 
     // Set scroll region to exclude header and status line.
     let viewport_height = page.viewport.height();
@@ -353,7 +346,7 @@ pub fn apply_scroll<S: Screen>(
         search,
         header_height,
     )?;
-    let status_y = (header_height + content_height) as u16;
-    draw_status_line(screen, &page.status, status_y)?;
+    draw_status_line_no_flush(screen, page)?;
+
     screen.flush()
 }

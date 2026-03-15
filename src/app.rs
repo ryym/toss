@@ -92,16 +92,7 @@ impl<S: Screen> App<S> {
                     }
                     Event::Resize(w, h) => {
                         log::debug!("Resize: {w}x{h}");
-                        let header_height = self
-                            .page
-                            .header
-                            .resolve(&mut self.page.doc, w as usize)
-                            .len();
-                        let content_height =
-                            (h as usize).saturating_sub(1).saturating_sub(header_height);
-                        self.page
-                            .viewport
-                            .resize(&mut self.page.doc, w as usize, content_height);
+                        self.page.resize(w as usize, h as usize);
                         self.needs_full_redraw = true;
                     }
                     _ => {}
@@ -118,7 +109,7 @@ impl<S: Screen> App<S> {
                 self.needs_full_redraw = false;
                 self.needs_status_redraw = false;
             } else if self.needs_status_redraw {
-                screen::redraw_status_line(&mut self.screen, &mut self.page)?;
+                screen::draw_status_line(&mut self.screen, &mut self.page)?;
                 self.needs_status_redraw = false;
             }
         }
