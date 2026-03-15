@@ -134,20 +134,24 @@ impl Line {
 
     /// Get the raw text slice for a specific wrapped row, including any
     /// embedded escape sequences.
+    #[cfg(test)]
     pub fn wrap_row_text(&self, width: usize, wrap_index: usize) -> &str {
         let range = self.wrap_row_range(width, wrap_index);
         &self.raw[range]
     }
 
     /// Get the byte range in raw text for a specific wrapped row.
+    #[cfg(test)]
     pub fn wrap_row_range(&self, width: usize, wrap_index: usize) -> Range<usize> {
+        self.wrap_rows_range(width, wrap_index, wrap_index + 1)
+    }
+
+    /// Get the byte range in raw text spanning multiple consecutive wrapped rows
+    /// from `from` to `to` (exclusive).
+    pub fn wrap_rows_range(&self, width: usize, from: usize, to: usize) -> Range<usize> {
         let ends = self.wrap_end_positions(width);
-        let start = if wrap_index == 0 {
-            0
-        } else {
-            ends[wrap_index - 1]
-        };
-        start..ends[wrap_index]
+        let start = if from == 0 { 0 } else { ends[from - 1] };
+        start..ends[to - 1]
     }
 
     /// Find all matches of a regex in the plain text.

@@ -25,7 +25,7 @@ line 3",
     assert_eq!(
         screen.last_snapshot(),
         "\
-01234{reverse}a{/reverse}{reverse}>
+01234{reverse}a>
 b{/reverse}cde
 line 3
 :

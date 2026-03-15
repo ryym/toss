@@ -159,48 +159,41 @@ fn draw_rows_grouped<S: Screen>(
         }
         // Write the combined text for this group as one continuous piece
         if let Some(line) = doc.line(line_idx) {
-            let text = match search {
-                Some(sh) => {
-                    let matches = line.find_matches(sh.query);
-                    if matches.is_empty() {
-                        // No matches: use original text as-is
-                        (group_start..i)
-                            .map(|j| line.wrap_row_text(width, rows[j].wrap_index).to_string())
-                            .collect::<String>()
-                    } else {
-                        let styles: Vec<HighlightStyle> = matches
-                            .iter()
-                            .enumerate()
-                            .map(|(mi, _)| {
-                                let is_current = sh
-                                    .current
-                                    .is_some_and(|c| c.line == line_idx && c.match_index == mi);
-                                if is_current {
-                                    HighlightStyle::Reverse
-                                } else {
-                                    HighlightStyle::DimReverse
-                                }
-                            })
-                            .collect();
-                        let positions = highlight::build_highlight_positions(
-                            &matches,
-                            &styles,
-                            line.plain_to_raw(),
-                            line.raw().len(),
-                        );
-                        (group_start..i)
-                            .map(|j| {
-                                let range = line.wrap_row_range(width, rows[j].wrap_index);
-                                highlight::apply_highlight_to_range(line.raw(), range, &positions)
-                            })
-                            .collect::<String>()
-                    }
-                }
-                None => (group_start..i)
-                    .map(|j| line.wrap_row_text(width, rows[j].wrap_index).to_string())
-                    .collect::<String>(),
-            };
-            screen.write_at((group_start + screen_y) as u16, &text)?;
+            let first_wrap = rows[group_start].wrap_index;
+            let last_wrap = rows[i - 1].wrap_index;
+            let raw_range = line.wrap_rows_range(width, first_wrap, last_wrap + 1);
+
+            let matches = search.map(|sh| line.find_matches(sh.query));
+            let has_matches = matches.as_ref().is_some_and(|m| !m.is_empty());
+
+            if has_matches {
+                let sh = search.unwrap();
+                let matches = matches.unwrap();
+                let styles: Vec<HighlightStyle> = matches
+                    .iter()
+                    .enumerate()
+                    .map(|(mi, _)| {
+                        let is_current = sh
+                            .current
+                            .is_some_and(|c| c.line == line_idx && c.match_index == mi);
+                        if is_current {
+                            HighlightStyle::Reverse
+                        } else {
+                            HighlightStyle::DimReverse
+                        }
+                    })
+                    .collect();
+                let positions = highlight::build_highlight_positions(
+                    &matches,
+                    &styles,
+                    line.plain_to_raw(),
+                    line.raw().len(),
+                );
+                let text = highlight::apply_highlight_to_range(line.raw(), raw_range, &positions);
+                screen.write_at((group_start + screen_y) as u16, &text)?;
+            } else {
+                screen.write_at((group_start + screen_y) as u16, &line.raw()[raw_range])?;
+            }
         }
     }
     Ok(())
