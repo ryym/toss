@@ -4,15 +4,12 @@ use std::time::{Duration, Instant};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::document::Document;
-use crate::header::Header;
 use crate::line_editor::LineEditor;
 use crate::options::Options;
 use crate::page::Page;
 use crate::screen::{self, Screen, SearchHighlight};
 use crate::scroll::ScrollAnimation;
 use crate::search::{self, MatchPosition, SearchDirection, SearchState};
-use crate::status_line::StatusLine;
-use crate::viewport::Viewport;
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
@@ -46,21 +43,12 @@ pub struct App<S> {
 }
 
 impl<S: Screen> App<S> {
-    pub fn new(screen: S, mut doc: Document, options: Options) -> io::Result<Self> {
+    pub fn new(screen: S, doc: Document, options: Options) -> io::Result<Self> {
         let (w, h) = screen.size()?;
-        let header = Header::new(options.header);
-        let header_height = header.resolve(&mut doc, w as usize).len();
-        let content_height = (h as usize).saturating_sub(1).saturating_sub(header_height);
-        let viewport = Viewport::new(&mut doc, w as usize, content_height, header.min_top_line());
-
+        let page = Page::new(doc, &options, w as usize, h as usize);
         Ok(Self {
             screen,
-            page: Page {
-                doc,
-                header,
-                viewport,
-                status: StatusLine::new(),
-            },
+            page,
             mode: AppMode::View,
             search: None,
             animation: None,
