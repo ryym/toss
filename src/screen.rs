@@ -11,9 +11,10 @@ use regex::Regex;
 
 use crate::document::Document;
 use crate::highlight::{self, HighlightStyle};
+use crate::page::Page;
 use crate::search::MatchPosition;
 use crate::status_line::StatusLine;
-use crate::viewport::{Direction, ScreenRow, ScrollPlan, Viewport};
+use crate::viewport::{Direction, ScreenRow, ScrollPlan};
 
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {
@@ -202,18 +203,18 @@ pub fn draw_status_line<S: Screen>(
 /// Render a full page (used on initial draw and resize).
 pub fn draw_full_page<S: Screen>(
     screen: &mut S,
-    doc: &mut Document,
-    state: &Viewport,
-    status: &StatusLine,
+    page: &mut Page,
     search: Option<&SearchHighlight<'_>>,
 ) -> io::Result<()> {
-    let rows = state.rows();
-    draw_rows_grouped(screen, doc, rows, 0, rows.len(), state.width(), search)?;
+    let rows = page.viewport.rows();
+    let width = page.viewport.width();
+    let height = page.viewport.height();
+    draw_rows_grouped(screen, &mut page.doc, rows, 0, rows.len(), width, search)?;
     // Clear any rows below content that may have stale content.
-    for y in rows.len() as u16..state.height() as u16 {
+    for y in rows.len() as u16..height as u16 {
         screen.clear_row(y)?;
     }
-    draw_status_line(screen, status, rows.len() as u16)?;
+    draw_status_line(screen, &page.status, rows.len() as u16)?;
     screen.flush()
 }
 
@@ -224,10 +225,8 @@ pub fn draw_full_page<S: Screen>(
 /// range is then redrawn with grouped continuous writes to maintain soft wraps.
 pub fn apply_scroll<S: Screen>(
     screen: &mut S,
-    doc: &mut Document,
     plan: &ScrollPlan,
-    state: &Viewport,
-    status: &StatusLine,
+    page: &mut Page,
     search: Option<&SearchHighlight<'_>>,
 ) -> io::Result<()> {
     if plan.terminal_scroll == 0 {
@@ -236,7 +235,8 @@ pub fn apply_scroll<S: Screen>(
 
     screen.scroll_terminal(plan)?;
 
-    let rows = state.rows();
+    let rows = page.viewport.rows();
+    let width = page.viewport.width();
     let content_height = rows.len();
     let n_new = plan.new_rows.len();
 
@@ -261,7 +261,15 @@ pub fn apply_scroll<S: Screen>(
         }
     };
 
-    draw_rows_grouped(screen, doc, rows, draw_from, draw_to, state.width(), search)?;
-    draw_status_line(screen, status, rows.len() as u16)?;
+    draw_rows_grouped(
+        screen,
+        &mut page.doc,
+        rows,
+        draw_from,
+        draw_to,
+        width,
+        search,
+    )?;
+    draw_status_line(screen, &page.status, rows.len() as u16)?;
     screen.flush()
 }

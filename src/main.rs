@@ -9,6 +9,7 @@ mod line_index;
 mod logger;
 #[cfg(test)]
 mod mock_screen;
+mod page;
 mod screen;
 mod scroll;
 mod search;

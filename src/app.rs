@@ -5,6 +5,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::document::Document;
 use crate::line_editor::LineEditor;
+use crate::page::Page;
 use crate::screen::{self, Screen, SearchHighlight};
 use crate::scroll::ScrollAnimation;
 use crate::search::{self, MatchPosition, SearchDirection, SearchState};
@@ -30,9 +31,7 @@ enum AppMode {
 
 pub struct App<S> {
     screen: S,
-    doc: Document,
-    viewport: Viewport,
-    status: StatusLine,
+    page: Page,
     mode: AppMode,
     search: Option<SearchState>,
     animation: Option<ScrollAnimation>,
@@ -52,9 +51,11 @@ impl<S: Screen> App<S> {
 
         Ok(Self {
             screen,
-            doc,
-            viewport,
-            status: StatusLine::new(),
+            page: Page {
+                doc,
+                viewport,
+                status: StatusLine::new(),
+            },
             mode: AppMode::View,
             search: None,
             animation: None,
@@ -78,13 +79,7 @@ impl<S: Screen> App<S> {
     pub fn run(&mut self) -> io::Result<()> {
         // Initial draw
         let sh = search_highlight(active_search(&self.mode, &self.search));
-        screen::draw_full_page(
-            &mut self.screen,
-            &mut self.doc,
-            &self.viewport,
-            &self.status,
-            sh.as_ref(),
-        )?;
+        screen::draw_full_page(&mut self.screen, &mut self.page, sh.as_ref())?;
         self.needs_full_redraw = false;
 
         loop {
@@ -105,8 +100,9 @@ impl<S: Screen> App<S> {
                     Event::Resize(w, h) => {
                         log::debug!("Resize: {w}x{h}");
                         let content_height = (h as usize).saturating_sub(1);
-                        self.viewport
-                            .resize(&mut self.doc, w as usize, content_height);
+                        self.page
+                            .viewport
+                            .resize(&mut self.page.doc, w as usize, content_height);
                         self.needs_full_redraw = true;
                     }
                     _ => {}
@@ -119,20 +115,14 @@ impl<S: Screen> App<S> {
             // 3. Render if needed
             if self.needs_full_redraw {
                 let sh = search_highlight(active_search(&self.mode, &self.search));
-                screen::draw_full_page(
-                    &mut self.screen,
-                    &mut self.doc,
-                    &self.viewport,
-                    &self.status,
-                    sh.as_ref(),
-                )?;
+                screen::draw_full_page(&mut self.screen, &mut self.page, sh.as_ref())?;
                 self.needs_full_redraw = false;
                 self.needs_status_redraw = false;
             } else if self.needs_status_redraw {
                 screen::draw_status_line(
                     &mut self.screen,
-                    &self.status,
-                    self.viewport.rows().len() as u16,
+                    &self.page.status,
+                    self.page.viewport.rows().len() as u16,
                 )?;
                 self.screen.flush()?;
                 self.needs_status_redraw = false;
@@ -165,27 +155,27 @@ impl<S: Screen> App<S> {
                 self.scroll_immediate(-1)?;
             }
             KeyCode::Char('d') => {
-                self.start_scroll_animation(self.viewport.height() as isize / 2);
+                self.start_scroll_animation(self.page.viewport.height() as isize / 2);
             }
             KeyCode::Char('u') => {
-                self.start_scroll_animation(-(self.viewport.height() as isize / 2));
+                self.start_scroll_animation(-(self.page.viewport.height() as isize / 2));
             }
             KeyCode::Char('f') | KeyCode::Char(' ') => {
-                self.start_scroll_animation(self.viewport.height() as isize);
+                self.start_scroll_animation(self.page.viewport.height() as isize);
             }
             KeyCode::Char('b') => {
-                self.start_scroll_animation(-(self.viewport.height() as isize));
+                self.start_scroll_animation(-(self.page.viewport.height() as isize));
             }
             KeyCode::Char('g') => {
                 self.animation = None;
-                if self.viewport.jump_to(&mut self.doc, 0) {
+                if self.page.viewport.jump_to(&mut self.page.doc, 0) {
                     self.rendered_offset = 0.0;
                     self.needs_full_redraw = true;
                 }
             }
             KeyCode::Char('G') => {
                 self.animation = None;
-                if self.viewport.jump_to_end(&mut self.doc) {
+                if self.page.viewport.jump_to_end(&mut self.page.doc) {
                     self.needs_full_redraw = true;
                 }
             }
@@ -210,12 +200,13 @@ impl<S: Screen> App<S> {
         log::debug!("Enter search mode: {direction:?}");
         self.animation = None;
         let saved_top_line = self
+            .page
             .viewport
             .rows()
             .first()
             .map(|r| r.line_index)
             .unwrap_or(0);
-        self.status.set_content(direction.prompt().to_string());
+        self.page.status.set_content(direction.prompt().to_string());
         self.mode = AppMode::Search {
             direction,
             editor: LineEditor::new(),
@@ -228,7 +219,7 @@ impl<S: Screen> App<S> {
     fn exit_search_mode(&mut self) {
         log::debug!("Exit search mode");
         self.mode = AppMode::View;
-        self.status.set_content(":".to_string());
+        self.page.status.set_content(":".to_string());
         self.needs_status_redraw = true;
     }
 
@@ -236,7 +227,7 @@ impl<S: Screen> App<S> {
     fn cancel_search(&mut self) {
         if let AppMode::Search { saved_top_line, .. } = &self.mode {
             let top = *saved_top_line;
-            self.viewport.jump_to(&mut self.doc, top);
+            self.page.viewport.jump_to(&mut self.page.doc, top);
             self.needs_full_redraw = true;
         }
         self.exit_search_mode();
@@ -259,17 +250,19 @@ impl<S: Screen> App<S> {
             if let AppMode::Search { preview, .. } = &mut self.mode {
                 *preview = None;
             }
-            self.viewport.jump_to(&mut self.doc, saved_top_line);
+            self.page
+                .viewport
+                .jump_to(&mut self.page.doc, saved_top_line);
             self.needs_full_redraw = true;
             return;
         }
 
         let re = regex::Regex::new(&regex::escape(&input)).unwrap();
-        let matched = search::find_next_match(&mut self.doc, &re, saved_top_line, direction);
+        let matched = search::find_next_match(&mut self.page.doc, &re, saved_top_line, direction);
         log::debug!("Search preview: query={input:?}, result={matched:?}");
 
         if let Some(ref pos) = matched {
-            self.viewport.jump_to(&mut self.doc, pos.line);
+            self.page.viewport.jump_to(&mut self.page.doc, pos.line);
         }
 
         if let AppMode::Search { preview, .. } = &mut self.mode {
@@ -300,8 +293,11 @@ impl<S: Screen> App<S> {
                         return;
                     }
                     editor.backspace();
-                    self.status
-                        .set_content(format!("{}{}", direction.prompt(), editor.input()));
+                    self.page.status.set_content(format!(
+                        "{}{}",
+                        direction.prompt(),
+                        editor.input()
+                    ));
                 }
                 self.update_search_preview();
             }
@@ -311,8 +307,11 @@ impl<S: Screen> App<S> {
                 } = &mut self.mode
                 {
                     editor.insert(ch);
-                    self.status
-                        .set_content(format!("{}{}", direction.prompt(), editor.input()));
+                    self.page.status.set_content(format!(
+                        "{}{}",
+                        direction.prompt(),
+                        editor.input()
+                    ));
                 }
                 self.update_search_preview();
             }
@@ -357,7 +356,7 @@ impl<S: Screen> App<S> {
         if let Some(current) = search.current {
             let query = search.query.clone();
             if let Some(next_mi) =
-                search::find_next_match_in_line(&mut self.doc, &query, current, direction)
+                search::find_next_match_in_line(&mut self.page.doc, &query, current, direction)
             {
                 log::debug!("Next match on same line: index={next_mi}");
                 if let Some(ref mut search) = self.search {
@@ -375,7 +374,7 @@ impl<S: Screen> App<S> {
         let from = match search.current {
             Some(pos) => match direction {
                 SearchDirection::Forward => {
-                    if pos.line + 1 < self.doc.line_count() {
+                    if pos.line + 1 < self.page.doc.line_count() {
                         pos.line + 1
                     } else {
                         0
@@ -385,11 +384,12 @@ impl<S: Screen> App<S> {
                     if pos.line > 0 {
                         pos.line - 1
                     } else {
-                        self.doc.line_count().saturating_sub(1)
+                        self.page.doc.line_count().saturating_sub(1)
                     }
                 }
             },
             None => self
+                .page
                 .viewport
                 .rows()
                 .first()
@@ -398,10 +398,10 @@ impl<S: Screen> App<S> {
         };
 
         let query = search.query.clone();
-        let matched = search::find_next_match(&mut self.doc, &query, from, direction);
+        let matched = search::find_next_match(&mut self.page.doc, &query, from, direction);
         log::debug!("Next match from line {from}: {matched:?}");
         if let Some(ref pos) = matched {
-            self.viewport.jump_to(&mut self.doc, pos.line);
+            self.page.viewport.jump_to(&mut self.page.doc, pos.line);
             self.needs_full_redraw = true;
         }
         if let Some(ref mut search) = self.search {
@@ -414,21 +414,18 @@ impl<S: Screen> App<S> {
         self.animation = None;
 
         let plan = if rows > 0 {
-            self.viewport.scroll_down(rows as usize, &mut self.doc)
+            self.page
+                .viewport
+                .scroll_down(rows as usize, &mut self.page.doc)
         } else {
-            self.viewport.scroll_up((-rows) as usize, &mut self.doc)
+            self.page
+                .viewport
+                .scroll_up((-rows) as usize, &mut self.page.doc)
         };
 
         if plan.terminal_scroll > 0 {
             let sh = search_highlight(active_search(&self.mode, &self.search));
-            screen::apply_scroll(
-                &mut self.screen,
-                &mut self.doc,
-                &plan,
-                &self.viewport,
-                &self.status,
-                sh.as_ref(),
-            )?;
+            screen::apply_scroll(&mut self.screen, &plan, &mut self.page, sh.as_ref())?;
             self.rendered_offset += rows as f64;
         }
         Ok(())
@@ -461,21 +458,18 @@ impl<S: Screen> App<S> {
 
         if delta != 0 {
             let plan = if delta > 0 {
-                self.viewport.scroll_down(delta as usize, &mut self.doc)
+                self.page
+                    .viewport
+                    .scroll_down(delta as usize, &mut self.page.doc)
             } else {
-                self.viewport.scroll_up((-delta) as usize, &mut self.doc)
+                self.page
+                    .viewport
+                    .scroll_up((-delta) as usize, &mut self.page.doc)
             };
 
             if plan.terminal_scroll > 0 {
                 let sh = search_highlight(active_search(&self.mode, &self.search));
-                screen::apply_scroll(
-                    &mut self.screen,
-                    &mut self.doc,
-                    &plan,
-                    &self.viewport,
-                    &self.status,
-                    sh.as_ref(),
-                )?;
+                screen::apply_scroll(&mut self.screen, &plan, &mut self.page, sh.as_ref())?;
             }
 
             self.rendered_offset = current_row as f64;
