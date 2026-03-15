@@ -10,10 +10,10 @@ mod logger;
 #[cfg(test)]
 mod mock_screen;
 mod screen;
-mod screen_state;
 mod scroll;
 mod search;
 mod status_line;
+mod viewport;
 
 #[cfg(test)]
 mod tests;

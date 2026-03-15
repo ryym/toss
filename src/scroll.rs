@@ -3,9 +3,9 @@
 //! App keeps a `rendered_offset` (f64) representing the current visual scroll position.
 //! ScrollAnimation interpolates between a start and target offset using cubic ease-out.
 //! Each frame, App computes the integer delta from the last rendered position and
-//! passes it to ScreenState's scroll methods, which always work in whole rows.
+//! passes it to Viewport's scroll methods, which always work in whole rows.
 //! This separation of float interpolation from integer row tracking is what makes
-//! the animation visually smooth without complicating ScreenState.
+//! the animation visually smooth without complicating Viewport.
 
 use std::time::{Duration, Instant};
 

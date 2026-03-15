@@ -5,7 +5,7 @@ use unicode_width::UnicodeWidthChar;
 
 use crate::ansi;
 use crate::screen::Screen;
-use crate::screen_state::{Direction, ScrollPlan};
+use crate::viewport::{Direction, ScrollPlan};
 
 #[derive(Debug, Clone)]
 struct GridRow {

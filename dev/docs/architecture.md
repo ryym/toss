@@ -5,14 +5,14 @@
 The system has four layers. Each layer has a single responsibility and depends only on the layer(s) below it.
 
 ```
-App          Event loop, mode dispatch, animation coordination
-ScreenState  What is currently displayed (row-level bookkeeping)
-Document     Line data (loading, caching, wrapping)
-Screen       Terminal I/O abstraction
+App       Event loop, mode dispatch, animation coordination
+Viewport  What is currently displayed in the content area (row-level bookkeeping)
+Document  Line data (loading, caching, wrapping)
+Screen    Terminal I/O abstraction
 ```
 
 - **Document** loads lines from a file or stdin and owns the parsed data. It knows nothing about the screen.
-- **ScreenState** tracks which document lines (and which wrap segments) occupy each screen row. It computes a **ScrollPlan** — a minimal diff describing what changed — but never touches the terminal itself.
+- **Viewport** tracks which document lines (and which wrap segments) occupy each content area row. It computes a **ScrollPlan** — a minimal diff describing what changed — but never touches the terminal itself. It knows only about the content area dimensions (excluding status line, sticky header, etc.); screen layout is managed by App.
 - **Screen** is a trait that abstracts terminal operations. Production code uses crossterm; tests use an in-memory mock. Rendering functions live alongside the trait and translate a ScrollPlan into terminal commands.
 - **App** ties everything together: it runs the event loop, dispatches input by mode, drives animations, and decides when to render.
 
@@ -31,7 +31,7 @@ This design exists because smooth scroll animation requires rendering intermedia
 
 Full screen redraws cause visible flicker. To avoid this, scrolling works incrementally:
 
-1. ScreenState receives "scroll N rows down/up"
+1. Viewport receives "scroll N rows down/up"
 2. It shifts its internal row array and fills in the newly exposed rows
 3. It returns a ScrollPlan: the direction, how many rows shifted, and the new row contents
 4. The rendering function issues a terminal scroll command (which shifts existing content in-place) and only draws the newly revealed rows
@@ -44,7 +44,7 @@ Source lines may contain ANSI escape sequences. The design principle is: **width
 
 This duality surfaces in two cross-cutting concerns:
 
-- **Wrapping**: Wrap positions are determined by display widths on plain text, then translated to raw byte offsets. ScreenState tracks which wrap segment of which line occupies each screen row. When rendering, wrapped rows from the same logical line are written as a single continuous string so the terminal handles line breaks as soft wraps.
+- **Wrapping**: Wrap positions are determined by display widths on plain text, then translated to raw byte offsets. Viewport tracks which wrap segment of which line occupies each screen row. When rendering, wrapped rows from the same logical line are written as a single continuous string so the terminal handles line breaks as soft wraps.
 - **Search highlighting**: Matches are found on plain text, then the match ranges are mapped to raw text positions where escape sequences for highlight are injected.
 
 ## Mode System

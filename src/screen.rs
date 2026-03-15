@@ -11,9 +11,9 @@ use regex::Regex;
 
 use crate::document::Document;
 use crate::highlight::{self, HighlightStyle};
-use crate::screen_state::{Direction, ScreenRow, ScreenState, ScrollPlan};
 use crate::search::MatchPosition;
 use crate::status_line::StatusLine;
+use crate::viewport::{Direction, ScreenRow, ScrollPlan, Viewport};
 
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {
@@ -203,14 +203,14 @@ pub fn draw_status_line<S: Screen>(
 pub fn draw_full_page<S: Screen>(
     screen: &mut S,
     doc: &mut Document,
-    state: &ScreenState,
+    state: &Viewport,
     status: &StatusLine,
     search: Option<&SearchHighlight<'_>>,
 ) -> io::Result<()> {
     let rows = state.rows();
     draw_rows_grouped(screen, doc, rows, 0, rows.len(), state.width(), search)?;
     // Clear any rows below content that may have stale content.
-    for y in rows.len() as u16..state.content_height() as u16 {
+    for y in rows.len() as u16..state.height() as u16 {
         screen.clear_row(y)?;
     }
     draw_status_line(screen, status, rows.len() as u16)?;
@@ -226,7 +226,7 @@ pub fn apply_scroll<S: Screen>(
     screen: &mut S,
     doc: &mut Document,
     plan: &ScrollPlan,
-    state: &ScreenState,
+    state: &Viewport,
     status: &StatusLine,
     search: Option<&SearchHighlight<'_>>,
 ) -> io::Result<()> {

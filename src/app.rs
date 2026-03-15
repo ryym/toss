@@ -6,10 +6,10 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use crate::document::Document;
 use crate::line_editor::LineEditor;
 use crate::screen::{self, Screen, SearchHighlight};
-use crate::screen_state::ScreenState;
 use crate::scroll::ScrollAnimation;
 use crate::search::{self, MatchPosition, SearchDirection, SearchState};
 use crate::status_line::StatusLine;
+use crate::viewport::Viewport;
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
@@ -31,7 +31,7 @@ enum AppMode {
 pub struct App<S> {
     screen: S,
     doc: Document,
-    state: ScreenState,
+    viewport: Viewport,
     status: StatusLine,
     mode: AppMode,
     search: Option<SearchState>,
@@ -47,12 +47,13 @@ pub struct App<S> {
 impl<S: Screen> App<S> {
     pub fn new(screen: S, mut doc: Document) -> io::Result<Self> {
         let (w, h) = screen.size()?;
-        let state = ScreenState::new(&mut doc, w as usize, h as usize);
+        let content_height = (h as usize).saturating_sub(1);
+        let viewport = Viewport::new(&mut doc, w as usize, content_height);
 
         Ok(Self {
             screen,
             doc,
-            state,
+            viewport,
             status: StatusLine::new(),
             mode: AppMode::View,
             search: None,
@@ -80,7 +81,7 @@ impl<S: Screen> App<S> {
         screen::draw_full_page(
             &mut self.screen,
             &mut self.doc,
-            &self.state,
+            &self.viewport,
             &self.status,
             sh.as_ref(),
         )?;
@@ -103,7 +104,9 @@ impl<S: Screen> App<S> {
                     }
                     Event::Resize(w, h) => {
                         log::debug!("Resize: {w}x{h}");
-                        self.state.resize(&mut self.doc, w as usize, h as usize);
+                        let content_height = (h as usize).saturating_sub(1);
+                        self.viewport
+                            .resize(&mut self.doc, w as usize, content_height);
                         self.needs_full_redraw = true;
                     }
                     _ => {}
@@ -119,7 +122,7 @@ impl<S: Screen> App<S> {
                 screen::draw_full_page(
                     &mut self.screen,
                     &mut self.doc,
-                    &self.state,
+                    &self.viewport,
                     &self.status,
                     sh.as_ref(),
                 )?;
@@ -129,7 +132,7 @@ impl<S: Screen> App<S> {
                 screen::draw_status_line(
                     &mut self.screen,
                     &self.status,
-                    self.state.rows().len() as u16,
+                    self.viewport.rows().len() as u16,
                 )?;
                 self.screen.flush()?;
                 self.needs_status_redraw = false;
@@ -162,27 +165,27 @@ impl<S: Screen> App<S> {
                 self.scroll_immediate(-1)?;
             }
             KeyCode::Char('d') => {
-                self.start_scroll_animation(self.state.content_height() as isize / 2);
+                self.start_scroll_animation(self.viewport.height() as isize / 2);
             }
             KeyCode::Char('u') => {
-                self.start_scroll_animation(-(self.state.content_height() as isize / 2));
+                self.start_scroll_animation(-(self.viewport.height() as isize / 2));
             }
             KeyCode::Char('f') | KeyCode::Char(' ') => {
-                self.start_scroll_animation(self.state.content_height() as isize);
+                self.start_scroll_animation(self.viewport.height() as isize);
             }
             KeyCode::Char('b') => {
-                self.start_scroll_animation(-(self.state.content_height() as isize));
+                self.start_scroll_animation(-(self.viewport.height() as isize));
             }
             KeyCode::Char('g') => {
                 self.animation = None;
-                if self.state.jump_to(&mut self.doc, 0) {
+                if self.viewport.jump_to(&mut self.doc, 0) {
                     self.rendered_offset = 0.0;
                     self.needs_full_redraw = true;
                 }
             }
             KeyCode::Char('G') => {
                 self.animation = None;
-                if self.state.jump_to_end(&mut self.doc) {
+                if self.viewport.jump_to_end(&mut self.doc) {
                     self.needs_full_redraw = true;
                 }
             }
@@ -206,7 +209,12 @@ impl<S: Screen> App<S> {
     fn enter_search_mode(&mut self, direction: SearchDirection) {
         log::debug!("Enter search mode: {direction:?}");
         self.animation = None;
-        let saved_top_line = self.state.rows().first().map(|r| r.line_index).unwrap_or(0);
+        let saved_top_line = self
+            .viewport
+            .rows()
+            .first()
+            .map(|r| r.line_index)
+            .unwrap_or(0);
         self.status.set_content(direction.prompt().to_string());
         self.mode = AppMode::Search {
             direction,
@@ -228,7 +236,7 @@ impl<S: Screen> App<S> {
     fn cancel_search(&mut self) {
         if let AppMode::Search { saved_top_line, .. } = &self.mode {
             let top = *saved_top_line;
-            self.state.jump_to(&mut self.doc, top);
+            self.viewport.jump_to(&mut self.doc, top);
             self.needs_full_redraw = true;
         }
         self.exit_search_mode();
@@ -251,7 +259,7 @@ impl<S: Screen> App<S> {
             if let AppMode::Search { preview, .. } = &mut self.mode {
                 *preview = None;
             }
-            self.state.jump_to(&mut self.doc, saved_top_line);
+            self.viewport.jump_to(&mut self.doc, saved_top_line);
             self.needs_full_redraw = true;
             return;
         }
@@ -261,7 +269,7 @@ impl<S: Screen> App<S> {
         log::debug!("Search preview: query={input:?}, result={matched:?}");
 
         if let Some(ref pos) = matched {
-            self.state.jump_to(&mut self.doc, pos.line);
+            self.viewport.jump_to(&mut self.doc, pos.line);
         }
 
         if let AppMode::Search { preview, .. } = &mut self.mode {
@@ -381,14 +389,19 @@ impl<S: Screen> App<S> {
                     }
                 }
             },
-            None => self.state.rows().first().map(|r| r.line_index).unwrap_or(0),
+            None => self
+                .viewport
+                .rows()
+                .first()
+                .map(|r| r.line_index)
+                .unwrap_or(0),
         };
 
         let query = search.query.clone();
         let matched = search::find_next_match(&mut self.doc, &query, from, direction);
         log::debug!("Next match from line {from}: {matched:?}");
         if let Some(ref pos) = matched {
-            self.state.jump_to(&mut self.doc, pos.line);
+            self.viewport.jump_to(&mut self.doc, pos.line);
             self.needs_full_redraw = true;
         }
         if let Some(ref mut search) = self.search {
@@ -401,9 +414,9 @@ impl<S: Screen> App<S> {
         self.animation = None;
 
         let plan = if rows > 0 {
-            self.state.scroll_down(rows as usize, &mut self.doc)
+            self.viewport.scroll_down(rows as usize, &mut self.doc)
         } else {
-            self.state.scroll_up((-rows) as usize, &mut self.doc)
+            self.viewport.scroll_up((-rows) as usize, &mut self.doc)
         };
 
         if plan.terminal_scroll > 0 {
@@ -412,7 +425,7 @@ impl<S: Screen> App<S> {
                 &mut self.screen,
                 &mut self.doc,
                 &plan,
-                &self.state,
+                &self.viewport,
                 &self.status,
                 sh.as_ref(),
             )?;
@@ -448,9 +461,9 @@ impl<S: Screen> App<S> {
 
         if delta != 0 {
             let plan = if delta > 0 {
-                self.state.scroll_down(delta as usize, &mut self.doc)
+                self.viewport.scroll_down(delta as usize, &mut self.doc)
             } else {
-                self.state.scroll_up((-delta) as usize, &mut self.doc)
+                self.viewport.scroll_up((-delta) as usize, &mut self.doc)
             };
 
             if plan.terminal_scroll > 0 {
@@ -459,7 +472,7 @@ impl<S: Screen> App<S> {
                     &mut self.screen,
                     &mut self.doc,
                     &plan,
-                    &self.state,
+                    &self.viewport,
                     &self.status,
                     sh.as_ref(),
                 )?;
