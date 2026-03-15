@@ -10,11 +10,13 @@ use crossterm::{
 use regex::Regex;
 
 use crate::document::Document;
-use crate::highlight::{self, HighlightStyle};
+mod highlight;
+
 use crate::page::Page;
 use crate::search::MatchPosition;
 use crate::status_line::StatusLine;
 use crate::viewport::{Direction, ScreenRow, ScrollPlan};
+use highlight::HighlightStyle;
 
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {

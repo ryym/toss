@@ -1,7 +1,6 @@
 mod ansi;
 mod app;
 mod document;
-mod highlight;
 mod line;
 mod line_editor;
 mod logger;
