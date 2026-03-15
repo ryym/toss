@@ -14,6 +14,7 @@ line 3
 line 4
 line 5",
         events: vec![key('j'), key('j'), key('k'), key('q')],
+        ..Default::default()
     })
     .out();
     assert_eq!(
@@ -62,6 +63,7 @@ line 6
 line 7
 line 8",
         events: vec![key('d'), key('u'), key('q')],
+        ..Default::default()
     })
     .out();
     assert_eq!(
@@ -107,6 +109,7 @@ line 6
 line 7
 line 8",
         events: vec![key('G'), key('g'), key('q')],
+        ..Default::default()
     })
     .out();
     assert_eq!(
@@ -144,6 +147,7 @@ line 1
 line 2
 line 3",
         events: vec![key('k'), key('j'), key('q')],
+        ..Default::default()
     })
     .out();
     assert_eq!(

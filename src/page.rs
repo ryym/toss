@@ -1,11 +1,45 @@
 use crate::document::Document;
+use crate::header::Header;
+use crate::options::Options;
 use crate::status_line::StatusLine;
-use crate::viewport::Viewport;
+use crate::viewport::{ScreenRow, Viewport};
 
-/// Bundles the document, viewport, and status line — everything the
+/// Bundles the document, header, viewport, and status line — everything the
 /// rendering functions need to draw a frame (except search highlight).
 pub struct Page {
     pub doc: Document,
+    header: Header,
     pub viewport: Viewport,
     pub status: StatusLine,
+}
+
+impl Page {
+    /// Create a new page with the initial viewport sized for the given terminal dimensions.
+    pub fn new(mut doc: Document, options: &Options, width: usize, height: usize) -> Self {
+        let header = Header::new(options.header);
+        let header_height = header.resolve(&mut doc, width).len();
+        let content_height = height.saturating_sub(1).saturating_sub(header_height);
+        let viewport = Viewport::new(&mut doc, width, content_height, header.min_top_line());
+        let status = StatusLine::new();
+        Self {
+            doc,
+            header,
+            viewport,
+            status,
+        }
+    }
+
+    /// Resize the viewport to fit the new terminal dimensions, accounting for
+    /// the header and status line.
+    pub fn resize(&mut self, width: usize, height: usize) {
+        let header_height = self.resolve_header().len();
+        let content_height = height.saturating_sub(1).saturating_sub(header_height);
+        self.viewport.resize(&mut self.doc, width, content_height);
+    }
+
+    /// Resolve the header rows for the current viewport width.
+    pub fn resolve_header(&mut self) -> Vec<ScreenRow> {
+        let width = self.viewport.width();
+        self.header.resolve(&mut self.doc, width)
+    }
 }

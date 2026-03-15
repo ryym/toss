@@ -14,7 +14,6 @@ mod highlight;
 
 use crate::page::Page;
 use crate::search::MatchPosition;
-use crate::status_line::StatusLine;
 use crate::viewport::{Direction, ScreenRow, ScrollPlan};
 use highlight::HighlightStyle;
 
@@ -32,6 +31,14 @@ pub trait Screen {
     fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()>;
 
     fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()>;
+
+    /// Restrict which rows are affected by scroll commands (DECSTBM).
+    /// `top` and `bottom` are 0-indexed inclusive row bounds.
+    fn set_scroll_region(&mut self, top: u16, bottom: u16) -> io::Result<()>;
+
+    /// Reset the scroll region to the full screen.
+    fn reset_scroll_region(&mut self) -> io::Result<()>;
+
     fn flush(&mut self) -> io::Result<()>;
 }
 
@@ -97,6 +104,19 @@ impl Screen for TermScreen {
         Ok(())
     }
 
+    fn set_scroll_region(&mut self, top: u16, bottom: u16) -> io::Result<()> {
+        // DECSTBM: CSI top ; bottom r (1-indexed)
+        queue!(
+            self.stdout,
+            Print(format!("\x1b[{};{}r", top + 1, bottom + 1))
+        )
+    }
+
+    fn reset_scroll_region(&mut self) -> io::Result<()> {
+        // CSI r with no parameters resets to full screen.
+        queue!(self.stdout, Print("\x1b[r"))
+    }
+
     fn flush(&mut self) -> io::Result<()> {
         self.stdout.flush()
     }
@@ -117,6 +137,10 @@ pub struct SearchHighlight<'a> {
 /// Draw a range of screen rows, grouping consecutive rows from the same
 /// logical line and writing them as a single continuous string so the
 /// terminal treats line-internal wraps as soft wraps.
+///
+/// `screen_y_offset` shifts all row positions by the given amount
+/// (used to render viewport rows below the header area).
+#[allow(clippy::too_many_arguments)]
 fn draw_rows_grouped<S: Screen>(
     screen: &mut S,
     doc: &mut Document,
@@ -125,6 +149,7 @@ fn draw_rows_grouped<S: Screen>(
     to: usize,
     width: usize,
     search: Option<&SearchHighlight<'_>>,
+    screen_y_offset: usize,
 ) -> io::Result<()> {
     let mut i = from;
     while i < to {
@@ -135,7 +160,7 @@ fn draw_rows_grouped<S: Screen>(
         }
         // Clear each row in the group
         for j in group_start..i {
-            screen.clear_row(j as u16)?;
+            screen.clear_row((j + screen_y_offset) as u16)?;
         }
         // Write the combined text for this group as one continuous piece
         if let Some(line) = doc.line(line_idx) {
@@ -186,20 +211,24 @@ fn draw_rows_grouped<S: Screen>(
                     })
                     .collect::<String>(),
             };
-            screen.write_at(group_start as u16, &text)?;
+            screen.write_at((group_start + screen_y_offset) as u16, &text)?;
         }
     }
     Ok(())
 }
 
-/// Draw the status line at the given screen row.
-pub fn draw_status_line<S: Screen>(
-    screen: &mut S,
-    status: &StatusLine,
-    screen_y: u16,
-) -> io::Result<()> {
-    screen.clear_row(screen_y)?;
-    screen.write_at(screen_y, status.render())
+/// Draw the status line, computing its position from the page layout.
+pub fn draw_status_line<S: Screen>(screen: &mut S, page: &mut Page) -> io::Result<()> {
+    draw_status_line_no_flush(screen, page)?;
+    screen.flush()
+}
+
+fn draw_status_line_no_flush<S: Screen>(screen: &mut S, page: &mut Page) -> io::Result<()> {
+    let header_height = page.resolve_header().len();
+    let status_y = (header_height + page.viewport.rows().len()) as u16;
+    screen.clear_row(status_y)?;
+    screen.write_at(status_y, page.status.render())?;
+    Ok(())
 }
 
 /// Render a full page (used on initial draw and resize).
@@ -208,15 +237,43 @@ pub fn draw_full_page<S: Screen>(
     page: &mut Page,
     search: Option<&SearchHighlight<'_>>,
 ) -> io::Result<()> {
-    let rows = page.viewport.rows();
     let width = page.viewport.width();
-    let height = page.viewport.height();
-    draw_rows_grouped(screen, &mut page.doc, rows, 0, rows.len(), width, search)?;
-    // Clear any rows below content that may have stale content.
-    for y in rows.len() as u16..height as u16 {
-        screen.clear_row(y)?;
+    let header_rows = page.resolve_header();
+    let header_height = header_rows.len();
+
+    // Draw header rows at the top of the screen.
+    if header_height > 0 {
+        draw_rows_grouped(
+            screen,
+            &mut page.doc,
+            &header_rows,
+            0,
+            header_height,
+            width,
+            search,
+            0,
+        )?;
     }
-    draw_status_line(screen, &page.status, rows.len() as u16)?;
+
+    // Draw viewport rows below the header.
+    let rows = page.viewport.rows();
+    draw_rows_grouped(
+        screen,
+        &mut page.doc,
+        rows,
+        0,
+        rows.len(),
+        width,
+        search,
+        header_height,
+    )?;
+
+    // Clear any rows below content that may have stale content.
+    for y in rows.len()..page.viewport.height() {
+        screen.clear_row((y + header_height) as u16)?;
+    }
+    draw_status_line_no_flush(screen, page)?;
+
     screen.flush()
 }
 
@@ -225,6 +282,8 @@ pub fn draw_full_page<S: Screen>(
 /// After terminal scroll, we determine the "dirty range": the new rows plus
 /// any adjacent existing rows that belong to the same logical line. The dirty
 /// range is then redrawn with grouped continuous writes to maintain soft wraps.
+///
+/// When a header is present, a scroll region is used to keep it in place.
 pub fn apply_scroll<S: Screen>(
     screen: &mut S,
     plan: &ScrollPlan,
@@ -235,10 +294,24 @@ pub fn apply_scroll<S: Screen>(
         return Ok(());
     }
 
+    let width = page.viewport.width();
+    let header_height = page.resolve_header().len();
+
+    // Set scroll region to exclude header and status line.
+    let viewport_height = page.viewport.height();
+    if header_height > 0 {
+        let region_top = header_height as u16;
+        let region_bottom = (header_height + viewport_height - 1) as u16;
+        screen.set_scroll_region(region_top, region_bottom)?;
+    }
+
     screen.scroll_terminal(plan)?;
 
+    if header_height > 0 {
+        screen.reset_scroll_region()?;
+    }
+
     let rows = page.viewport.rows();
-    let width = page.viewport.width();
     let content_height = rows.len();
     let n_new = plan.new_rows.len();
 
@@ -271,7 +344,9 @@ pub fn apply_scroll<S: Screen>(
         draw_to,
         width,
         search,
+        header_height,
     )?;
-    draw_status_line(screen, &page.status, rows.len() as u16)?;
+    draw_status_line_no_flush(screen, page)?;
+
     screen.flush()
 }

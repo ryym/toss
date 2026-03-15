@@ -14,6 +14,7 @@ short
 abcdefgh
 end",
         events: vec![key('j'), key('j'), key('k'), key('q')],
+        ..Default::default()
     })
     .out();
     assert_eq!(
@@ -55,6 +56,7 @@ xx
 aaabbbccc
 yy",
         events: vec![key('j'), key('j'), key('q')],
+        ..Default::default()
     })
     .out();
     // Initial: xx, aaa>, bbb>, ccc
@@ -93,6 +95,7 @@ xx
 abcdefgh
 yy",
         events: vec![key('j'), key('j'), key('k'), key('q')],
+        ..Default::default()
     })
     .out();
     // "abcdefgh" wraps to "abcde" + "fgh"
@@ -136,6 +139,7 @@ line1
 line2
 abcdefgh",
         events: vec![key('G'), key('g'), key('q')],
+        ..Default::default()
     })
     .out();
     // "abcdefgh" wraps to "abcde" + "fgh"
@@ -179,6 +183,7 @@ fn midline_at_top_of_screen() {
 abcdefghijk
 end",
         events: vec![key('j'), key('q')],
+        ..Default::default()
     })
     .out();
     // Initial: abcde>, fghij>, k

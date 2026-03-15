@@ -5,12 +5,11 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::document::Document;
 use crate::line_editor::LineEditor;
+use crate::options::Options;
 use crate::page::Page;
 use crate::screen::{self, Screen, SearchHighlight};
 use crate::scroll::ScrollAnimation;
 use crate::search::{self, MatchPosition, SearchDirection, SearchState};
-use crate::status_line::StatusLine;
-use crate::viewport::Viewport;
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
@@ -44,18 +43,12 @@ pub struct App<S> {
 }
 
 impl<S: Screen> App<S> {
-    pub fn new(screen: S, mut doc: Document) -> io::Result<Self> {
+    pub fn new(screen: S, doc: Document, options: Options) -> io::Result<Self> {
         let (w, h) = screen.size()?;
-        let content_height = (h as usize).saturating_sub(1);
-        let viewport = Viewport::new(&mut doc, w as usize, content_height);
-
+        let page = Page::new(doc, &options, w as usize, h as usize);
         Ok(Self {
             screen,
-            page: Page {
-                doc,
-                viewport,
-                status: StatusLine::new(),
-            },
+            page,
             mode: AppMode::View,
             search: None,
             animation: None,
@@ -99,10 +92,7 @@ impl<S: Screen> App<S> {
                     }
                     Event::Resize(w, h) => {
                         log::debug!("Resize: {w}x{h}");
-                        let content_height = (h as usize).saturating_sub(1);
-                        self.page
-                            .viewport
-                            .resize(&mut self.page.doc, w as usize, content_height);
+                        self.page.resize(w as usize, h as usize);
                         self.needs_full_redraw = true;
                     }
                     _ => {}
@@ -119,12 +109,7 @@ impl<S: Screen> App<S> {
                 self.needs_full_redraw = false;
                 self.needs_status_redraw = false;
             } else if self.needs_status_redraw {
-                screen::draw_status_line(
-                    &mut self.screen,
-                    &self.page.status,
-                    self.page.viewport.rows().len() as u16,
-                )?;
-                self.screen.flush()?;
+                screen::draw_status_line(&mut self.screen, &mut self.page)?;
                 self.needs_status_redraw = false;
             }
         }

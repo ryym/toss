@@ -14,6 +14,7 @@ line 3
 line 4
 line 5",
         events: vec![key('q')],
+        ..Default::default()
     })
     .out();
     assert_eq!(
@@ -46,6 +47,7 @@ fn ansi_escape_sequences() {
 \x1b[31mabcde\x1b[0mfgh
 end",
         events: vec![key('q')],
+        ..Default::default()
     })
     .out();
     assert_eq!(
@@ -75,6 +77,7 @@ line 3
 line 4
 line 5",
         events: vec![key('j'), key('k'), key('q')],
+        ..Default::default()
     })
     .out();
     assert_eq!(

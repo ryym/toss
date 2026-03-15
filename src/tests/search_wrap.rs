@@ -20,6 +20,7 @@ line 1
 01234abcde
 line 3",
         events: vec![key('/'), key('a'), key('b'), enter()],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
@@ -43,6 +44,7 @@ line 1
 01234abcde
 line 3",
         events: vec![key('/'), key('c'), key('d'), key('e'), enter()],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
@@ -65,6 +67,7 @@ fn match_in_first_row_of_wrapped_line() {
         screen_height: 4,
         content: "abcde_XX_fghij",
         events: vec![key('/'), key('X'), key('X'), enter()],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),

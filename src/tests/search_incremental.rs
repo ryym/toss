@@ -29,6 +29,7 @@ line 4
 line 5
 line 6",
         events: vec![key('/'), key('f'), key('o'), key('o'), esc()],
+        ..Default::default()
     })
     .out();
     assert_eq!(
@@ -96,6 +97,7 @@ line 6",
             key('t'),
             enter(),
         ],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
@@ -128,6 +130,7 @@ foo 3",
             enter(),
             key('n'), // next: foo 2
         ],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
@@ -162,6 +165,7 @@ target here",
             key('t'),
             esc(),
         ],
+        ..Default::default()
     });
     // Should be back to the original position with no highlights.
     assert_eq!(
@@ -198,6 +202,7 @@ target here",
             key('t'),
             esc(),
         ],
+        ..Default::default()
     });
     // Should restore to the position after scrolling (line 2 at top).
     assert_eq!(
@@ -223,6 +228,7 @@ line 2
 line 3
 target here",
         events: vec![key('/'), backspace()],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
@@ -254,6 +260,7 @@ line 4",
             backspace(), // "ab" again
             esc(),
         ],
+        ..Default::default()
     })
     .out();
     assert_eq!(
@@ -324,6 +331,7 @@ line 4",
             key('/'),
             enter(), // empty search, should keep previous "foo" highlight
         ],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
@@ -359,6 +367,7 @@ line 4",
             key('r'),
             esc(), // cancel "bar" search
         ],
+        ..Default::default()
     });
     // Previous "foo" search should still be active.
     assert_eq!(
@@ -387,6 +396,7 @@ line 4
 line 5
 line 6",
         events: vec![key('/'), key('f'), key('o'), key('o'), enter()],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
