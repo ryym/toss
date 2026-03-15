@@ -2,7 +2,7 @@ use crate::document::Document;
 use crate::header::Header;
 use crate::options::Options;
 use crate::status_line::StatusLine;
-use crate::viewport::{ScreenRow, Viewport};
+use crate::viewport::{ScreenRow, ScrollPlan, Viewport};
 
 /// Bundles the document, header, viewport, and status line — everything the
 /// rendering functions need to draw a frame (except search highlight).
@@ -35,6 +35,15 @@ impl Page {
         let header_height = self.resolve_header().len();
         let content_height = height.saturating_sub(1).saturating_sub(header_height);
         self.viewport.resize(&mut self.doc, width, content_height);
+    }
+
+    /// Scroll by the given number of rows (positive = down, negative = up).
+    pub fn plan_scroll(&mut self, rows: isize) -> ScrollPlan {
+        if rows > 0 {
+            self.viewport.scroll_down(rows as usize, &mut self.doc)
+        } else {
+            self.viewport.scroll_up((-rows) as usize, &mut self.doc)
+        }
     }
 
     /// Resolve the header rows for the current viewport width.

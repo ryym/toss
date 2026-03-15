@@ -385,15 +385,7 @@ impl<S: Screen> App<S> {
         // Cancel any running animation
         self.animation = None;
 
-        let plan = if rows > 0 {
-            self.page
-                .viewport
-                .scroll_down(rows as usize, &mut self.page.doc)
-        } else {
-            self.page
-                .viewport
-                .scroll_up((-rows) as usize, &mut self.page.doc)
-        };
+        let plan = self.page.plan_scroll(rows);
 
         if plan.terminal_scroll > 0 {
             let search = active_search(&self.mode, &self.search);
@@ -429,15 +421,7 @@ impl<S: Screen> App<S> {
         let delta = current_row - rendered_row;
 
         if delta != 0 {
-            let plan = if delta > 0 {
-                self.page
-                    .viewport
-                    .scroll_down(delta as usize, &mut self.page.doc)
-            } else {
-                self.page
-                    .viewport
-                    .scroll_up((-delta) as usize, &mut self.page.doc)
-            };
+            let plan = self.page.plan_scroll(delta);
 
             if plan.terminal_scroll > 0 {
                 let search = active_search(&self.mode, &self.search);
