@@ -130,19 +130,10 @@ impl<S: Screen> App<S> {
                 self.needs_full_redraw = false;
                 self.needs_status_redraw = false;
             } else if self.needs_status_redraw {
-                let status_y = self.status_line_y();
-                screen::draw_status_line(&mut self.screen, &self.page.status, status_y)?;
-                self.screen.flush()?;
+                screen::redraw_status_line(&mut self.screen, &mut self.page)?;
                 self.needs_status_redraw = false;
             }
         }
-    }
-
-    /// Compute the screen row where the status line should appear.
-    fn status_line_y(&mut self) -> u16 {
-        let width = self.page.viewport.width();
-        let header_height = self.page.header.resolve(&mut self.page.doc, width).len();
-        (header_height + self.page.viewport.rows().len()) as u16
     }
 
     /// Returns true if the app should quit.

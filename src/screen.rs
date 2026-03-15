@@ -219,13 +219,22 @@ fn draw_rows_grouped<S: Screen>(
 }
 
 /// Draw the status line at the given screen row.
-pub fn draw_status_line<S: Screen>(
+fn draw_status_line<S: Screen>(
     screen: &mut S,
     status: &StatusLine,
     screen_y: u16,
 ) -> io::Result<()> {
     screen.clear_row(screen_y)?;
     screen.write_at(screen_y, status.render())
+}
+
+/// Redraw only the status line, computing its position from the page layout.
+pub fn redraw_status_line<S: Screen>(screen: &mut S, page: &mut Page) -> io::Result<()> {
+    let width = page.viewport.width();
+    let header_height = page.header.resolve(&mut page.doc, width).len();
+    let status_y = (header_height + page.viewport.rows().len()) as u16;
+    draw_status_line(screen, &page.status, status_y)?;
+    screen.flush()
 }
 
 /// Render a full page (used on initial draw and resize).
