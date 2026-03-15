@@ -5,6 +5,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::document::Document;
 use crate::line_editor::LineEditor;
+use crate::options::Options;
 use crate::page::Page;
 use crate::screen::{self, Screen, SearchHighlight};
 use crate::scroll::ScrollAnimation;
@@ -44,7 +45,14 @@ pub struct App<S> {
 }
 
 impl<S: Screen> App<S> {
-    pub fn new(screen: S, mut doc: Document) -> io::Result<Self> {
+    pub fn new(screen: S, mut doc: Document, options: Options) -> io::Result<Self> {
+        if options.header > 0 {
+            log::warn!(
+                "--header is not yet implemented (header={})",
+                options.header
+            );
+        }
+
         let (w, h) = screen.size()?;
         let content_height = (h as usize).saturating_sub(1);
         let viewport = Viewport::new(&mut doc, w as usize, content_height);

@@ -5,6 +5,7 @@ mod document;
 mod line;
 mod line_editor;
 mod logger;
+mod options;
 mod page;
 mod screen;
 mod scroll;
@@ -81,7 +82,8 @@ fn run() -> Result<(), AppError> {
     let screen = TermScreen::new()
         .map_err(|e| AppError::new(format!("Error initializing terminal: {e}"), 1))?;
 
-    let mut app = App::new(screen, doc).map_err(|e| AppError::new(format!("{e}"), 1))?;
+    let mut app =
+        App::new(screen, doc, args.options).map_err(|e| AppError::new(format!("{e}"), 1))?;
     app.run().map_err(|e| AppError::new(format!("{e}"), 1))?;
 
     Ok(())

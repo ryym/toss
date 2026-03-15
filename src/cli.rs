@@ -1,6 +1,8 @@
 /// Command-line argument parsing.
 use std::path::PathBuf;
 
+use crate::options::Options;
+
 const VERSION: &str = "0.0.0";
 
 const HELP: &str = "\
@@ -10,8 +12,9 @@ Usage: toss [OPTIONS] [FILE]
 A terminal pager.
 
 Options:
-  -h, --help     Print help
-  -v, --version  Print version";
+      --header <N>  Pin the first N lines as a fixed header
+  -h, --help        Print help
+  -v, --version     Print version";
 
 /// Parsed command-line action.
 pub enum Action {
@@ -24,12 +27,14 @@ pub enum Action {
 /// Parsed command-line arguments.
 pub struct Args {
     pub file: Option<PathBuf>,
+    pub options: Options,
 }
 
 pub fn parse_args() -> Result<Action, lexopt::Error> {
     use lexopt::prelude::*;
 
     let mut file = None;
+    let mut header = 0;
     let mut parser = lexopt::Parser::from_env();
 
     while let Some(arg) = parser.next()? {
@@ -38,6 +43,9 @@ pub fn parse_args() -> Result<Action, lexopt::Error> {
             Short('v') | Long("version") => {
                 return Ok(Action::Print(format!("toss {VERSION}")));
             }
+            Long("header") => {
+                header = parser.value()?.parse()?;
+            }
             Value(val) if file.is_none() => {
                 file = Some(PathBuf::from(val));
             }
@@ -45,5 +53,8 @@ pub fn parse_args() -> Result<Action, lexopt::Error> {
         }
     }
 
-    Ok(Action::Run(Args { file }))
+    Ok(Action::Run(Args {
+        file,
+        options: Options { header },
+    }))
 }

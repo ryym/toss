@@ -29,6 +29,7 @@ line 2
 line 3
 line 4",
         events: vec![key('/'), key('a'), key('b'), esc()],
+        ..Default::default()
     })
     .out();
     // No match for "a" or "ab" so position stays the same.
@@ -82,6 +83,7 @@ line 2
 line 3
 line 4",
         events: vec![key('?'), key('x'), enter()],
+        ..Default::default()
     })
     .out();
     assert_eq!(
@@ -126,6 +128,7 @@ line 2
 line 3
 line 4",
         events: vec![key('/'), key('a'), key('b'), backspace(), esc()],
+        ..Default::default()
     })
     .out();
     assert_eq!(

@@ -21,6 +21,7 @@ line 3
 target foo here
 line 5",
         events: vec![key('/'), key('f'), key('o'), key('o'), enter()],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
@@ -54,6 +55,7 @@ line 5",
             key('p'),
             enter(),
         ],
+        ..Default::default()
     })
     .out();
     assert_eq!(
@@ -125,6 +127,7 @@ foo 3",
             enter(),  // finds "foo 1" (line 0)
             key('n'), // next: "foo 2" (line 2)
         ],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
@@ -157,6 +160,7 @@ foo 3",
             enter(),  // finds "foo 1" (line 0)
             key('N'), // previous (backward): wraps to "foo 3" (line 4)
         ],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
@@ -181,6 +185,7 @@ line 2
 line 3
 line 4",
         events: vec![key('/'), key('z'), key('z'), key('z'), enter()],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
@@ -216,6 +221,7 @@ line 5",
             key('t'),
             enter(), // should wrap around to "target here" at line 0
         ],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
@@ -244,6 +250,7 @@ fn highlight_with_ansi_escapes() {
             key('o'),
             enter(),
         ],
+        ..Default::default()
     });
     // The bold start (\x1b[1m) precedes "Cargo" in raw text and the
     // reset (\x1b[0m) follows it. The match end position in raw text
@@ -290,6 +297,7 @@ line 6",
             key('j'),
             key('k'),
         ],
+        ..Default::default()
     })
     .out();
     assert_eq!(
@@ -389,6 +397,7 @@ line 2
 line 3
 line 4",
         events: vec![key('/'), key('f'), key('o'), key('o'), enter()],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
@@ -430,6 +439,7 @@ line 6",
             key('t'),
             enter(),
         ],
+        ..Default::default()
     });
     // The matched line should be visible and the status line must be on
     // the last row (row 4), not immediately after the last content line.
@@ -474,6 +484,7 @@ line 10",
             // Scroll down works now.
             key('j'),
         ],
+        ..Default::default()
     })
     .out();
     assert_eq!(
@@ -551,6 +562,7 @@ line 10",
             key('k'),
             key('j'),
         ],
+        ..Default::default()
     });
     assert_eq!(
         screen.last_snapshot(),
