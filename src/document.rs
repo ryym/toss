@@ -2,9 +2,12 @@ use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
+mod line_cache;
+mod line_index;
+
 use crate::line::Line;
-use crate::line_cache::LineCache;
-use crate::line_index::LineIndex;
+use line_cache::LineCache;
+use line_index::LineIndex;
 
 const LINE_CACHE_CAPACITY: usize = 1000;
 
