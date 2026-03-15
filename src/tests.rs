@@ -2,10 +2,9 @@ mod display;
 mod scroll;
 mod scroll_wrap;
 mod search_execution;
-mod search_highlight;
 mod search_incremental;
 mod search_input;
-mod search_jump;
+mod search_wrap;
 
 use std::time::Duration;
 
