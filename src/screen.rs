@@ -154,35 +154,35 @@ fn draw_rows_grouped<S: Screen>(
             let raw_range = line.wrap_rows_range(width, first_wrap, last_wrap + 1);
 
             let matches = search.map(|sh| line.find_matches(&sh.query));
-            let has_matches = matches.as_ref().is_some_and(|m| !m.is_empty());
-
-            if has_matches {
-                let search = search.unwrap();
-                let matches = matches.unwrap();
-                let styles: Vec<HighlightStyle> = matches
-                    .iter()
-                    .enumerate()
-                    .map(|(mi, _)| {
-                        let is_current = search
-                            .current
-                            .is_some_and(|c| c.line == line_idx && c.match_index == mi);
-                        if is_current {
-                            HighlightStyle::Reverse
-                        } else {
-                            HighlightStyle::DimReverse
-                        }
-                    })
-                    .collect();
-                let positions = highlight::build_highlight_positions(
-                    &matches,
-                    &styles,
-                    line.plain_to_raw(),
-                    line.raw().len(),
-                );
-                let text = highlight::apply_highlight_to_range(line.raw(), raw_range, &positions);
-                screen.write_at((group_start + screen_y) as u16, &text)?;
-            } else {
-                screen.write_at((group_start + screen_y) as u16, &line.raw()[raw_range])?;
+            match (search, matches) {
+                (Some(search), Some(matches)) if !matches.is_empty() => {
+                    let styles: Vec<HighlightStyle> = matches
+                        .iter()
+                        .enumerate()
+                        .map(|(mi, _)| {
+                            let is_current = search
+                                .current
+                                .is_some_and(|c| c.line == line_idx && c.match_index == mi);
+                            if is_current {
+                                HighlightStyle::Reverse
+                            } else {
+                                HighlightStyle::DimReverse
+                            }
+                        })
+                        .collect();
+                    let positions = highlight::build_highlight_positions(
+                        &matches,
+                        &styles,
+                        line.plain_to_raw(),
+                        line.raw().len(),
+                    );
+                    let text =
+                        highlight::apply_highlight_to_range(line.raw(), raw_range, &positions);
+                    screen.write_at((group_start + screen_y) as u16, &text)?;
+                }
+                _ => {
+                    screen.write_at((group_start + screen_y) as u16, &line.raw()[raw_range])?;
+                }
             }
         }
     }
