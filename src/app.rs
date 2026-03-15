@@ -370,8 +370,7 @@ impl<S: Screen> App<S> {
             None => self.page.viewport.top_line_index(),
         };
 
-        let query = search.query.clone();
-        let matched = search::find_next_match(&mut self.page.doc, &query, from, direction);
+        let matched = search::find_next_match(&mut self.page.doc, &search.query, from, direction);
         log::debug!("Next match from line {from}: {matched:?}");
         if let Some(ref pos) = matched {
             self.page.viewport.jump_to(&mut self.page.doc, pos.line);
