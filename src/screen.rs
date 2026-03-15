@@ -141,6 +141,7 @@ pub struct SearchHighlight<'a> {
 ///
 /// `screen_y_offset` shifts all row positions by the given amount
 /// (used to render viewport rows below the header area).
+#[allow(clippy::too_many_arguments)]
 fn draw_rows_grouped<S: Screen>(
     screen: &mut S,
     doc: &mut Document,

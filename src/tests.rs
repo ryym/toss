@@ -1,4 +1,5 @@
 mod display;
+mod header;
 mod mock_screen;
 mod scroll;
 mod scroll_wrap;
