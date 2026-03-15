@@ -24,6 +24,41 @@ pub struct ScrollPlan {
     pub new_rows: Vec<ScreenRow>,
 }
 
+/// Move one row forward in the document. Returns None at the end.
+fn next_row(doc: &mut Document, width: usize, row: ScreenRow) -> Option<ScreenRow> {
+    let line = doc.line(row.line_index)?;
+    if row.wrap_index + 1 < line.row_count(width) {
+        Some(ScreenRow {
+            line_index: row.line_index,
+            wrap_index: row.wrap_index + 1,
+        })
+    } else {
+        doc.line(row.line_index + 1)?;
+        Some(ScreenRow {
+            line_index: row.line_index + 1,
+            wrap_index: 0,
+        })
+    }
+}
+
+/// Move one row backward in the document. Returns None at the beginning.
+fn prev_row(doc: &mut Document, width: usize, row: ScreenRow) -> Option<ScreenRow> {
+    if row.wrap_index > 0 {
+        Some(ScreenRow {
+            line_index: row.line_index,
+            wrap_index: row.wrap_index - 1,
+        })
+    } else if row.line_index > 0 {
+        let prev_line = doc.line(row.line_index - 1)?;
+        Some(ScreenRow {
+            line_index: row.line_index - 1,
+            wrap_index: prev_line.row_count(width) - 1,
+        })
+    } else {
+        None
+    }
+}
+
 /// Viewport of the content area (excludes header, status line, etc.).
 /// Tracks which document rows are currently visible and provides scroll
 /// operations that return minimal diffs for rendering.
@@ -189,26 +224,21 @@ impl Viewport {
         start_wrap: usize,
         count: usize,
     ) -> Vec<ScreenRow> {
-        let mut rows = Vec::with_capacity(count);
-        let mut line_idx = start_line;
-        let mut wrap_idx = start_wrap;
-
+        if count == 0 || doc.line(start_line).is_none() {
+            return vec![];
+        }
+        let mut current = ScreenRow {
+            line_index: start_line,
+            wrap_index: start_wrap,
+        };
+        let mut rows = vec![current];
         while rows.len() < count {
-            let Some(line) = doc.line(line_idx) else {
+            let Some(next) = next_row(doc, width, current) else {
                 break;
             };
-            let wrap_count = line.row_count(width);
-            while wrap_idx < wrap_count && rows.len() < count {
-                rows.push(ScreenRow {
-                    line_index: line_idx,
-                    wrap_index: wrap_idx,
-                });
-                wrap_idx += 1;
-            }
-            line_idx += 1;
-            wrap_idx = 0;
+            rows.push(next);
+            current = next;
         }
-
         rows
     }
 
@@ -222,29 +252,19 @@ impl Viewport {
         if line_count == 0 {
             return vec![];
         }
-
-        let mut rows = Vec::with_capacity(count);
-        let mut line_idx = line_count - 1;
-
-        loop {
-            let line = doc.line(line_idx).unwrap();
-            let wrap_count = line.row_count(width);
-            for wrap_idx in (0..wrap_count).rev() {
-                rows.push(ScreenRow {
-                    line_index: line_idx,
-                    wrap_index: wrap_idx,
-                });
-                if rows.len() >= count {
-                    rows.reverse();
-                    return rows;
-                }
-            }
-            if line_idx == 0 {
+        let last_line = doc.line(line_count - 1).unwrap();
+        let mut current = ScreenRow {
+            line_index: line_count - 1,
+            wrap_index: last_line.row_count(width) - 1,
+        };
+        let mut rows = vec![current];
+        while rows.len() < count {
+            let Some(prev) = prev_row(doc, width, current) else {
                 break;
-            }
-            line_idx -= 1;
+            };
+            rows.push(prev);
+            current = prev;
         }
-
         rows.reverse();
         rows
     }
@@ -257,37 +277,14 @@ impl Viewport {
         n: usize,
     ) -> Vec<ScreenRow> {
         let mut rows = Vec::with_capacity(n);
-        let mut line_idx = after.line_index;
-        let mut wrap_idx = after.wrap_index;
-
-        // Advance one step from `after`
-        let Some(first_line) = doc.line(line_idx) else {
-            return rows;
-        };
-        let wrap_count = first_line.row_count(width);
-        if wrap_idx + 1 < wrap_count {
-            wrap_idx += 1;
-        } else {
-            line_idx += 1;
-            wrap_idx = 0;
-        }
-
-        while rows.len() < n {
-            let Some(line) = doc.line(line_idx) else {
+        let mut current = after;
+        for _ in 0..n {
+            let Some(next) = next_row(doc, width, current) else {
                 break;
             };
-            let wc = line.row_count(width);
-            while wrap_idx < wc && rows.len() < n {
-                rows.push(ScreenRow {
-                    line_index: line_idx,
-                    wrap_index: wrap_idx,
-                });
-                wrap_idx += 1;
-            }
-            line_idx += 1;
-            wrap_idx = 0;
+            rows.push(next);
+            current = next;
         }
-
         rows
     }
 
@@ -300,27 +297,14 @@ impl Viewport {
         n: usize,
     ) -> Vec<ScreenRow> {
         let mut rows = Vec::with_capacity(n);
-        let mut line_idx = before.line_index;
-        let mut wrap_idx = before.wrap_index;
-
+        let mut current = before;
         for _ in 0..n {
-            if wrap_idx > 0 {
-                wrap_idx -= 1;
-            } else if line_idx > 0 {
-                line_idx -= 1;
-                let line = doc.line(line_idx).unwrap();
-                wrap_idx = line.row_count(width) - 1;
-            } else {
-                // Reached the top of the document
+            let Some(prev) = prev_row(doc, width, current) else {
                 break;
-            }
-            rows.push(ScreenRow {
-                line_index: line_idx,
-                wrap_index: wrap_idx,
-            });
+            };
+            rows.push(prev);
+            current = prev;
         }
-
-        // Reverse: we collected bottom-to-top, but want top-to-bottom
         rows.reverse();
         rows
     }
