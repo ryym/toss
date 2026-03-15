@@ -3,12 +3,22 @@ use std::path::PathBuf;
 
 const VERSION: &str = "0.0.0";
 
+const HELP: &str = "\
+Usage: toss [OPTIONS] [FILE]
+       command | toss
+
+A terminal pager.
+
+Options:
+  -h, --help     Print help
+  -v, --version  Print version";
+
 /// Parsed command-line action.
 pub enum Action {
     /// Run the pager.
     Run(Args),
-    /// Print version and exit.
-    PrintVersion,
+    /// Print a message and exit.
+    Print(String),
 }
 
 /// Parsed command-line arguments.
@@ -24,7 +34,10 @@ pub fn parse_args() -> Result<Action, lexopt::Error> {
 
     while let Some(arg) = parser.next()? {
         match arg {
-            Short('v') | Long("version") => return Ok(Action::PrintVersion),
+            Short('h') | Long("help") => return Ok(Action::Print(HELP.to_string())),
+            Short('v') | Long("version") => {
+                return Ok(Action::Print(format!("toss {VERSION}")));
+            }
             Value(val) if file.is_none() => {
                 file = Some(PathBuf::from(val));
             }
@@ -33,9 +46,4 @@ pub fn parse_args() -> Result<Action, lexopt::Error> {
     }
 
     Ok(Action::Run(Args { file }))
-}
-
-/// Return the version string.
-pub fn version() -> &'static str {
-    VERSION
 }
