@@ -42,12 +42,14 @@ impl<S: Screen> App<S> {
     pub fn new(screen: S, doc: Document, options: Options) -> io::Result<Self> {
         let (w, h) = screen.size()?;
         let page = Page::new(doc, &options, w as usize, h as usize);
+        let mut scroll_physics = ScrollPhysics::new();
+        scroll_physics.configure(h as usize);
         Ok(Self {
             screen,
             page,
             mode: AppMode::View,
             search: None,
-            scroll_physics: ScrollPhysics::new(),
+            scroll_physics,
             instant_scroll: false,
             needs_full_redraw: true,
             needs_status_redraw: false,
@@ -88,6 +90,7 @@ impl<S: Screen> App<S> {
                     Event::Resize(w, h) => {
                         log::debug!("Resize: {w}x{h}");
                         self.page.resize(w as usize, h as usize);
+                        self.scroll_physics.configure(h as usize);
                         self.needs_full_redraw = true;
                     }
                     _ => {}
