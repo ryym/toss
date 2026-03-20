@@ -1,5 +1,5 @@
 use std::io;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
@@ -8,12 +8,11 @@ use crate::line_editor::LineEditor;
 use crate::options::Options;
 use crate::page::Page;
 use crate::screen::{self, Screen};
-use crate::scroll::ScrollAnimation;
+use crate::scroll::ScrollPhysics;
 use crate::search::{self, MatchPosition, SearchDirection, SearchState};
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
-const SCROLL_ANIMATION_DURATION: Duration = Duration::from_millis(200);
 
 /// Current input mode of the application.
 enum AppMode {
@@ -33,11 +32,8 @@ pub struct App<S> {
     page: Page,
     mode: AppMode,
     search: Option<SearchState>,
-    animation: Option<ScrollAnimation>,
-    scroll_duration: Duration,
-    /// Current scroll position as a float (row offset from top of document).
-    /// This is the "rendered" position — the last integer position we drew.
-    rendered_offset: f64,
+    scroll_physics: ScrollPhysics,
+    instant_scroll: bool,
     needs_full_redraw: bool,
     needs_status_redraw: bool,
 }
@@ -51,17 +47,16 @@ impl<S: Screen> App<S> {
             page,
             mode: AppMode::View,
             search: None,
-            animation: None,
-            scroll_duration: SCROLL_ANIMATION_DURATION,
-            rendered_offset: 0.0,
+            scroll_physics: ScrollPhysics::new(),
+            instant_scroll: false,
             needs_full_redraw: true,
             needs_status_redraw: false,
         })
     }
 
     #[cfg(test)]
-    pub fn set_scroll_duration(&mut self, duration: Duration) {
-        self.scroll_duration = duration;
+    pub fn set_instant_scroll(&mut self) {
+        self.instant_scroll = true;
     }
 
     #[cfg(test)]
@@ -77,7 +72,7 @@ impl<S: Screen> App<S> {
 
         loop {
             // 1. Poll input
-            let timeout = if self.animation.is_some() {
+            let timeout = if self.scroll_physics.is_active() {
                 FRAME_DURATION_ANIMATING
             } else {
                 FRAME_DURATION_IDLE
@@ -140,26 +135,25 @@ impl<S: Screen> App<S> {
                 self.scroll_immediate(-1)?;
             }
             KeyCode::Char('d') => {
-                self.start_scroll_animation(self.page.viewport.height() as isize / 2);
+                self.scroll_animated(self.page.viewport.height() as isize / 2)?;
             }
             KeyCode::Char('u') => {
-                self.start_scroll_animation(-(self.page.viewport.height() as isize / 2));
+                self.scroll_animated(-(self.page.viewport.height() as isize / 2))?;
             }
             KeyCode::Char('f') | KeyCode::Char(' ') => {
-                self.start_scroll_animation(self.page.viewport.height() as isize);
+                self.scroll_animated(self.page.viewport.height() as isize)?;
             }
             KeyCode::Char('b') => {
-                self.start_scroll_animation(-(self.page.viewport.height() as isize));
+                self.scroll_animated(-(self.page.viewport.height() as isize))?;
             }
             KeyCode::Char('g') => {
-                self.animation = None;
+                self.scroll_physics.stop();
                 if self.page.viewport.jump_to(&mut self.page.doc, 0) {
-                    self.rendered_offset = 0.0;
                     self.needs_full_redraw = true;
                 }
             }
             KeyCode::Char('G') => {
-                self.animation = None;
+                self.scroll_physics.stop();
                 if self.page.viewport.jump_to_end(&mut self.page.doc) {
                     self.needs_full_redraw = true;
                 }
@@ -183,7 +177,7 @@ impl<S: Screen> App<S> {
 
     fn enter_search_mode(&mut self, direction: SearchDirection) {
         log::debug!("Enter search mode: {direction:?}");
-        self.animation = None;
+        self.scroll_physics.stop();
         let saved_top_line = self.page.viewport.top_line_index();
         self.page.status.set_content(direction.prompt().to_string());
         self.mode = AppMode::Search {
@@ -382,50 +376,43 @@ impl<S: Screen> App<S> {
     }
 
     fn scroll_immediate(&mut self, rows: isize) -> io::Result<()> {
-        // Cancel any running animation
-        self.animation = None;
+        self.scroll_physics.stop();
 
         if let Some(plan) = self.page.plan_scroll(rows) {
             let search = active_search(&self.mode, &self.search);
             screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
-            self.rendered_offset += rows as f64;
         }
         Ok(())
     }
 
-    fn start_scroll_animation(&mut self, total_rows: isize) {
-        log::debug!("Start scroll animation: rows={total_rows}");
-        let start = self.rendered_offset;
-        let target = start + total_rows as f64;
-        self.animation = Some(ScrollAnimation::new(start, target, self.scroll_duration));
+    /// Start or add momentum for an animated scroll.
+    /// In instant_scroll mode (tests), scrolls immediately instead.
+    fn scroll_animated(&mut self, total_rows: isize) -> io::Result<()> {
+        if self.instant_scroll {
+            self.scroll_physics.stop();
+            if let Some(plan) = self.page.plan_scroll(total_rows) {
+                let search = active_search(&self.mode, &self.search);
+                screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
+            }
+        } else {
+            log::debug!("Scroll animation impulse: rows={total_rows}");
+            self.scroll_physics.impulse(total_rows as f64);
+        }
+        Ok(())
     }
 
     fn update_animation(&mut self) -> io::Result<()> {
-        let Some(ref anim) = self.animation else {
+        if !self.scroll_physics.is_active() {
             return Ok(());
-        };
-
-        let now = Instant::now();
-        let done = anim.is_done(now);
-        let current = if done {
-            anim.target()
-        } else {
-            anim.current_offset(now)
-        };
-
-        // How many rows to scroll since last render
-        let current_row = current.floor() as isize;
-        let rendered_row = self.rendered_offset.floor() as isize;
-        let delta = current_row - rendered_row;
-
-        if let Some(plan) = self.page.plan_scroll(delta) {
-            let search = active_search(&self.mode, &self.search);
-            screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
-            self.rendered_offset = current_row as f64;
         }
 
-        if done {
-            self.animation = None;
+        let rows = self
+            .scroll_physics
+            .tick(FRAME_DURATION_ANIMATING.as_secs_f64());
+
+        if let Some(plan) = self.page.plan_scroll(rows) {
+            let search = active_search(&self.mode, &self.search);
+            screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
         }
 
         Ok(())

@@ -1,60 +1,128 @@
-//! Smooth scroll animation.
+//! Physics-based smooth scroll animation.
 //!
-//! App keeps a `rendered_offset` (f64) representing the current visual scroll position.
-//! ScrollAnimation interpolates between a start and target offset using cubic ease-out.
-//! Each frame, App computes the integer delta from the last rendered position and
-//! passes it to Viewport's scroll methods, which always work in whole rows.
-//! This separation of float interpolation from integer row tracking is what makes
-//! the animation visually smooth without complicating Viewport.
+//! This simulates inertial scrolling with friction and air drag.
+//! User actions add impulse (velocity) to the simulation,
+//! and repeated presses accumulate momentum for faster scrolling. Each frame,
+//! the simulation produces an integer row delta that the viewport uses for incremental rendering.
+//! Inspired by https://github.com/yuttie/comfortable-motion.vim
 
-use std::time::{Duration, Instant};
+/// Constant friction force opposing velocity direction.
+const FRICTION: f64 = 80.0;
 
-/// Easing function: cubic ease-out (fast start, slow end).
-fn ease_out_cubic(t: f64) -> f64 {
-    let t1 = 1.0 - t;
-    1.0 - t1 * t1 * t1
+/// Velocity-proportional drag coefficient.
+const AIR_DRAG: f64 = 2.0;
+
+/// Minimum velocity below which the simulation stops.
+const MIN_VELOCITY: f64 = 1.0;
+
+/// Physics-based scroll animation state.
+pub struct ScrollPhysics {
+    velocity: f64,
+    /// Fractional row accumulator (sub-row precision).
+    delta: f64,
 }
 
-/// Tracks the state of a smooth scroll animation.
-pub struct ScrollAnimation {
-    start: f64,
-    target: f64,
-    start_time: Instant,
-    duration: Duration,
-}
-
-impl ScrollAnimation {
-    pub fn new(start: f64, target: f64, duration: Duration) -> Self {
+impl ScrollPhysics {
+    pub fn new() -> Self {
         Self {
-            start,
-            target,
-            start_time: Instant::now(),
-            duration,
+            velocity: 0.0,
+            delta: 0.0,
         }
     }
 
-    /// Current interpolated offset.
-    pub fn current_offset(&self, now: Instant) -> f64 {
-        let t = self.progress(now);
-        let eased = ease_out_cubic(t);
-        self.start + (self.target - self.start) * eased
+    /// Add impulse to scroll approximately `target_rows` rows.
+    /// The impulse is computed to achieve the target distance from rest,
+    /// then added to the current velocity (allowing momentum accumulation).
+    pub fn impulse(&mut self, target_rows: f64) {
+        let impulse = impulse_for_distance(target_rows.abs());
+        self.velocity += impulse * target_rows.signum();
     }
 
-    /// Whether the animation has completed.
-    pub fn is_done(&self, now: Instant) -> bool {
-        self.progress(now) >= 1.0
+    /// Advance the simulation by `dt` seconds and return integer rows to scroll.
+    pub fn tick(&mut self, dt: f64) -> isize {
+        if !self.is_active() {
+            return 0;
+        }
+
+        // Apply friction (constant, opposing velocity) and air drag (proportional to velocity)
+        let sign = self.velocity.signum();
+        let friction_force = -sign * FRICTION;
+        let drag_force = -self.velocity * AIR_DRAG;
+        let dv = (friction_force + drag_force) * dt;
+
+        // Clamp: don't let deceleration reverse the velocity direction
+        if dv.abs() > self.velocity.abs() {
+            self.velocity = 0.0;
+        } else {
+            self.velocity += dv;
+        }
+
+        self.delta += self.velocity * dt;
+        self.extract_rows()
     }
 
-    /// Target offset (final position).
-    pub fn target(&self) -> f64 {
-        self.target
+    /// Whether the simulation has active motion.
+    pub fn is_active(&self) -> bool {
+        self.velocity.abs() >= MIN_VELOCITY
     }
 
-    fn progress(&self, now: Instant) -> f64 {
-        let elapsed = now.duration_since(self.start_time).as_secs_f64();
-        let total = self.duration.as_secs_f64();
-        (elapsed / total).min(1.0)
+    /// Stop the simulation immediately.
+    pub fn stop(&mut self) {
+        self.velocity = 0.0;
+        self.delta = 0.0;
     }
+
+    /// Extract whole rows from the fractional accumulator.
+    fn extract_rows(&mut self) -> isize {
+        let rows = if self.delta >= 0.0 {
+            self.delta.floor() as isize
+        } else {
+            self.delta.ceil() as isize
+        };
+        self.delta -= rows as f64;
+        rows
+    }
+}
+
+/// Compute the impulse (initial velocity) needed to scroll approximately
+/// `target_distance` rows with the current friction and air drag parameters.
+///
+/// Uses the analytical total-distance formula for the physics model:
+///   distance(v0) = v0/D - F/D^2 * ln(1 + v0*D/F)
+/// where F = FRICTION, D = AIR_DRAG.
+///
+/// Binary search finds the v0 that produces the target distance.
+fn impulse_for_distance(target_distance: f64) -> f64 {
+    if target_distance <= 0.0 {
+        return 0.0;
+    }
+
+    let mut lo = 0.0;
+    // Upper bound: v0/D grows linearly, so target * D * 4 is a safe upper bound.
+    let mut hi = target_distance * AIR_DRAG * 4.0;
+
+    for _ in 0..64 {
+        let mid = (lo + hi) / 2.0;
+        if analytical_distance(mid) < target_distance {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+
+    (lo + hi) / 2.0
+}
+
+/// Analytical total scroll distance for a given initial velocity.
+/// Derived from integrating v(t) = (v0 + F/D)*exp(-D*t) - F/D
+/// from t=0 until v = MIN_VELOCITY (matching the simulation stop condition).
+fn analytical_distance(v0: f64) -> f64 {
+    if v0 <= MIN_VELOCITY {
+        return 0.0;
+    }
+    let a = FRICTION / AIR_DRAG; // F/D
+    // distance = (v0 - MIN_VELOCITY) / D - F/D^2 * ln((v0 + F/D) / (MIN_VELOCITY + F/D))
+    (v0 - MIN_VELOCITY) / AIR_DRAG - a / AIR_DRAG * ((v0 + a) / (MIN_VELOCITY + a)).ln()
 }
 
 #[cfg(test)]
@@ -62,65 +130,103 @@ mod tests {
     use super::*;
 
     #[test]
-    fn easing_boundaries() {
-        assert!((ease_out_cubic(0.0) - 0.0).abs() < f64::EPSILON);
-        assert!((ease_out_cubic(1.0) - 1.0).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn easing_monotonic() {
+    fn analytical_distance_sanity() {
+        // Below MIN_VELOCITY, distance is 0
+        assert!((analytical_distance(0.0) - 0.0).abs() < f64::EPSILON);
+        assert!((analytical_distance(MIN_VELOCITY) - 0.0).abs() < f64::EPSILON);
+        // Monotonically increasing above MIN_VELOCITY
         let mut prev = 0.0;
-        for i in 1..=100 {
-            let t = i as f64 / 100.0;
-            let val = ease_out_cubic(t);
-            assert!(val >= prev, "easing must be monotonically increasing");
-            prev = val;
+        for i in 2..=100 {
+            let v0 = i as f64;
+            let d = analytical_distance(v0);
+            assert!(
+                d > prev,
+                "distance must increase: v0={v0}, d={d}, prev={prev}"
+            );
+            prev = d;
         }
     }
 
     #[test]
-    fn easing_fast_start() {
-        // At t=0.5, ease-out-cubic should be past 0.5 (fast start)
-        let mid = ease_out_cubic(0.5);
+    fn impulse_for_known_distances() {
+        for target in [5.0, 10.0, 20.0, 50.0, 100.0] {
+            let v0 = impulse_for_distance(target);
+            let actual = analytical_distance(v0);
+            assert!(
+                (actual - target).abs() < 0.01,
+                "target={target}, v0={v0}, actual={actual}"
+            );
+        }
+    }
+
+    /// Run the simulation to completion and return total rows scrolled.
+    fn resolve(physics: &mut ScrollPhysics) -> isize {
+        let dt = 1.0 / 120.0;
+        let mut total = 0isize;
+        for _ in 0..10000 {
+            if !physics.is_active() {
+                break;
+            }
+            total = total.saturating_add(physics.tick(dt));
+        }
+        total
+    }
+
+    #[test]
+    fn physics_basic_scroll_down() {
+        let mut physics = ScrollPhysics::new();
+        physics.impulse(20.0);
+        assert!(physics.is_active());
+
+        let total = resolve(&mut physics);
+        // Physics approximates the target; allow some tolerance
+        assert!((total - 20).abs() <= 3, "expected ~20 rows, got {total}");
+        assert!(!physics.is_active());
+    }
+
+    #[test]
+    fn physics_basic_scroll_up() {
+        let mut physics = ScrollPhysics::new();
+        physics.impulse(-15.0);
+        assert!(physics.is_active());
+
+        let total = resolve(&mut physics);
+        assert!((total + 15).abs() <= 3, "expected ~-15 rows, got {total}");
+    }
+
+    #[test]
+    fn physics_momentum_accumulation() {
+        // Two impulses of 10 add to velocity, producing more total distance
+        // than a single impulse of 20 (due to the nonlinear friction model).
+        let mut single = ScrollPhysics::new();
+        single.impulse(20.0);
+        let single_total = resolve(&mut single);
+
+        let mut double = ScrollPhysics::new();
+        double.impulse(10.0);
+        double.impulse(10.0);
+        let double_total = resolve(&mut double);
+
         assert!(
-            mid > 0.5,
-            "ease-out should progress quickly at first: {mid}"
+            double_total > single_total,
+            "momentum should accumulate: double={double_total}, single={single_total}"
         );
     }
 
     #[test]
-    fn animation_at_start() {
-        let anim = ScrollAnimation::new(0.0, 10.0, Duration::from_millis(200));
-        let offset = anim.current_offset(anim.start_time);
-        assert!((offset - 0.0).abs() < 0.01);
-        assert!(!anim.is_done(anim.start_time));
+    fn physics_stop() {
+        let mut physics = ScrollPhysics::new();
+        physics.impulse(20.0);
+        assert!(physics.is_active());
+
+        physics.stop();
+        assert!(!physics.is_active());
+        assert_eq!(physics.tick(0.008), 0);
     }
 
     #[test]
-    fn animation_at_end() {
-        let anim = ScrollAnimation::new(0.0, 10.0, Duration::from_millis(200));
-        let end = anim.start_time + Duration::from_millis(200);
-        let offset = anim.current_offset(end);
-        assert!((offset - 10.0).abs() < 0.01);
-        assert!(anim.is_done(end));
-    }
-
-    #[test]
-    fn animation_past_end() {
-        let anim = ScrollAnimation::new(0.0, 10.0, Duration::from_millis(200));
-        let past = anim.start_time + Duration::from_millis(500);
-        let offset = anim.current_offset(past);
-        assert!((offset - 10.0).abs() < 0.01);
-        assert!(anim.is_done(past));
-    }
-
-    #[test]
-    fn animation_midpoint() {
-        let anim = ScrollAnimation::new(0.0, 100.0, Duration::from_millis(200));
-        let mid = anim.start_time + Duration::from_millis(100);
-        let offset = anim.current_offset(mid);
-        // At t=0.5, ease_out_cubic gives 0.875, so offset ~ 87.5
-        assert!(offset > 50.0, "should be past halfway: {offset}");
-        assert!(offset < 100.0, "should not be at target yet: {offset}");
+    fn physics_tick_returns_zero_when_idle() {
+        let mut physics = ScrollPhysics::new();
+        assert_eq!(physics.tick(0.008), 0);
     }
 }

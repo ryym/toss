@@ -8,8 +8,6 @@ mod search_incremental;
 mod search_input;
 mod search_wrap;
 
-use std::time::Duration;
-
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::App;
@@ -46,7 +44,7 @@ pub fn run_test_screen(tc: TestCase) -> MockScreen {
     let mut screen = MockScreen::new(tc.screen_width, tc.screen_height);
     screen.set_events(tc.events);
     let mut app = App::new(screen, doc, tc.options).unwrap();
-    app.set_scroll_duration(Duration::ZERO);
+    app.set_instant_scroll();
     app.run().unwrap();
     app.into_screen()
 }
