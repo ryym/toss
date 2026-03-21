@@ -72,27 +72,25 @@ impl Header {
         viewport_top: usize,
         sync_section: bool,
     ) -> Vec<ScreenRow> {
-        if sync_section {
-            if let Some(ref mut index) = self.section_index {
-                index.find_section(doc, viewport_top, self.section_header_lines);
-            }
+        if sync_section && let Some(ref mut index) = self.section_index {
+            index.find_section(doc, viewport_top, self.section_header_lines);
         }
 
         let mut rows = self.resolve_fixed(doc, width);
 
-        if let Some(ref index) = self.section_index {
-            if let Some(section_start) = index.current_section() {
-                // Skip lines that overlap with the fixed header.
-                let effective_start = section_start.max(self.fixed_lines);
-                let section_end = section_start + self.section_header_lines;
-                for i in effective_start..section_end {
-                    if let Some(line) = doc.line(i) {
-                        for w in 0..line.row_count(width) {
-                            rows.push(ScreenRow {
-                                line_index: i,
-                                wrap_index: w,
-                            });
-                        }
+        if let Some(ref index) = self.section_index
+            && let Some(section_start) = index.current_section()
+        {
+            // Skip lines that overlap with the fixed header.
+            let effective_start = section_start.max(self.fixed_lines);
+            let section_end = section_start + self.section_header_lines;
+            for i in effective_start..section_end {
+                if let Some(line) = doc.line(i) {
+                    for w in 0..line.row_count(width) {
+                        rows.push(ScreenRow {
+                            line_index: i,
+                            wrap_index: w,
+                        });
                     }
                 }
             }
@@ -166,11 +164,11 @@ impl SectionIndex {
         }
         let max_start = viewport_top - header_lines;
         for i in (0..=max_start).rev() {
-            if let Some(line) = doc.line(i) {
-                if self.pattern.is_match(line.plain()) {
-                    self.cached_section = Some(i);
-                    return Some(i);
-                }
+            if let Some(line) = doc.line(i)
+                && self.pattern.is_match(line.plain())
+            {
+                self.cached_section = Some(i);
+                return Some(i);
             }
         }
         self.cached_section = None;
@@ -193,10 +191,11 @@ impl SectionIndex {
         }
         let scan_start = old_top.saturating_sub(header_lines - 1);
         for i in scan_start..new_top {
-            if let Some(line) = doc.line(i) {
-                if self.pattern.is_match(line.plain()) && i + header_lines <= new_top {
-                    self.cached_section = Some(i);
-                }
+            if let Some(line) = doc.line(i)
+                && self.pattern.is_match(line.plain())
+                && i + header_lines <= new_top
+            {
+                self.cached_section = Some(i);
             }
         }
     }
@@ -224,11 +223,11 @@ impl SectionIndex {
                 return;
             };
             for i in (0..section_start.min(max_start + 1)).rev() {
-                if let Some(line) = doc.line(i) {
-                    if self.pattern.is_match(line.plain()) {
-                        self.cached_section = Some(i);
-                        return;
-                    }
+                if let Some(line) = doc.line(i)
+                    && self.pattern.is_match(line.plain())
+                {
+                    self.cached_section = Some(i);
+                    return;
                 }
             }
         }
