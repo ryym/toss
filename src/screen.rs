@@ -192,6 +192,22 @@ fn draw_status_line_no_flush<S: Screen>(screen: &mut S, page: &mut Page) -> io::
     Ok(())
 }
 
+/// Redraw only the header area (used when section header changes
+/// but header height stays the same during incremental scroll).
+pub fn redraw_header<S: Screen>(
+    screen: &mut S,
+    page: &mut Page,
+    search: Option<&SearchState>,
+) -> io::Result<()> {
+    let width = page.viewport.width();
+    let header_rows = page.resolve_header();
+    if !header_rows.is_empty() {
+        draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
+        screen.flush()?;
+    }
+    Ok(())
+}
+
 /// Render a full page (used on initial draw and resize).
 pub fn draw_full_page<S: Screen>(
     screen: &mut S,
@@ -199,7 +215,7 @@ pub fn draw_full_page<S: Screen>(
     search: Option<&SearchState>,
 ) -> io::Result<()> {
     let width = page.viewport.width();
-    let header_rows = page.resolve_header();
+    let header_rows = page.resolve_header_synced();
     let header_height = header_rows.len();
 
     // Draw header rows at the top of the screen.
