@@ -17,41 +17,11 @@ fn section_opts_n(pattern: &str, header_lines: usize) -> Option<SectionOptions> 
     })
 }
 
-/// No section header displayed when viewport is at the top
-/// (section line is still visible in viewport, not scrolled past).
+/// Section line is visible in the viewport at the top, so no sticky header.
+/// Scrolling down 1 makes it sticky. Scrolling back up removes the sticky.
 #[test]
-fn no_sticky_when_section_visible() {
-    let screen = run_test_screen(TestCase {
-        screen_width: 20,
-        screen_height: 5,
-        content: "\
-# Section A
-line 1
-line 2
-line 3",
-        options: Options {
-            section: section_opts("^# "),
-            ..Default::default()
-        },
-        events: vec![key('q')],
-        ..Default::default()
-    });
-    assert_eq!(
-        screen.last_snapshot(),
-        "\
-# Section A
-line 1
-line 2
-line 3
-:
-"
-    );
-}
-
-/// Section header appears as sticky when scrolled past.
-#[test]
-fn sticky_after_scroll_past_section() {
-    let screen = run_test_screen(TestCase {
+fn sticky_appears_and_disappears_on_scroll() {
+    let out = run_test_screen(TestCase {
         screen_width: 20,
         screen_height: 5,
         content: "\
@@ -64,27 +34,43 @@ line 4",
             section: section_opts("^# "),
             ..Default::default()
         },
-        // Scroll down 1 so "# Section A" is above viewport
-        events: vec![key('j'), key('q')],
+        events: vec![key('j'), key('k'), key('q')],
         ..Default::default()
-    });
-    // Header takes 1 row, viewport has 3 rows, status line 1 row = 5
+    })
+    .out();
     assert_eq!(
-        screen.last_snapshot(),
+        out,
         "\
 # Section A
 line 1
 line 2
 line 3
 :
+-----
+[EVENT]:char:j
+# Section A
+line 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:k
+# Section A
+line 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:q
 "
     );
 }
 
-/// Section header updates when scrolling into a new section.
+/// Scrolling through two sections: section A becomes sticky first,
+/// then section B replaces it.
 #[test]
-fn sticky_updates_on_new_section() {
-    let screen = run_test_screen(TestCase {
+fn sticky_transitions_between_sections() {
+    let out = run_test_screen(TestCase {
         screen_width: 20,
         screen_height: 5,
         content: "\
@@ -98,58 +84,49 @@ line 4",
             section: section_opts("^# "),
             ..Default::default()
         },
-        // Scroll down 3 so both sections are above viewport
         events: vec![key('j'), key('j'), key('j'), key('q')],
         ..Default::default()
-    });
+    })
+    .out();
     assert_eq!(
-        screen.last_snapshot(),
+        out,
         "\
+# Section A
+line 1
+# Section B
+line 2
+:
+-----
+[EVENT]:char:j
+# Section A
+line 1
+# Section B
+line 2
+:
+-----
+[EVENT]:char:j
+# Section A
+# Section B
+line 2
+line 3
+:
+-----
+[EVENT]:char:j
 # Section B
 line 2
 line 3
 line 4
 :
+-----
+[EVENT]:char:q
 "
     );
 }
 
-/// Section header disappears when scrolling back up past the section start.
-#[test]
-fn sticky_disappears_on_scroll_up() {
-    let screen = run_test_screen(TestCase {
-        screen_width: 20,
-        screen_height: 5,
-        content: "\
-# Section A
-line 1
-line 2
-line 3
-line 4",
-        options: Options {
-            section: section_opts("^# "),
-            ..Default::default()
-        },
-        // Scroll down 1, then back up 1
-        events: vec![key('j'), key('k'), key('q')],
-        ..Default::default()
-    });
-    assert_eq!(
-        screen.last_snapshot(),
-        "\
-# Section A
-line 1
-line 2
-line 3
-:
-"
-    );
-}
-
-/// Section header works with fixed header combined.
+/// Fixed header stays, and section header appears below it when scrolled.
 #[test]
 fn section_with_fixed_header() {
-    let screen = run_test_screen(TestCase {
+    let out = run_test_screen(TestCase {
         screen_width: 20,
         screen_height: 6,
         content: "\
@@ -164,66 +141,113 @@ line 4",
             header: 1,
             section: section_opts("^# "),
         },
-        // Scroll down 3: viewport_top=4 (# Section B).
-        // Section A (line 1) is sticky: 1+1<=4.
-        // Section B (line 4) is visible but not yet above viewport.
         events: vec![key('j'), key('j'), key('j'), key('q')],
         ..Default::default()
-    });
+    })
+    .out();
     assert_eq!(
-        screen.last_snapshot(),
+        out,
         "\
+FIXED
+# Section A
+line 1
+line 2
+# Section B
+:
+-----
+[EVENT]:char:j
+FIXED
+# Section A
+line 1
+line 2
+# Section B
+:
+-----
+[EVENT]:char:j
+FIXED
+# Section A
+line 2
+# Section B
+line 3
+:
+-----
+[EVENT]:char:j
 FIXED
 # Section A
 # Section B
 line 3
 line 4
 :
+-----
+[EVENT]:char:q
 "
     );
 }
 
-/// Multi-line section header (--section-header 2).
+/// Multi-line section header (--section-header 2). The sticky header
+/// only appears once the entire 2-line block scrolls above the viewport.
+/// After j: block [0,1] partially visible (0+2>1), no sticky.
+/// After jj: block [0,1] fully above (0+2<=2), sticky appears.
 #[test]
 fn multi_line_section_header() {
-    let screen = run_test_screen(TestCase {
+    let out = run_test_screen(TestCase {
         screen_width: 20,
-        screen_height: 7,
+        screen_height: 6,
         content: "\
 # Section A
 description A
 line 1
 line 2
 line 3
-line 4",
+line 4
+line 5",
         options: Options {
             section: section_opts_n("^# ", 2),
             ..Default::default()
         },
-        // Scroll down 2: section header block [0,1] is fully above viewport
-        // Sticky header = 2 rows, viewport = 7-1-2 = 4 rows
+        // height=6, status=1, no section initially → viewport=5, content=7 lines
+        // j: viewport_top=1, block [0,1] partially visible, no sticky
+        // jj: viewport_top=2, block [0,1] fully above → sticky, header=2, viewport=3
         events: vec![key('j'), key('j'), key('q')],
         ..Default::default()
-    });
+    })
+    .out();
     assert_eq!(
-        screen.last_snapshot(),
+        out,
         "\
 # Section A
 description A
 line 1
 line 2
 line 3
+:
+-----
+[EVENT]:char:j
+description A
+line 1
+line 2
+line 3
 line 4
 :
+-----
+[EVENT]:char:j
+# Section A
+description A
+line 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:q
 "
     );
 }
 
 /// Jump to end with section headers. Section A is sticky because
-/// the viewport top is at the section B line itself (still visible).
+/// the section B line is still visible in the viewport.
 #[test]
 fn jump_end_with_section() {
-    let screen = run_test_screen(TestCase {
+    let out = run_test_screen(TestCase {
         screen_width: 20,
         screen_height: 5,
         content: "\
@@ -240,48 +264,25 @@ line 5",
         },
         events: vec![key('G'), key('q')],
         ..Default::default()
-    });
+    })
+    .out();
     assert_eq!(
-        screen.last_snapshot(),
+        out,
         "\
-# Section A
-# Section B
-line 3
-line 4
-:
-"
-    );
-}
-
-/// Scroll down enough so that section B is fully above viewport.
-#[test]
-fn section_b_becomes_sticky() {
-    let screen = run_test_screen(TestCase {
-        screen_width: 20,
-        screen_height: 5,
-        content: "\
 # Section A
 line 1
+line 2
 # Section B
-line 3
-line 4
-line 5",
-        options: Options {
-            section: section_opts("^# "),
-            ..Default::default()
-        },
-        // Scroll 3 down: viewport_top=3, section B (line 2): 2+1=3<=3, sticky
-        events: vec![key('j'), key('j'), key('j'), key('q')],
-        ..Default::default()
-    });
-    assert_eq!(
-        screen.last_snapshot(),
-        "\
-# Section B
-line 3
-line 4
-line 5
 :
+-----
+[EVENT]:char:G
+# Section A
+# Section B
+line 3
+line 4
+:
+-----
+[EVENT]:char:q
 "
     );
 }
@@ -289,7 +290,7 @@ line 5
 /// No section above viewport means no sticky header.
 #[test]
 fn no_section_above_viewport() {
-    let screen = run_test_screen(TestCase {
+    let out = run_test_screen(TestCase {
         screen_width: 20,
         screen_height: 5,
         content: "\
@@ -302,27 +303,36 @@ line 4",
             section: section_opts("^# "),
             ..Default::default()
         },
-        // Scroll down 1: only regular lines above, no section
         events: vec![key('j'), key('q')],
         ..Default::default()
-    });
+    })
+    .out();
     assert_eq!(
-        screen.last_snapshot(),
+        out,
         "\
+line 1
+line 2
+line 3
+# Section A
+:
+-----
+[EVENT]:char:j
 line 2
 line 3
 # Section A
 line 4
 :
+-----
+[EVENT]:char:q
 "
     );
 }
 
-/// Section header with fixed header where section line is within the fixed header range.
-/// The section header should not duplicate the fixed header lines.
+/// Section header with fixed header where section line is within the
+/// fixed header range. The section header should not duplicate.
 #[test]
 fn section_overlaps_fixed_header() {
-    let screen = run_test_screen(TestCase {
+    let out = run_test_screen(TestCase {
         screen_width: 20,
         screen_height: 6,
         content: "\
@@ -336,21 +346,102 @@ line 5",
             header: 1,
             section: section_opts("^# "),
         },
-        // Scroll down 1
         events: vec![key('j'), key('q')],
         ..Default::default()
-    });
-    // Section A is at line 0 which is also the fixed header.
+    })
+    .out();
+    // Section A at line 0 overlaps with fixed header (also line 0).
     // It should not appear twice.
     assert_eq!(
-        screen.last_snapshot(),
+        out,
         "\
+# Section A
+line 1
+line 2
+line 3
+line 4
+:
+-----
+[EVENT]:char:j
 # Section A
 line 2
 line 3
 line 4
 line 5
 :
+-----
+[EVENT]:char:q
+"
+    );
+}
+
+/// Scroll down enough so that section B is fully above viewport,
+/// then scroll back up to see section A become sticky again.
+#[test]
+fn scroll_down_and_up_across_sections() {
+    let out = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 5,
+        content: "\
+# Section A
+line 1
+# Section B
+line 3
+line 4
+line 5",
+        options: Options {
+            section: section_opts("^# "),
+            ..Default::default()
+        },
+        events: vec![key('j'), key('j'), key('j'), key('k'), key('k'), key('q')],
+        ..Default::default()
+    })
+    .out();
+    assert_eq!(
+        out,
+        "\
+# Section A
+line 1
+# Section B
+line 3
+:
+-----
+[EVENT]:char:j
+# Section A
+line 1
+# Section B
+line 3
+:
+-----
+[EVENT]:char:j
+# Section A
+# Section B
+line 3
+line 4
+:
+-----
+[EVENT]:char:j
+# Section B
+line 3
+line 4
+line 5
+:
+-----
+[EVENT]:char:k
+# Section A
+# Section B
+line 3
+line 4
+:
+-----
+[EVENT]:char:k
+# Section A
+line 1
+# Section B
+line 3
+:
+-----
+[EVENT]:char:q
 "
     );
 }
