@@ -68,6 +68,8 @@ impl<S: Screen> App<S> {
 
     pub fn run(&mut self) -> io::Result<()> {
         // Initial draw
+        let (_, h) = self.screen.size()?;
+        self.page.sync_section_for_redraw(h as usize);
         let search = active_search(&self.mode, &self.search);
         screen::draw_full_page(&mut self.screen, &mut self.page, search)?;
         self.needs_full_redraw = false;
@@ -102,6 +104,8 @@ impl<S: Screen> App<S> {
 
             // 3. Render if needed
             if self.needs_full_redraw {
+                let (_, h) = self.screen.size()?;
+                self.page.sync_section_for_redraw(h as usize);
                 let search = active_search(&self.mode, &self.search);
                 screen::draw_full_page(&mut self.screen, &mut self.page, search)?;
                 self.needs_full_redraw = false;
