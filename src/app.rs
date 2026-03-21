@@ -429,8 +429,12 @@ impl<S: Screen> App<S> {
                 } else {
                     // Section changed but height is the same: incremental scroll + header redraw.
                     let search = active_search(&self.mode, &self.search);
-                    screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
-                    screen::redraw_header(&mut self.screen, &mut self.page, search)?;
+                    screen::apply_scroll_and_redraw_header(
+                        &mut self.screen,
+                        &plan,
+                        &mut self.page,
+                        search,
+                    )?;
                 }
             } else {
                 let search = active_search(&self.mode, &self.search);

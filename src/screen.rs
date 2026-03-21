@@ -192,9 +192,8 @@ fn draw_status_line_no_flush<S: Screen>(screen: &mut S, page: &mut Page) -> io::
     Ok(())
 }
 
-/// Redraw only the header area (used when section header changes
-/// but header height stays the same during incremental scroll).
-pub fn redraw_header<S: Screen>(
+/// Redraw only the header area without flushing.
+fn redraw_header_no_flush<S: Screen>(
     screen: &mut S,
     page: &mut Page,
     search: Option<&SearchState>,
@@ -203,9 +202,21 @@ pub fn redraw_header<S: Screen>(
     let header_rows = page.resolve_header();
     if !header_rows.is_empty() {
         draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
-        screen.flush()?;
     }
     Ok(())
+}
+
+/// Apply a scroll plan and redraw the header area in a single flush.
+/// Used when section header changes but header height stays the same.
+pub fn apply_scroll_and_redraw_header<S: Screen>(
+    screen: &mut S,
+    plan: &ScrollPlan,
+    page: &mut Page,
+    search: Option<&SearchState>,
+) -> io::Result<()> {
+    apply_scroll_no_flush(screen, plan, page, search)?;
+    redraw_header_no_flush(screen, page, search)?;
+    screen.flush()
 }
 
 /// Render a full page (used on initial draw and resize).
@@ -244,6 +255,16 @@ pub fn draw_full_page<S: Screen>(
 ///
 /// When a header is present, a scroll region is used to keep it in place.
 pub fn apply_scroll<S: Screen>(
+    screen: &mut S,
+    plan: &ScrollPlan,
+    page: &mut Page,
+    search: Option<&SearchState>,
+) -> io::Result<()> {
+    apply_scroll_no_flush(screen, plan, page, search)?;
+    screen.flush()
+}
+
+fn apply_scroll_no_flush<S: Screen>(
     screen: &mut S,
     plan: &ScrollPlan,
     page: &mut Page,
@@ -299,7 +320,5 @@ pub fn apply_scroll<S: Screen>(
         search,
         header_height + draw_from,
     )?;
-    draw_status_line_no_flush(screen, page)?;
-
-    screen.flush()
+    draw_status_line_no_flush(screen, page)
 }
