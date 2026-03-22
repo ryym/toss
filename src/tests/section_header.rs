@@ -42,9 +42,9 @@ line 3
 -----
 [EVENT]:char:j
 # Section A
-line 1
 line 2
 line 3
+line 4
 :
 -----
 [EVENT]:char:k
@@ -77,20 +77,13 @@ line 4",
             section: section_opts("^# "),
             ..Default::default()
         },
-        events: vec![key('j'), key('j'), key('j'), key('q')],
+        events: vec![key('j'), key('j'), key('q')],
         ..Default::default()
     })
     .out();
     assert_eq!(
         out,
         "\
-# Section A
-line 1
-# Section B
-line 2
-:
------
-[EVENT]:char:j
 # Section A
 line 1
 # Section B
@@ -134,21 +127,13 @@ line 4",
             header: 1,
             section: section_opts("^# "),
         },
-        events: vec![key('j'), key('j'), key('j'), key('q')],
+        events: vec![key('j'), key('j'), key('q')],
         ..Default::default()
     })
     .out();
     assert_eq!(
         out,
         "\
-FIXED
-# Section A
-line 1
-line 2
-# Section B
-:
------
-[EVENT]:char:j
 FIXED
 # Section A
 line 1
@@ -177,8 +162,8 @@ line 4
     );
 }
 
-/// Jump to end with section headers. Section A is sticky because
-/// the section B line is still visible in the viewport.
+/// Jump to end with section headers. Section B is at the top of
+/// the viewport, so section A's sticky header is pushed off.
 #[test]
 fn jump_end_with_section() {
     let out = run_test_screen(TestCase {
@@ -210,10 +195,10 @@ line 2
 :
 -----
 [EVENT]:char:G
-# Section A
 # Section B
 line 3
 line 4
+line 5
 :
 -----
 [EVENT]:char:q
@@ -342,13 +327,6 @@ line 3
 -----
 [EVENT]:char:j
 # Section A
-line 1
-# Section B
-line 3
-:
------
-[EVENT]:char:j
-# Section A
 # Section B
 line 3
 line 4
@@ -361,6 +339,7 @@ line 4
 line 5
 :
 -----
+[EVENT]:char:j
 [EVENT]:char:k
 # Section A
 # Section B

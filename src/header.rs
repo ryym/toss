@@ -84,18 +84,14 @@ impl Header {
 
         let mut rows = self.resolve_fixed(doc, width);
         let fixed_row_count = rows.len();
-        let mut use_overlay = false;
 
         if let Some(ref index) = self.section_index
             && let Some(section_start) = index.current_section()
         {
-            let n = index.header_lines();
-            use_overlay = n > 1;
-
             // Build full header block screen rows.
             let effective_start = section_start.max(self.fixed_lines);
             let mut block_rows = Vec::new();
-            for i in effective_start..section_start + n {
+            for i in effective_start..section_start + index.header_lines() {
                 if let Some(line) = doc.line(i) {
                     for w in 0..line.row_count(width) {
                         block_rows.push(ScreenRow {
@@ -106,21 +102,18 @@ impl Header {
                 }
             }
 
-            let display_rows = if use_overlay {
-                // Push-up: limit overlay to the screen row distance to the next section.
-                let max_rows = index
-                    .find_next_section_row_distance(
-                        doc,
-                        viewport_top,
-                        viewport_top_wrap,
-                        block_rows.len(),
-                        width,
-                    )
-                    .unwrap_or(block_rows.len());
-                max_rows.min(block_rows.len())
-            } else {
-                block_rows.len()
-            };
+            // Push-up: limit overlay to the screen row distance to the next section.
+            // For N=1 this is effectively a no-op (block_rows.len() is 1).
+            let max_rows = index
+                .find_next_section_row_distance(
+                    doc,
+                    viewport_top,
+                    viewport_top_wrap,
+                    block_rows.len(),
+                    width,
+                )
+                .unwrap_or(block_rows.len());
+            let display_rows = max_rows.min(block_rows.len());
 
             // Show the LAST display_rows of the block
             // (bottom rows remain while top rows get pushed off).
@@ -128,8 +121,7 @@ impl Header {
             rows.extend_from_slice(&block_rows[skip..]);
         }
 
-        let section_row_count = rows.len() - fixed_row_count;
-        self.cached_overlay = if use_overlay { section_row_count } else { 0 };
+        self.cached_overlay = rows.len() - fixed_row_count;
 
         rows
     }
