@@ -289,6 +289,17 @@ fn apply_scroll_no_flush<S: Screen>(
     // Set scroll region to exclude header (including overlay) and status line.
     let viewport_height = page.viewport.height();
     let visible_height = viewport_height.saturating_sub(overlay);
+
+    // When overlay covers the entire viewport, there are no content rows to scroll.
+    // Just redraw the header and status line.
+    if visible_height == 0 {
+        let header_rows = page.resolve_header();
+        if !header_rows.is_empty() {
+            draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
+        }
+        return draw_status_line_no_flush(screen, page);
+    }
+
     if header_height > 0 {
         let region_top = header_height as u16;
         let region_bottom = (header_height + visible_height - 1) as u16;
