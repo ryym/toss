@@ -254,3 +254,63 @@ line 5
 "
     );
 }
+
+/// When a line within the header block also matches the section pattern,
+/// it should be treated as part of the current section's block, not as
+/// a new section start.
+#[test]
+fn pattern_match_within_header_block() {
+    let out = run_test_screen(TestCase {
+        screen_width: 68,
+        screen_height: 6,
+        content: "\
+# Changelog
+
+## 2.0.74
+
+- Added LSP (Language Server Protocol) tool for code intelligence features like go-to-definition, find references, and hover documentation
+- Added `/terminal-setup` support for Kitty, Alacritty, Zed, and Warp terminals
+- Added ctrl+t shortcut in `/theme` to toggle syntax highlighting on/off
+",
+        options: Options {
+            section: section_opts_n("^#", 3),
+            ..Default::default()
+        },
+        events: vec![
+            key('j'),
+            key('j'),
+            key('q'),
+        ],
+        ..Default::default()
+    })
+    .out();
+    assert_eq!(
+        out,
+        "\
+# Changelog
+
+## 2.0.74
+
+- Added LSP (Language Server Protocol) tool for code intelligence fe
+:
+-----
+[EVENT]:char:j
+# Changelog
+
+## 2.0.74
+- Added LSP (Language Server Protocol) tool for code intelligence fe>
+atures like go-to-definition, find references, and hover documentati
+:
+-----
+[EVENT]:char:j
+# Changelog
+
+## 2.0.74
+atures like go-to-definition, find references, and hover documentati>
+on
+:
+-----
+[EVENT]:char:q
+"
+    );
+}

@@ -181,6 +181,29 @@ impl SectionIndex {
         self.cached_section
     }
 
+    /// Given a pattern match at `match_line`, walk backward to find the true
+    /// section start. A match might fall within the header block of an earlier
+    /// section, in which case that earlier section is the real start.
+    fn resolve_section_start(&self, doc: &mut Document, match_line: usize) -> usize {
+        let mut current = match_line;
+        loop {
+            let check_start = current.saturating_sub(self.header_lines - 1);
+            let mut found_earlier = false;
+            for j in check_start..current {
+                if let Some(line) = doc.line(j)
+                    && self.pattern.is_match(line.plain())
+                {
+                    current = j;
+                    found_earlier = true;
+                    break;
+                }
+            }
+            if !found_earlier {
+                return current;
+            }
+        }
+    }
+
     /// Scan backward from `viewport_top` to find the nearest section
     /// whose start is above the viewport (`section_start < viewport_top`).
     fn find_section(&mut self, doc: &mut Document, viewport_top: usize) -> Option<usize> {
@@ -192,8 +215,9 @@ impl SectionIndex {
             if let Some(line) = doc.line(i)
                 && self.pattern.is_match(line.plain())
             {
-                self.cached_section = Some(i);
-                return Some(i);
+                let start = self.resolve_section_start(doc, i);
+                self.cached_section = Some(start);
+                return Some(start);
             }
         }
         self.cached_section = None;
@@ -202,6 +226,7 @@ impl SectionIndex {
 
     /// Find the screen row distance from `viewport_top` to the next section start.
     /// Scans forward, accumulating screen rows per line (accounting for wrapping).
+    /// Skips matches within the current section's header block.
     /// Returns None if no section is found within `max_rows` screen rows.
     fn find_next_section_row_distance(
         &self,
@@ -210,11 +235,15 @@ impl SectionIndex {
         max_rows: usize,
         width: usize,
     ) -> Option<usize> {
+        let skip_until = self
+            .cached_section
+            .map(|s| s + self.header_lines)
+            .unwrap_or(0);
         let mut row_count = 0;
         let mut line_idx = viewport_top;
         while row_count < max_rows {
             let line = doc.line(line_idx)?;
-            if self.pattern.is_match(line.plain()) {
+            if line_idx >= skip_until && self.pattern.is_match(line.plain()) {
                 return Some(row_count);
             }
             row_count += line.row_count(width);
@@ -224,13 +253,21 @@ impl SectionIndex {
     }
 
     /// On scroll down, check if any new sections appeared in the scrolled
-    /// range. Any section at `section_start < new_top` qualifies as sticky.
+    /// range. Skips matches within the current section's header block.
     fn update_on_scroll_down(&mut self, doc: &mut Document, old_top: usize, new_top: usize) {
+        let mut skip_until = self
+            .cached_section
+            .map(|s| s + self.header_lines)
+            .unwrap_or(0);
         for i in old_top..new_top {
+            if i < skip_until {
+                continue;
+            }
             if let Some(line) = doc.line(i)
                 && self.pattern.is_match(line.plain())
             {
                 self.cached_section = Some(i);
+                skip_until = i + self.header_lines;
             }
         }
     }
@@ -250,7 +287,8 @@ impl SectionIndex {
                 if let Some(line) = doc.line(i)
                     && self.pattern.is_match(line.plain())
                 {
-                    self.cached_section = Some(i);
+                    let start = self.resolve_section_start(doc, i);
+                    self.cached_section = Some(start);
                     return;
                 }
             }
@@ -348,5 +386,50 @@ mod tests {
         // Scroll up past section B: section_start=2 >= new_top=2
         idx.update_on_scroll_up(&mut doc, 2);
         assert_eq!(idx.current_section(), None);
+    }
+
+    // --- Block-skip tests ---
+
+    #[test]
+    fn find_section_skips_match_within_block() {
+        // header_lines=3: section at line 0 owns block [0,1,2].
+        // Line 2 matches but is within line 0's block.
+        let mut doc = make_doc("# A\nline\n## sub\nline\nline");
+        let mut idx = SectionIndex::new(Regex::new("^#").unwrap(), 3);
+
+        // Scanning backward from viewport_top=3: finds ## sub at line 2,
+        // then resolves to line 0 (the true section start).
+        assert_eq!(idx.find_section(&mut doc, 3), Some(0));
+    }
+
+    #[test]
+    fn scroll_down_skips_match_within_block() {
+        // header_lines=3: line 0 starts section, block [0,1,2].
+        // Line 2 matches but should be skipped.
+        let mut doc = make_doc("# A\nline\n## sub\nline\n# B\nline");
+        let mut idx = SectionIndex::new(Regex::new("^#").unwrap(), 3);
+
+        // Scroll from 0 to 3: line 0 matches (section), line 2 is within block → skip
+        idx.update_on_scroll_down(&mut doc, 0, 3);
+        assert_eq!(idx.current_section(), Some(0));
+
+        // Scroll from 3 to 5: line 4 (# B) matches and is outside block → new section
+        idx.update_on_scroll_down(&mut doc, 3, 5);
+        assert_eq!(idx.current_section(), Some(4));
+    }
+
+    #[test]
+    fn scroll_up_resolves_through_block() {
+        // header_lines=3: line 0 starts section, block [0,1,2].
+        // Line 2 matches. When scrolling up to find previous section,
+        // the backward scan should resolve line 2 → line 0.
+        let mut doc = make_doc("# A\nline\n## sub\nline\n# B\nline");
+        let mut idx = SectionIndex::new(Regex::new("^#").unwrap(), 3);
+        idx.cached_section = Some(4); // Currently on section B
+
+        // Scroll up so new_top=4: section B no longer sticky.
+        // Backward scan finds ## sub (line 2), resolves to # A (line 0).
+        idx.update_on_scroll_up(&mut doc, 4);
+        assert_eq!(idx.current_section(), Some(0));
     }
 }
