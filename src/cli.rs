@@ -54,7 +54,11 @@ pub fn parse_args() -> Result<Action, lexopt::Error> {
                 section_pattern = Some(parser.value()?.parse()?);
             }
             Long("section-header") => {
-                section_header_lines = Some(parser.value()?.parse()?);
+                let n: usize = parser.value()?.parse()?;
+                if n == 0 {
+                    return Err("--section-header must be at least 1".into());
+                }
+                section_header_lines = Some(n);
             }
             Value(val) if file.is_none() => {
                 file = Some(PathBuf::from(val));
