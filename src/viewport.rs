@@ -23,8 +23,6 @@ pub struct ScrollPlan {
     /// How many rows to scroll the terminal (always non-zero).
     pub terminal_scroll: NonZeroUsize,
     pub direction: Direction,
-    /// New rows to draw (at the top or bottom depending on direction).
-    pub new_rows: Vec<ScreenRow>,
 }
 
 /// Move one row forward in the document. Returns None at the end.
@@ -113,6 +111,11 @@ impl Viewport {
         self.rows.first().map(|r| r.line_index).unwrap_or(0)
     }
 
+    /// Wrap index of the first visible row, or 0 if no rows exist.
+    pub fn top_wrap_index(&self) -> usize {
+        self.rows.first().map(|r| r.wrap_index).unwrap_or(0)
+    }
+
     /// Scroll down by n screen rows. Returns `None` if no scrolling occurred.
     pub fn scroll_down(&mut self, n: usize, doc: &mut Document) -> Option<ScrollPlan> {
         if n == 0 || self.rows.is_empty() {
@@ -133,7 +136,6 @@ impl Viewport {
         Some(ScrollPlan {
             terminal_scroll: actual,
             direction: Direction::Down,
-            new_rows,
         })
     }
 
@@ -158,7 +160,6 @@ impl Viewport {
         Some(ScrollPlan {
             terminal_scroll: actual,
             direction: Direction::Up,
-            new_rows,
         })
     }
 
@@ -372,13 +373,6 @@ mod tests {
         assert_eq!(plan.terminal_scroll.get(), 1);
         assert_eq!(plan.direction, Direction::Down);
         assert_eq!(
-            plan.new_rows,
-            vec![ScreenRow {
-                line_index: 3,
-                wrap_index: 0
-            }]
-        );
-        assert_eq!(
             state.rows(),
             &[
                 ScreenRow {
@@ -453,13 +447,6 @@ mod tests {
         assert_eq!(plan.terminal_scroll.get(), 1);
         assert_eq!(plan.direction, Direction::Up);
         assert_eq!(
-            plan.new_rows,
-            vec![ScreenRow {
-                line_index: 0,
-                wrap_index: 0
-            }]
-        );
-        assert_eq!(
             state.rows(),
             &[
                 ScreenRow {
@@ -495,13 +482,6 @@ mod tests {
 
         let plan = state.scroll_up(1, &mut doc).unwrap();
         assert_eq!(plan.terminal_scroll.get(), 1);
-        assert_eq!(
-            plan.new_rows,
-            vec![ScreenRow {
-                line_index: 0,
-                wrap_index: 0
-            }]
-        );
         // Back to: [abcde/0, fgh/1]
         assert_eq!(
             state.rows(),

@@ -7,11 +7,14 @@ mod search_execution;
 mod search_incremental;
 mod search_input;
 mod search_wrap;
+mod section_header;
+mod section_header_multi;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::App;
 use crate::document::Document;
+use crate::logger;
 use crate::options::Options;
 use mock_screen::MockScreen;
 
@@ -40,6 +43,10 @@ impl Default for TestCase {
 }
 
 pub fn run_test_screen(tc: TestCase) -> MockScreen {
+    let _log_guard = match logger::setup_file_logger() {
+        Ok(guard) => guard,
+        Err(err) => panic!("failed to setup logger: {}", err),
+    };
     let doc = Document::from_string(tc.content.to_string());
     let mut screen = MockScreen::new(tc.screen_width, tc.screen_height);
     screen.set_events(tc.events);

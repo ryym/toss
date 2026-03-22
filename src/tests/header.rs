@@ -15,7 +15,10 @@ line 3
 line 4
 line 5
 line 6",
-        options: Options { header: 2 },
+        options: Options {
+            header: 2,
+            ..Default::default()
+        },
         events: vec![key('q')],
         ..Default::default()
     });
@@ -43,7 +46,10 @@ line 3
 line 4
 line 5
 line 6",
-        options: Options { header: 2 },
+        options: Options {
+            header: 2,
+            ..Default::default()
+        },
         events: vec![key('j'), key('j'), key('q')],
         ..Default::default()
     });
@@ -71,7 +77,10 @@ line 3
 line 4
 line 5
 line 6",
-        options: Options { header: 2 },
+        options: Options {
+            header: 2,
+            ..Default::default()
+        },
         events: vec![key('j'), key('j'), key('k'), key('q')],
         ..Default::default()
     });
@@ -99,7 +108,10 @@ HEADER 2
 line 3
 line 4
 line 5",
-        options: Options { header: 2 },
+        options: Options {
+            header: 2,
+            ..Default::default()
+        },
         events: vec![key('k'), key('k'), key('q')],
         ..Default::default()
     });
@@ -128,7 +140,10 @@ line 3
 line 4
 line 5
 line 6",
-        options: Options { header: 1 },
+        options: Options {
+            header: 1,
+            ..Default::default()
+        },
         events: vec![key('G'), key('g'), key('q')],
         ..Default::default()
     });
@@ -157,7 +172,10 @@ line 3
 line 4
 line 5
 line 6",
-        options: Options { header: 1 },
+        options: Options {
+            header: 1,
+            ..Default::default()
+        },
         events: vec![key('G'), key('q')],
         ..Default::default()
     });
@@ -185,7 +203,10 @@ line 2
 line 3
 line 4
 line 5",
-        options: Options { header: 0 },
+        options: Options {
+            header: 0,
+            ..Default::default()
+        },
         events: vec![key('q')],
         ..Default::default()
     });

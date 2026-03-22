@@ -1,7 +1,7 @@
 /// Command-line argument parsing.
 use std::path::PathBuf;
 
-use crate::options::Options;
+use crate::options::{Options, SectionOptions};
 
 const VERSION: &str = "0.0.0";
 
@@ -12,9 +12,11 @@ Usage: toss [OPTIONS] [FILE]
 A terminal pager.
 
 Options:
-      --header <N>  Pin the first N lines as a fixed header
-  -h, --help        Print help
-  -v, --version     Print version";
+      --header <N>           Pin the first N lines as a fixed header
+      --section <REGEX>      Regex to identify section start lines for sticky headers
+      --section-header <N>   Number of lines per section header (default 1)
+  -h, --help                 Print help
+  -v, --version              Print version";
 
 /// Parsed command-line action.
 pub enum Action {
@@ -35,6 +37,8 @@ pub fn parse_args() -> Result<Action, lexopt::Error> {
 
     let mut file = None;
     let mut header = 0;
+    let mut section_pattern: Option<String> = None;
+    let mut section_header_lines: Option<usize> = None;
     let mut parser = lexopt::Parser::from_env();
 
     while let Some(arg) = parser.next()? {
@@ -46,6 +50,16 @@ pub fn parse_args() -> Result<Action, lexopt::Error> {
             Long("header") => {
                 header = parser.value()?.parse()?;
             }
+            Long("section") => {
+                section_pattern = Some(parser.value()?.parse()?);
+            }
+            Long("section-header") => {
+                let n: usize = parser.value()?.parse()?;
+                if n == 0 {
+                    return Err("--section-header must be at least 1".into());
+                }
+                section_header_lines = Some(n);
+            }
             Value(val) if file.is_none() => {
                 file = Some(PathBuf::from(val));
             }
@@ -53,8 +67,24 @@ pub fn parse_args() -> Result<Action, lexopt::Error> {
         }
     }
 
+    if section_header_lines.is_some() && section_pattern.is_none() {
+        return Err("--section-header requires --section".into());
+    }
+
+    let section = section_pattern
+        .map(|pat| {
+            let pattern =
+                regex::Regex::new(&pat).map_err(|e| format!("invalid --section regex: {e}"))?;
+            Ok::<_, String>(SectionOptions {
+                pattern,
+                header_lines: section_header_lines.unwrap_or(1),
+            })
+        })
+        .transpose()
+        .map_err(|e| e.to_string())?;
+
     Ok(Action::Run(Args {
         file,
-        options: Options { header },
+        options: Options { header, section },
     }))
 }

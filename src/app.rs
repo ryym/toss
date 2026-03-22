@@ -68,6 +68,8 @@ impl<S: Screen> App<S> {
 
     pub fn run(&mut self) -> io::Result<()> {
         // Initial draw
+        let (_, h) = self.screen.size()?;
+        self.page.sync_section_for_redraw(h as usize);
         let search = active_search(&self.mode, &self.search);
         screen::draw_full_page(&mut self.screen, &mut self.page, search)?;
         self.needs_full_redraw = false;
@@ -102,6 +104,8 @@ impl<S: Screen> App<S> {
 
             // 3. Render if needed
             if self.needs_full_redraw {
+                let (_, h) = self.screen.size()?;
+                self.page.sync_section_for_redraw(h as usize);
                 let search = active_search(&self.mode, &self.search);
                 screen::draw_full_page(&mut self.screen, &mut self.page, search)?;
                 self.needs_full_redraw = false;
@@ -380,12 +384,7 @@ impl<S: Screen> App<S> {
 
     fn scroll_immediate(&mut self, rows: isize) -> io::Result<()> {
         self.scroll_physics.stop();
-
-        if let Some(plan) = self.page.plan_scroll(rows) {
-            let search = active_search(&self.mode, &self.search);
-            screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
-        }
-        Ok(())
+        self.apply_scroll(rows)
     }
 
     /// Start or add momentum for an animated scroll.
@@ -393,15 +392,12 @@ impl<S: Screen> App<S> {
     fn scroll_animated(&mut self, total_rows: isize) -> io::Result<()> {
         if self.instant_scroll {
             self.scroll_physics.stop();
-            if let Some(plan) = self.page.plan_scroll(total_rows) {
-                let search = active_search(&self.mode, &self.search);
-                screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
-            }
+            self.apply_scroll(total_rows)
         } else {
             log::debug!("Scroll animation impulse: rows={total_rows}");
             self.scroll_physics.impulse(total_rows as f64);
+            Ok(())
         }
-        Ok(())
     }
 
     fn update_animation(&mut self) -> io::Result<()> {
@@ -413,11 +409,38 @@ impl<S: Screen> App<S> {
             .scroll_physics
             .tick(FRAME_DURATION_ANIMATING.as_secs_f64());
 
-        if let Some(plan) = self.page.plan_scroll(rows) {
-            let search = active_search(&self.mode, &self.search);
-            screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
-        }
+        self.apply_scroll(rows)
+    }
 
+    /// Apply a scroll and handle section header changes.
+    fn apply_scroll(&mut self, rows: isize) -> io::Result<()> {
+        let old_section = self.page.current_section();
+        let old_header_height = self.page.resolve_header().len();
+
+        if let Some(plan) = self.page.plan_scroll(rows) {
+            let new_header_height = self.page.resolve_header().len();
+            let new_section = self.page.current_section();
+
+            if old_header_height != new_header_height {
+                // Header height changed (section change, push-up, or overlay change):
+                // need viewport resize + full redraw.
+                let (w, h) = self.screen.size()?;
+                self.page.resize(w as usize, h as usize);
+                self.needs_full_redraw = true;
+            } else if old_section != new_section {
+                // Section changed but height is the same: incremental scroll + header redraw.
+                let search = active_search(&self.mode, &self.search);
+                screen::apply_scroll_and_redraw_header(
+                    &mut self.screen,
+                    &plan,
+                    &mut self.page,
+                    search,
+                )?;
+            } else {
+                let search = active_search(&self.mode, &self.search);
+                screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
+            }
+        }
         Ok(())
     }
 }
