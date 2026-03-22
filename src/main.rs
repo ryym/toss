@@ -19,6 +19,7 @@ mod tests;
 
 use std::fmt;
 use std::io::{self, IsTerminal};
+use std::path::PathBuf;
 use std::process;
 
 use app::App;
@@ -79,17 +80,7 @@ fn run() -> Result<(), AppError> {
         Err(e) => return Err(AppError::new(format!("Error: {e}"), 1)),
     };
 
-    let doc = if let Some(path) = &args.file {
-        log::debug!("Read file: {}", path.display());
-        Document::from_file(path)
-            .map_err(|e| AppError::new(format!("Error reading {}: {e}", path.display()), 1))?
-    } else if !io::stdin().is_terminal() {
-        log::debug!("Read from stdin");
-        Document::from_reader(&mut io::stdin().lock())
-            .map_err(|e| AppError::new(format!("Error reading stdin: {e}"), 1))?
-    } else {
-        return Err(AppError::new("Usage: toss <file> OR command | toss", 1));
-    };
+    let doc = build_document(args.file)?;
 
     let (w, h) = crossterm::terminal::size()
         .map_err(|e| AppError::new(format!("Error getting terminal size: {e}"), 1))?;
@@ -111,4 +102,19 @@ fn run() -> Result<(), AppError> {
     app.run().map_err(|e| AppError::new(format!("{e}"), 1))?;
 
     Ok(())
+}
+
+fn build_document(path: Option<PathBuf>) -> Result<Document, AppError> {
+    let doc = if let Some(path) = &path {
+        log::debug!("Read file: {}", path.display());
+        Document::from_file(path)
+            .map_err(|e| AppError::new(format!("Error reading {}: {e}", path.display()), 1))?
+    } else if !io::stdin().is_terminal() {
+        log::debug!("Read from stdin");
+        Document::from_reader(&mut io::stdin().lock())
+            .map_err(|e| AppError::new(format!("Error reading stdin: {e}"), 1))?
+    } else {
+        return Err(AppError::new("Usage: toss <file> OR command | toss", 1));
+    };
+    Ok(doc)
 }
