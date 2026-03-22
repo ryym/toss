@@ -10,8 +10,6 @@ pub struct Header {
     fixed_lines: usize,
     /// Section index for dynamic sticky headers.
     section_index: Option<SectionIndex>,
-    /// Number of lines per section header block.
-    section_header_lines: usize,
     /// Cached: number of viewport screen rows overlaid by the section header.
     /// For multi-line section headers (N>=2), the section header overlays
     /// viewport rows instead of resizing the viewport. For single-line
@@ -23,17 +21,11 @@ impl Header {
     /// Create a new header with the given number of fixed lines
     /// and optional section configuration.
     pub fn new(fixed_lines: usize, section: Option<&SectionOptions>) -> Self {
-        let (section_index, section_header_lines) = match section {
-            Some(opts) => (
-                Some(SectionIndex::new(opts.pattern.clone())),
-                opts.header_lines,
-            ),
-            None => (None, 0),
-        };
+        let section_index =
+            section.map(|opts| SectionIndex::new(opts.pattern.clone(), opts.header_lines));
         Self {
             fixed_lines,
             section_index,
-            section_header_lines,
             cached_overlay: 0,
         }
     }
@@ -91,11 +83,14 @@ impl Header {
 
         let mut rows = self.resolve_fixed(doc, width);
         let fixed_row_count = rows.len();
+        let mut use_overlay = false;
 
         if let Some(ref index) = self.section_index
             && let Some(section_start) = index.current_section()
         {
-            let n = self.section_header_lines;
+            let n = index.header_lines();
+            use_overlay = n > 1;
+
             // Build full header block screen rows.
             let effective_start = section_start.max(self.fixed_lines);
             let mut block_rows = Vec::new();
@@ -110,7 +105,7 @@ impl Header {
                 }
             }
 
-            let display_rows = if n > 1 {
+            let display_rows = if use_overlay {
                 // Push-up: limit overlay to the screen row distance to the next section.
                 let max_rows = index
                     .find_next_section_row_distance(doc, viewport_top, block_rows.len(), width)
@@ -127,11 +122,7 @@ impl Header {
         }
 
         let section_row_count = rows.len() - fixed_row_count;
-        self.cached_overlay = if self.section_header_lines > 1 {
-            section_row_count
-        } else {
-            0
-        };
+        self.cached_overlay = if use_overlay { section_row_count } else { 0 };
 
         rows
     }
@@ -166,16 +157,23 @@ impl Header {
 /// viewport (`section_start < viewport_top`).
 struct SectionIndex {
     pattern: Regex,
+    /// Number of lines per section header block.
+    header_lines: usize,
     /// The section-start line for the current sticky header, if any.
     cached_section: Option<usize>,
 }
 
 impl SectionIndex {
-    fn new(pattern: Regex) -> Self {
+    fn new(pattern: Regex, header_lines: usize) -> Self {
         Self {
             pattern,
+            header_lines,
             cached_section: None,
         }
+    }
+
+    fn header_lines(&self) -> usize {
+        self.header_lines
     }
 
     /// Returns the current cached section start line.
@@ -271,7 +269,7 @@ mod tests {
     #[test]
     fn find_section_no_match() {
         let mut doc = make_doc("line 1\nline 2\nline 3");
-        let mut idx = SectionIndex::new(Regex::new("^#").unwrap());
+        let mut idx = SectionIndex::new(Regex::new("^#").unwrap(), 1);
         assert_eq!(idx.find_section(&mut doc, 2), None);
         assert_eq!(idx.current_section(), None);
     }
@@ -279,7 +277,7 @@ mod tests {
     #[test]
     fn find_section_basic() {
         let mut doc = make_doc("# Section A\nline 1\nline 2\n# Section B\nline 3");
-        let mut idx = SectionIndex::new(Regex::new("^# ").unwrap());
+        let mut idx = SectionIndex::new(Regex::new("^# ").unwrap(), 1);
 
         // viewport_top=2: section at line 0 qualifies (0 < 2)
         assert_eq!(idx.find_section(&mut doc, 2), Some(0));
@@ -293,7 +291,7 @@ mod tests {
         // With header_lines=2, section at line 0 becomes sticky at viewport_top=1
         // (section_start=0 < 1).
         let mut doc = make_doc("# Sec\ncontinued\nline 2\nline 3");
-        let mut idx = SectionIndex::new(Regex::new("^# ").unwrap());
+        let mut idx = SectionIndex::new(Regex::new("^# ").unwrap(), 1);
 
         // viewport_top=1: section_start=0 < 1, sticky
         assert_eq!(idx.find_section(&mut doc, 1), Some(0));
@@ -305,7 +303,7 @@ mod tests {
     #[test]
     fn scroll_down_updates_section() {
         let mut doc = make_doc("# A\nline\n# B\nline\nline");
-        let mut idx = SectionIndex::new(Regex::new("^# ").unwrap());
+        let mut idx = SectionIndex::new(Regex::new("^# ").unwrap(), 1);
 
         // Initially no section
         assert_eq!(idx.current_section(), None);
@@ -322,7 +320,7 @@ mod tests {
     #[test]
     fn scroll_down_multi_line_header() {
         let mut doc = make_doc("# A\ncont\nline\nline");
-        let mut idx = SectionIndex::new(Regex::new("^# ").unwrap());
+        let mut idx = SectionIndex::new(Regex::new("^# ").unwrap(), 1);
 
         // Scroll from 0 to 1: line 0 matches, 0 < 1 → sticky
         idx.update_on_scroll_down(&mut doc, 0, 1);
@@ -332,7 +330,7 @@ mod tests {
     #[test]
     fn scroll_up_reverts_to_previous_section() {
         let mut doc = make_doc("# A\nline\n# B\nline\nline");
-        let mut idx = SectionIndex::new(Regex::new("^# ").unwrap());
+        let mut idx = SectionIndex::new(Regex::new("^# ").unwrap(), 1);
         idx.cached_section = Some(2); // Currently on section B
 
         // Scroll up so new_top=2: section_start=2 >= new_top=2, no longer sticky.
@@ -344,7 +342,7 @@ mod tests {
     #[test]
     fn scroll_up_no_previous_section() {
         let mut doc = make_doc("line\nline\n# B\nline");
-        let mut idx = SectionIndex::new(Regex::new("^# ").unwrap());
+        let mut idx = SectionIndex::new(Regex::new("^# ").unwrap(), 1);
         idx.cached_section = Some(2);
 
         // Scroll up past section B: section_start=2 >= new_top=2
