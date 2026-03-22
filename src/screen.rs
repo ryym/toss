@@ -186,7 +186,8 @@ pub fn draw_status_line<S: Screen>(screen: &mut S, page: &mut Page) -> io::Resul
 
 fn draw_status_line_no_flush<S: Screen>(screen: &mut S, page: &mut Page) -> io::Result<()> {
     let header_height = page.resolve_header().len();
-    let status_y = (header_height + page.viewport.rows().len()) as u16;
+    let overlay = page.section_overlay();
+    let status_y = (header_height + page.viewport.rows().len() - overlay) as u16;
     screen.clear_row(status_y)?;
     screen.write_at(status_y, page.status.render())?;
     Ok(())
@@ -228,18 +229,29 @@ pub fn draw_full_page<S: Screen>(
     let width = page.viewport.width();
     let header_rows = page.resolve_header();
     let header_height = header_rows.len();
+    let overlay = page.section_overlay();
 
     // Draw header rows at the top of the screen.
     if header_height > 0 {
         draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
     }
 
-    // Draw viewport rows below the header.
+    // Draw viewport rows below the header, skipping overlaid rows.
     let rows = page.viewport.rows();
-    draw_rows_grouped(screen, &mut page.doc, rows, width, search, header_height)?;
+    let skip = overlay.min(rows.len());
+    let visible_rows = &rows[skip..];
+    draw_rows_grouped(
+        screen,
+        &mut page.doc,
+        visible_rows,
+        width,
+        search,
+        header_height,
+    )?;
 
     // Clear any rows below content that may have stale content.
-    for y in rows.len()..page.viewport.height() {
+    let visible_capacity = page.viewport.height().saturating_sub(skip);
+    for y in visible_rows.len()..visible_capacity {
         screen.clear_row((y + header_height) as u16)?;
     }
     draw_status_line_no_flush(screen, page)?;
@@ -272,12 +284,14 @@ fn apply_scroll_no_flush<S: Screen>(
 ) -> io::Result<()> {
     let width = page.viewport.width();
     let header_height = page.resolve_header().len();
+    let overlay = page.section_overlay();
 
-    // Set scroll region to exclude header and status line.
+    // Set scroll region to exclude header (including overlay) and status line.
     let viewport_height = page.viewport.height();
+    let visible_height = viewport_height.saturating_sub(overlay);
     if header_height > 0 {
         let region_top = header_height as u16;
-        let region_bottom = (header_height + viewport_height - 1) as u16;
+        let region_bottom = (header_height + visible_height - 1) as u16;
         screen.set_scroll_region(region_top, region_bottom)?;
     }
 
@@ -287,25 +301,32 @@ fn apply_scroll_no_flush<S: Screen>(
         screen.reset_scroll_region()?;
     }
 
+    // Work with visible rows (viewport rows after skipping overlay).
     let rows = page.viewport.rows();
-    let content_height = rows.len();
-    let n_new = plan.new_rows.len();
+    let skip = overlay.min(rows.len());
+    let visible_rows = &rows[skip..];
+    let content_height = visible_rows.len();
+    let n_scroll = plan.terminal_scroll.get();
 
     let (draw_from, draw_to) = match plan.direction {
         Direction::Down => {
-            let new_start = content_height - n_new;
+            let new_start = content_height.saturating_sub(n_scroll);
             // Extend backwards: include existing rows of the same line
             let mut from = new_start;
-            while from > 0 && rows[from - 1].line_index == rows[new_start].line_index {
+            while from > 0
+                && visible_rows[from - 1].line_index == visible_rows[new_start].line_index
+            {
                 from -= 1;
             }
             (from, content_height)
         }
         Direction::Up => {
-            let new_end = n_new;
+            let new_end = n_scroll.min(content_height);
             // Extend forwards: include existing rows of the same line
             let mut to = new_end;
-            while to < content_height && rows[to].line_index == rows[new_end - 1].line_index {
+            while to < content_height
+                && visible_rows[to].line_index == visible_rows[new_end - 1].line_index
+            {
                 to += 1;
             }
             (0, to)
@@ -315,7 +336,7 @@ fn apply_scroll_no_flush<S: Screen>(
     draw_rows_grouped(
         screen,
         &mut page.doc,
-        &rows[draw_from..draw_to],
+        &visible_rows[draw_from..draw_to],
         width,
         search,
         header_height + draw_from,

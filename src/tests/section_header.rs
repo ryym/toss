@@ -184,10 +184,7 @@ line 4
     );
 }
 
-/// Multi-line section header (--section-header 2). The sticky header
-/// only appears once the entire 2-line block scrolls above the viewport.
-/// After j: block [0,1] partially visible (0+2>1), no sticky.
-/// After jj: block [0,1] fully above (0+2<=2), sticky appears.
+/// Multi-line section header (--section-header 2).
 #[test]
 fn multi_line_section_header() {
     let out = run_test_screen(TestCase {
@@ -223,8 +220,8 @@ line 3
 :
 -----
 [EVENT]:char:j
+# Section A
 description A
-line 1
 line 2
 line 3
 line 4
@@ -233,9 +230,109 @@ line 4
 [EVENT]:char:j
 # Section A
 description A
+line 3
+line 4
+line 5
+:
+-----
+[EVENT]:char:q
+"
+    );
+}
+
+/// Multi-line section header (--section-header 2).
+/// The sections switches gradually.
+#[test]
+fn multi_line_section_header_switching() {
+    let out = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 6,
+        content: "\
+# Section A
+description A
 line 1
 line 2
 line 3
+line 4
+# Section B
+description B
+line 5
+line 6
+line 7
+line 8
+line 10",
+        options: Options {
+            section: section_opts_n("^# ", 2),
+            ..Default::default()
+        },
+        events: vec![
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('q'),
+        ],
+        ..Default::default()
+    })
+    .out();
+    assert_eq!(
+        out,
+        "\
+# Section A
+description A
+line 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:j
+# Section A
+description A
+line 2
+line 3
+line 4
+:
+-----
+[EVENT]:char:j
+# Section A
+description A
+line 3
+line 4
+# Section B
+:
+-----
+[EVENT]:char:j
+# Section A
+description A
+line 4
+# Section B
+description B
+:
+-----
+[EVENT]:char:j
+# Section A
+description A
+# Section B
+description B
+line 5
+:
+-----
+[EVENT]:char:j
+description A
+# Section B
+description B
+line 5
+line 6
+:
+-----
+[EVENT]:char:j
+# Section B
+description B
+line 5
+line 6
+line 7
 :
 -----
 [EVENT]:char:q
