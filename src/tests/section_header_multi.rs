@@ -449,3 +449,219 @@ e default viewer
 "
     );
 }
+
+/// When section-header N equals the viewport content rows, the section header
+/// fills the entire viewport. Scrolling down past the section start results
+/// in a frozen display. Scrolling back up reveals pre-section content.
+#[test]
+fn section_header_fills_viewport() {
+    let out = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 5,
+        content: "\
+pre 1
+pre 2
+# Section A
+desc 1
+desc 2
+body 1
+body 2
+body 3
+body 4
+body 5",
+        options: Options {
+            section: section_opts_n("^# ", 4),
+            ..Default::default()
+        },
+        events: vec![
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('k'),
+            key('k'),
+            key('k'),
+            key('k'),
+            key('q'),
+        ],
+        ..Default::default()
+    })
+    .out();
+    assert_eq!(
+        out,
+        "\
+pre 1
+pre 2
+# Section A
+desc 1
+:
+-----
+[EVENT]:char:j
+pre 2
+# Section A
+desc 1
+desc 2
+:
+-----
+[EVENT]:char:j
+# Section A
+desc 1
+desc 2
+body 1
+:
+-----
+[EVENT]:char:j
+# Section A
+desc 1
+desc 2
+body 1
+:
+-----
+[EVENT]:char:j
+# Section A
+desc 1
+desc 2
+body 1
+:
+-----
+[EVENT]:char:k
+# Section A
+desc 1
+desc 2
+body 1
+:
+-----
+[EVENT]:char:k
+# Section A
+desc 1
+desc 2
+body 1
+:
+-----
+[EVENT]:char:k
+pre 2
+# Section A
+desc 1
+desc 2
+:
+-----
+[EVENT]:char:k
+pre 1
+pre 2
+# Section A
+desc 1
+:
+-----
+[EVENT]:char:q
+"
+    );
+}
+
+/// When section-header N exceeds the viewport content rows, only the first
+/// viewport-height lines of the section header are visible (the rest are
+/// truncated). The display freezes on the header while scrolling down.
+#[test]
+fn section_header_exceeds_viewport() {
+    let out = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 5,
+        content: "\
+pre 1
+pre 2
+# Section A
+desc 1
+desc 2
+desc 3
+desc 4
+desc 5
+body 1
+body 2
+body 3
+body 4",
+        options: Options {
+            section: section_opts_n("^# ", 6),
+            ..Default::default()
+        },
+        events: vec![
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('k'),
+            key('k'),
+            key('k'),
+            key('k'),
+            key('q'),
+        ],
+        ..Default::default()
+    })
+    .out();
+    assert_eq!(
+        out,
+        "\
+pre 1
+pre 2
+# Section A
+desc 1
+:
+-----
+[EVENT]:char:j
+pre 2
+# Section A
+desc 1
+desc 2
+:
+-----
+[EVENT]:char:j
+# Section A
+desc 1
+desc 2
+desc 3
+:
+-----
+[EVENT]:char:j
+# Section A
+desc 1
+desc 2
+desc 3
+:
+-----
+[EVENT]:char:j
+# Section A
+desc 1
+desc 2
+desc 3
+:
+-----
+[EVENT]:char:k
+# Section A
+desc 1
+desc 2
+desc 3
+:
+-----
+[EVENT]:char:k
+# Section A
+desc 1
+desc 2
+desc 3
+:
+-----
+[EVENT]:char:k
+pre 2
+# Section A
+desc 1
+desc 2
+:
+-----
+[EVENT]:char:k
+pre 1
+pre 2
+# Section A
+desc 1
+:
+-----
+[EVENT]:char:q
+"
+    );
+}
