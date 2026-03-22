@@ -188,18 +188,13 @@ impl SectionIndex {
         let mut current = match_line;
         loop {
             let check_start = current.saturating_sub(self.header_lines - 1);
-            let mut found_earlier = false;
-            for j in check_start..current {
-                if let Some(line) = doc.line(j)
-                    && self.pattern.is_match(line.plain())
-                {
-                    current = j;
-                    found_earlier = true;
-                    break;
-                }
-            }
-            if !found_earlier {
-                return current;
+            let earlier = (check_start..current).find(|&j| {
+                doc.line(j)
+                    .is_some_and(|line| self.pattern.is_match(line.plain()))
+            });
+            match earlier {
+                Some(j) => current = j,
+                None => return current,
             }
         }
     }
