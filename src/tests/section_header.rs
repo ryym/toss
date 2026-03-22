@@ -340,6 +340,102 @@ line 7
     );
 }
 
+/// Multi-line section header (--section-header 2) with wrapped lines.
+#[test]
+fn multi_line_section_header_wrapped_switching() {
+    let out = run_test_screen(TestCase {
+        screen_width: 7,
+        screen_height: 6,
+        content: "\
+# abcde
+012345678
+line 1
+line 2
+line 3
+# fghig
+012345678
+line 4
+line 5
+line 6",
+        options: Options {
+            section: section_opts_n("^# ", 2),
+            ..Default::default()
+        },
+        events: vec![
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('q'),
+        ],
+        ..Default::default()
+    })
+    .out();
+    assert_eq!(
+        out,
+        "\
+# abcde
+0123456>
+78
+line 1
+line 2
+:
+-----
+[EVENT]:char:j
+# abcde
+0123456>
+78
+line 2
+line 3
+:
+-----
+[EVENT]:char:j
+# abcde
+0123456>
+78
+line 3
+# fghig
+:
+-----
+[EVENT]:char:j
+# abcde
+0123456>
+78
+# fghig
+0123456
+:
+-----
+[EVENT]:char:j
+0123456>
+78
+# fghig
+0123456>
+78
+:
+-----
+[EVENT]:char:j
+78
+# fghig
+0123456>
+78
+line 4
+:
+-----
+[EVENT]:char:j
+# fghig
+0123456>
+78
+line 4
+line 5
+:
+-----
+[EVENT]:char:q
+"
+    );
+}
+
 /// Jump to end with section headers. Section A is sticky because
 /// the section B line is still visible in the viewport.
 #[test]

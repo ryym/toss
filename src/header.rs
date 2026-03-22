@@ -96,33 +96,34 @@ impl Header {
             && let Some(section_start) = index.current_section()
         {
             let n = self.section_header_lines;
-            let display_lines = if n > 1 {
-                // Push-up: reduce display lines when the next section approaches.
-                index
-                    .find_next_section_distance(doc, viewport_top, n)
-                    .unwrap_or(n)
-            } else {
-                n
-            };
-
-            if display_lines > 0 {
-                // For multi-line headers, show the LAST display_lines of the block
-                // (bottom lines remain while top lines get pushed off).
-                let block_start = section_start + (n - display_lines);
-                let block_end = section_start + n;
-                // Skip lines that overlap with the fixed header.
-                let effective_start = block_start.max(self.fixed_lines);
-                for i in effective_start..block_end {
-                    if let Some(line) = doc.line(i) {
-                        for w in 0..line.row_count(width) {
-                            rows.push(ScreenRow {
-                                line_index: i,
-                                wrap_index: w,
-                            });
-                        }
+            // Build full header block screen rows.
+            let effective_start = section_start.max(self.fixed_lines);
+            let mut block_rows = Vec::new();
+            for i in effective_start..section_start + n {
+                if let Some(line) = doc.line(i) {
+                    for w in 0..line.row_count(width) {
+                        block_rows.push(ScreenRow {
+                            line_index: i,
+                            wrap_index: w,
+                        });
                     }
                 }
             }
+
+            let display_rows = if n > 1 {
+                // Push-up: limit overlay to the screen row distance to the next section.
+                let max_rows = index
+                    .find_next_section_row_distance(doc, viewport_top, block_rows.len(), width)
+                    .unwrap_or(block_rows.len());
+                max_rows.min(block_rows.len())
+            } else {
+                block_rows.len()
+            };
+
+            // Show the LAST display_rows of the block
+            // (bottom rows remain while top rows get pushed off).
+            let skip = block_rows.len() - display_rows;
+            rows.extend_from_slice(&block_rows[skip..]);
         }
 
         let section_row_count = rows.len() - fixed_row_count;
@@ -201,21 +202,25 @@ impl SectionIndex {
         None
     }
 
-    /// Find the distance from `viewport_top` to the next section start.
-    /// Only scans up to `max_distance` lines. Returns None if no section
-    /// is found within that range.
-    fn find_next_section_distance(
+    /// Find the screen row distance from `viewport_top` to the next section start.
+    /// Scans forward, accumulating screen rows per line (accounting for wrapping).
+    /// Returns None if no section is found within `max_rows` screen rows.
+    fn find_next_section_row_distance(
         &self,
         doc: &mut Document,
         viewport_top: usize,
-        max_distance: usize,
+        max_rows: usize,
+        width: usize,
     ) -> Option<usize> {
-        for d in 0..max_distance {
-            if let Some(line) = doc.line(viewport_top + d)
-                && self.pattern.is_match(line.plain())
-            {
-                return Some(d);
+        let mut row_count = 0;
+        let mut line_idx = viewport_top;
+        while row_count < max_rows {
+            let line = doc.line(line_idx)?;
+            if self.pattern.is_match(line.plain()) {
+                return Some(row_count);
             }
+            row_count += line.row_count(width);
+            line_idx += 1;
         }
         None
     }
