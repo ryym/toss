@@ -8,6 +8,7 @@ mod search_incremental;
 mod search_input;
 mod search_wrap;
 mod section_header;
+mod section_header_multi;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
