@@ -314,3 +314,138 @@ on
 "
     );
 }
+
+#[test]
+fn regression_wrapped_header_switching() {
+    let out = run_test_screen(TestCase {
+        screen_width: 68,
+        screen_height: 7,
+        content: "\
+# Changelog
+
+## 2.0.74
+
+- Added LSP (Language Server Protocol) tool for code intelligence features like go-to-definition, find references, and hover documentation
+- Added `/terminal-setup` support for Kitty
+
+## 2.0.73
+
+- Added clickable `[Image #N]` links that open attached images in the default viewer
+- Added alt-y yank-pop to cycle through kill ring history after ctrl-y yank
+- Added search filtering to the plugin discover screen (type to filter by name, description, or marketplace)
+",
+        options: Options {
+            section: section_opts_n("^##", 3),
+            ..Default::default()
+        },
+        events: vec![
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('j'),
+            key('q'),
+        ],
+        ..Default::default()
+    })
+    .out();
+    assert_eq!(
+        out,
+        "\
+# Changelog
+
+## 2.0.74
+
+- Added LSP (Language Server Protocol) tool for code intelligence fe>
+atures like go-to-definition, find references, and hover documentati
+:
+-----
+[EVENT]:char:j
+
+## 2.0.74
+
+- Added LSP (Language Server Protocol) tool for code intelligence fe>
+atures like go-to-definition, find references, and hover documentati>
+on
+:
+-----
+[EVENT]:char:j
+## 2.0.74
+
+- Added LSP (Language Server Protocol) tool for code intelligence fe>
+atures like go-to-definition, find references, and hover documentati>
+on
+- Added `/terminal-setup` support for Kitty
+:
+-----
+[EVENT]:char:j
+## 2.0.74
+
+- Added LSP (Language Server Protocol) tool for code intelligence fe>
+atures like go-to-definition, find references, and hover documentati>
+on
+
+:
+-----
+[EVENT]:char:j
+## 2.0.74
+
+- Added LSP (Language Server Protocol) tool for code intelligence fe>
+atures like go-to-definition, find references, and hover documentati>
+on
+## 2.0.73
+:
+-----
+[EVENT]:char:j
+
+- Added LSP (Language Server Protocol) tool for code intelligence fe>
+atures like go-to-definition, find references, and hover documentati>
+on
+## 2.0.73
+
+:
+-----
+[EVENT]:char:j
+- Added LSP (Language Server Protocol) tool for code intelligence fe>
+atures like go-to-definition, find references, and hover documentati>
+on
+## 2.0.73
+
+- Added clickable `[Image #N]` links that open attached images in th
+:
+-----
+[EVENT]:char:j
+atures like go-to-definition, find references, and hover documentati>
+on
+## 2.0.73
+
+- Added clickable `[Image #N]` links that open attached images in th>
+e default viewer
+:
+-----
+[EVENT]:char:j
+on
+## 2.0.73
+
+- Added clickable `[Image #N]` links that open attached images in th>
+e default viewer
+- Added alt-y yank-pop to cycle through kill ring history after ctrl
+:
+-----
+[EVENT]:char:j
+## 2.0.73
+
+- Added clickable `[Image #N]` links that open attached images in th>
+e default viewer
+- Added alt-y yank-pop to cycle through kill ring history after ctrl>
+-y yank
+:
+-----
+[EVENT]:char:q
+"
+    );
+}

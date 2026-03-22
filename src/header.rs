@@ -75,6 +75,7 @@ impl Header {
         doc: &mut Document,
         width: usize,
         viewport_top: usize,
+        viewport_top_wrap: usize,
         sync_section: bool,
     ) -> Vec<ScreenRow> {
         if sync_section && let Some(ref mut index) = self.section_index {
@@ -108,7 +109,13 @@ impl Header {
             let display_rows = if use_overlay {
                 // Push-up: limit overlay to the screen row distance to the next section.
                 let max_rows = index
-                    .find_next_section_row_distance(doc, viewport_top, block_rows.len(), width)
+                    .find_next_section_row_distance(
+                        doc,
+                        viewport_top,
+                        viewport_top_wrap,
+                        block_rows.len(),
+                        width,
+                    )
                     .unwrap_or(block_rows.len());
                 max_rows.min(block_rows.len())
             } else {
@@ -227,6 +234,7 @@ impl SectionIndex {
         &self,
         doc: &mut Document,
         viewport_top: usize,
+        viewport_top_wrap: usize,
         max_rows: usize,
         width: usize,
     ) -> Option<usize> {
@@ -241,7 +249,13 @@ impl SectionIndex {
             if line_idx >= skip_until && self.pattern.is_match(line.plain()) {
                 return Some(row_count);
             }
-            row_count += line.row_count(width);
+            let rows = line.row_count(width);
+            // For the first line, only count rows from the current wrap position.
+            if line_idx == viewport_top {
+                row_count += rows - viewport_top_wrap;
+            } else {
+                row_count += rows;
+            }
             line_idx += 1;
         }
         None

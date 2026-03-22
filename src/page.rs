@@ -34,7 +34,13 @@ impl Page {
     pub fn resize(&mut self, width: usize, height: usize) {
         let header_height = self
             .header
-            .resolve(&mut self.doc, width, self.viewport.top_line_index(), true)
+            .resolve(
+                &mut self.doc,
+                width,
+                self.viewport.top_line_index(),
+                self.viewport.top_wrap_index(),
+                true,
+            )
             .len();
         let overlay = self.header.section_overlay();
         let content_height = height
@@ -75,7 +81,9 @@ impl Page {
     pub fn resolve_header(&mut self) -> Vec<ScreenRow> {
         let width = self.viewport.width();
         let top = self.viewport.top_line_index();
-        self.header.resolve(&mut self.doc, width, top, false)
+        let top_wrap = self.viewport.top_wrap_index();
+        self.header
+            .resolve(&mut self.doc, width, top, top_wrap, false)
     }
 
     /// Resolve the header rows, synchronizing the section index cache.
@@ -83,7 +91,9 @@ impl Page {
     pub fn resolve_header_synced(&mut self) -> Vec<ScreenRow> {
         let width = self.viewport.width();
         let top = self.viewport.top_line_index();
-        self.header.resolve(&mut self.doc, width, top, true)
+        let top_wrap = self.viewport.top_wrap_index();
+        self.header
+            .resolve(&mut self.doc, width, top, top_wrap, true)
     }
 
     /// Synchronize the section cache and adjust viewport if header height changed.

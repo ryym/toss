@@ -111,6 +111,11 @@ impl Viewport {
         self.rows.first().map(|r| r.line_index).unwrap_or(0)
     }
 
+    /// Wrap index of the first visible row, or 0 if no rows exist.
+    pub fn top_wrap_index(&self) -> usize {
+        self.rows.first().map(|r| r.wrap_index).unwrap_or(0)
+    }
+
     /// Scroll down by n screen rows. Returns `None` if no scrolling occurred.
     pub fn scroll_down(&mut self, n: usize, doc: &mut Document) -> Option<ScrollPlan> {
         if n == 0 || self.rows.is_empty() {
