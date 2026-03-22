@@ -3,9 +3,7 @@ use std::time::Duration;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
-use crate::document::Document;
 use crate::line_editor::LineEditor;
-use crate::options::Options;
 use crate::page::Page;
 use crate::screen::{self, Screen};
 use crate::scroll::ScrollPhysics;
@@ -39,9 +37,8 @@ pub struct App<S> {
 }
 
 impl<S: Screen> App<S> {
-    pub fn new(screen: S, doc: Document, options: Options) -> io::Result<Self> {
-        let (w, h) = screen.size()?;
-        let page = Page::new(doc, &options, w as usize, h as usize);
+    pub fn new(screen: S, page: Page) -> io::Result<Self> {
+        let (_, h) = screen.size()?;
         let mut scroll_physics = ScrollPhysics::new();
         scroll_physics.configure(h as usize);
         Ok(Self {

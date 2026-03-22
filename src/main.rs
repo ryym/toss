@@ -23,7 +23,7 @@ use std::process;
 
 use app::App;
 use document::Document;
-use options::Options;
+use page::Page;
 use screen::TermScreen;
 
 struct AppError {
@@ -56,22 +56,6 @@ fn main() {
     }
 }
 
-/// Check if the content fits on one screen and print it if so.
-/// Returns true if content was printed (caller should exit).
-fn print_if_one_screen(doc: &mut Document, options: &Options) -> Result<bool, AppError> {
-    let (w, h) = crossterm::terminal::size()
-        .map_err(|e| AppError::new(format!("Error getting terminal size: {e}"), 1))?;
-    if !page::content_fits_on_screen(doc, options, w as usize, h as usize) {
-        return Ok(false);
-    }
-    for i in 0..doc.line_count() {
-        if let Some(line) = doc.line(i) {
-            println!("{}", line.raw());
-        }
-    }
-    Ok(true)
-}
-
 fn run() -> Result<(), AppError> {
     let _log_guard = logger::setup_file_logger()
         .map_err(|e| AppError::new(format!("Error setting up logger: {e}"), 1))?;
@@ -85,7 +69,7 @@ fn run() -> Result<(), AppError> {
         Err(e) => return Err(AppError::new(format!("Error: {e}"), 1)),
     };
 
-    let mut doc = if let Some(path) = &args.file {
+    let doc = if let Some(path) = &args.file {
         log::debug!("Read file: {}", path.display());
         Document::from_file(path)
             .map_err(|e| AppError::new(format!("Error reading {}: {e}", path.display()), 1))?
@@ -97,15 +81,23 @@ fn run() -> Result<(), AppError> {
         return Err(AppError::new("Usage: toss <file> OR command | toss", 1));
     };
 
-    if args.options.quit_if_one_screen && print_if_one_screen(&mut doc, &args.options)? {
+    let (w, h) = crossterm::terminal::size()
+        .map_err(|e| AppError::new(format!("Error getting terminal size: {e}"), 1))?;
+    let mut page = Page::new(doc, &args.options, w as usize, h as usize);
+
+    if args.options.quit_if_one_screen && page.content_fits_on_screen() {
+        for i in 0..page.doc.line_count() {
+            if let Some(line) = page.doc.line(i) {
+                println!("{}", line.raw());
+            }
+        }
         return Ok(());
     }
 
     let screen = TermScreen::new()
         .map_err(|e| AppError::new(format!("Error initializing terminal: {e}"), 1))?;
 
-    let mut app =
-        App::new(screen, doc, args.options).map_err(|e| AppError::new(format!("{e}"), 1))?;
+    let mut app = App::new(screen, page).map_err(|e| AppError::new(format!("{e}"), 1))?;
     app.run().map_err(|e| AppError::new(format!("{e}"), 1))?;
 
     Ok(())

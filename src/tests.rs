@@ -16,6 +16,7 @@ use crate::app::App;
 use crate::document::Document;
 use crate::logger;
 use crate::options::Options;
+use crate::page::Page;
 use mock_screen::MockScreen;
 
 pub fn key(ch: char) -> Event {
@@ -48,9 +49,15 @@ pub fn run_test_screen(tc: TestCase) -> MockScreen {
         Err(err) => panic!("failed to setup logger: {}", err),
     };
     let doc = Document::from_string(tc.content.to_string());
+    let page = Page::new(
+        doc,
+        &tc.options,
+        tc.screen_width as usize,
+        tc.screen_height as usize,
+    );
     let mut screen = MockScreen::new(tc.screen_width, tc.screen_height);
     screen.set_events(tc.events);
-    let mut app = App::new(screen, doc, tc.options).unwrap();
+    let mut app = App::new(screen, page).unwrap();
     app.set_instant_scroll();
     app.run().unwrap();
     app.into_screen()
