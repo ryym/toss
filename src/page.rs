@@ -29,9 +29,22 @@ impl Page {
         }
     }
 
-    /// Whether the entire document content fits within the viewport.
-    pub fn content_fits_on_screen(&self) -> bool {
-        self.viewport.rows().len() < self.viewport.height()
+    /// Whether the entire document content fits on the terminal when printed
+    /// to stdout (no pager UI). `shell_lines` reserves space for the shell
+    /// prompt that will appear after the output (like LESS_SHELL_LINES).
+    pub fn content_fits_on_screen(&mut self, screen_height: usize, shell_lines: usize) -> bool {
+        let width = self.viewport.width();
+        let available = screen_height.saturating_sub(shell_lines);
+        let mut total_rows = 0;
+        for i in 0..self.doc.line_count() {
+            if let Some(line) = self.doc.line(i) {
+                total_rows += line.row_count(width);
+                if total_rows > available {
+                    return false;
+                }
+            }
+        }
+        total_rows <= available
     }
 
     /// Resize the viewport to fit the new terminal dimensions, accounting for
@@ -133,53 +146,54 @@ mod tests {
 
     #[test]
     fn fits_when_fewer_lines_than_screen() {
-        // Screen height 5: 1 status line + 4 content rows. 3 lines < 4 rows.
-        let page = make_page("line 1\nline 2\nline 3", &Options::default(), 80, 5);
-        assert_eq!(page.content_fits_on_screen(), true);
+        // Screen height 5, shell_lines 1: available = 4. 3 lines <= 4.
+        let mut page = make_page("line 1\nline 2\nline 3", &Options::default(), 80, 5);
+        assert_eq!(page.content_fits_on_screen(5, 1), true);
     }
 
     #[test]
-    fn does_not_fit_when_lines_fill_screen() {
-        // Screen height 5: 1 status line + 4 content rows. 4 lines == 4 rows.
-        let page = make_page("line 1\nline 2\nline 3\nline 4", &Options::default(), 80, 5);
-        assert_eq!(page.content_fits_on_screen(), false);
+    fn fits_when_lines_equal_available() {
+        // Screen height 5, shell_lines 1: available = 4. 4 lines <= 4.
+        let mut page = make_page("line 1\nline 2\nline 3\nline 4", &Options::default(), 80, 5);
+        assert_eq!(page.content_fits_on_screen(5, 1), true);
     }
 
     #[test]
     fn does_not_fit_when_lines_exceed_screen() {
-        // Screen height 5: 1 status line + 4 content rows. 5 lines > 4 rows.
-        let page = make_page(
+        // Screen height 5, shell_lines 1: available = 4. 5 lines > 4.
+        let mut page = make_page(
             "line 1\nline 2\nline 3\nline 4\nline 5",
             &Options::default(),
             80,
             5,
         );
-        assert_eq!(page.content_fits_on_screen(), false);
+        assert_eq!(page.content_fits_on_screen(5, 1), false);
+    }
+
+    #[test]
+    fn shell_lines_reduces_available_space() {
+        // Screen height 5, shell_lines 2: available = 3. 4 lines > 3.
+        let mut page = make_page("line 1\nline 2\nline 3\nline 4", &Options::default(), 80, 5);
+        assert_eq!(page.content_fits_on_screen(5, 2), false);
+        // Same content with shell_lines 1: available = 4. 4 lines <= 4.
+        assert_eq!(page.content_fits_on_screen(5, 1), true);
     }
 
     #[test]
     fn wrapping_increases_row_count() {
         // "abcdefghij" (10 chars) wraps to 2 rows at width 5.
-        // Screen height 4: 1 status + 3 content rows. 2 lines => 3 rows (wrapping).
-        let page = make_page("abcdefghij\nshort", &Options::default(), 5, 4);
-        assert_eq!(page.content_fits_on_screen(), false);
-    }
-
-    #[test]
-    fn fits_with_header() {
-        let options = Options {
-            header: 1,
-            ..Default::default()
-        };
-        // Screen height 5: 1 status + 1 header + 3 content rows.
-        // Content below header: 2 lines < 3 rows.
-        let page = make_page("header\nline 1\nline 2", &options, 80, 5);
-        assert_eq!(page.content_fits_on_screen(), true);
+        // Screen height 5, shell_lines 1: available = 4. 2+1 = 3 rows <= 4.
+        let mut page = make_page("abcdefghij\nshort", &Options::default(), 5, 5);
+        assert_eq!(page.content_fits_on_screen(5, 1), true);
+        // Screen height 4, shell_lines 1: available = 3. 3 rows <= 3.
+        assert_eq!(page.content_fits_on_screen(4, 1), true);
+        // Screen height 3, shell_lines 1: available = 2. 3 rows > 2.
+        assert_eq!(page.content_fits_on_screen(3, 1), false);
     }
 
     #[test]
     fn empty_document_fits() {
-        let page = make_page("", &Options::default(), 80, 5);
-        assert_eq!(page.content_fits_on_screen(), true);
+        let mut page = make_page("", &Options::default(), 80, 5);
+        assert_eq!(page.content_fits_on_screen(5, 1), true);
     }
 }

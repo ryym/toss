@@ -17,7 +17,11 @@ Options:
       --section <REGEX>      Regex to identify section start lines for sticky headers
       --section-header <N>   Number of lines per section header (default 1)
   -h, --help                 Print help
-  -v, --version              Print version";
+  -v, --version              Print version
+
+Environment variables:
+  TOSS_SHELL_LINES   Number of shell prompt lines to reserve when using -F
+                     (falls back to LESS_SHELL_LINES, default 1)";
 
 /// Parsed command-line action.
 pub enum Action {

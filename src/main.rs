@@ -56,6 +56,16 @@ fn main() {
     }
 }
 
+/// Read the number of shell prompt lines to reserve from environment variables.
+/// Checks TOSS_SHELL_LINES first, then LESS_SHELL_LINES, defaulting to 1.
+fn shell_lines() -> usize {
+    std::env::var("TOSS_SHELL_LINES")
+        .or_else(|_| std::env::var("LESS_SHELL_LINES"))
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1)
+}
+
 fn run() -> Result<(), AppError> {
     let _log_guard = logger::setup_file_logger()
         .map_err(|e| AppError::new(format!("Error setting up logger: {e}"), 1))?;
@@ -85,7 +95,7 @@ fn run() -> Result<(), AppError> {
         .map_err(|e| AppError::new(format!("Error getting terminal size: {e}"), 1))?;
     let mut page = Page::new(doc, &args.options, w as usize, h as usize);
 
-    if args.options.quit_if_one_screen && page.content_fits_on_screen() {
+    if args.options.quit_if_one_screen && page.content_fits_on_screen(h as usize, shell_lines()) {
         for i in 0..page.doc.line_count() {
             if let Some(line) = page.doc.line(i) {
                 println!("{}", line.raw());
