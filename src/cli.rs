@@ -12,6 +12,7 @@ Usage: toss [OPTIONS] [FILE]
 A terminal pager.
 
 Options:
+  -F, --quit-if-one-screen   Quit if the entire content fits on one screen
       --header <N>           Pin the first N lines as a fixed header
       --section <REGEX>      Regex to identify section start lines for sticky headers
       --section-header <N>   Number of lines per section header (default 1)
@@ -36,6 +37,7 @@ pub fn parse_args() -> Result<Action, lexopt::Error> {
     use lexopt::prelude::*;
 
     let mut file = None;
+    let mut quit_if_one_screen = false;
     let mut header = 0;
     let mut section_pattern: Option<String> = None;
     let mut section_header_lines: Option<usize> = None;
@@ -43,6 +45,9 @@ pub fn parse_args() -> Result<Action, lexopt::Error> {
 
     while let Some(arg) = parser.next()? {
         match arg {
+            Short('F') | Long("quit-if-one-screen") => {
+                quit_if_one_screen = true;
+            }
             Short('h') | Long("help") => return Ok(Action::Print(HELP.to_string())),
             Short('v') | Long("version") => {
                 return Ok(Action::Print(format!("toss {VERSION}")));
@@ -85,6 +90,10 @@ pub fn parse_args() -> Result<Action, lexopt::Error> {
 
     Ok(Action::Run(Args {
         file,
-        options: Options { header, section },
+        options: Options {
+            quit_if_one_screen,
+            header,
+            section,
+        },
     }))
 }

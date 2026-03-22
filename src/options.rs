@@ -5,6 +5,8 @@ pub struct Options {
     pub header: usize,
     /// Section header configuration, if enabled.
     pub section: Option<SectionOptions>,
+    /// Quit automatically if the entire content fits on one screen.
+    pub quit_if_one_screen: bool,
 }
 
 /// Configuration for section-based sticky headers.

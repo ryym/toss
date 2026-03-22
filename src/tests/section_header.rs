@@ -126,6 +126,7 @@ line 4",
         options: Options {
             header: 1,
             section: section_opts("^# "),
+            ..Default::default()
         },
         events: vec![key('j'), key('j'), key('q')],
         ..Default::default()
@@ -264,6 +265,7 @@ line 5",
         options: Options {
             header: 1,
             section: section_opts("^# "),
+            ..Default::default()
         },
         events: vec![key('j'), key('q')],
         ..Default::default()

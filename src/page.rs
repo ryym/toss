@@ -4,6 +4,20 @@ use crate::options::Options;
 use crate::status_line::StatusLine;
 use crate::viewport::{ScreenRow, ScrollPlan, Viewport};
 
+/// Check if the document content fits on one screen without taking ownership.
+pub fn content_fits_on_screen(
+    doc: &mut Document,
+    options: &Options,
+    width: usize,
+    height: usize,
+) -> bool {
+    let header = Header::new(options.header, options.section.as_ref());
+    let header_height = header.resolve_fixed_height(doc, width);
+    let content_height = height.saturating_sub(1).saturating_sub(header_height);
+    let viewport = Viewport::new(doc, width, content_height, header.min_top_line());
+    viewport.rows().len() < viewport.height()
+}
+
 /// Bundles the document, header, viewport, and status line — everything the
 /// rendering functions need to draw a frame (except search highlight).
 pub struct Page {
@@ -113,5 +127,73 @@ impl Page {
             self.viewport
                 .resize(&mut self.doc, self.viewport.width(), content_height);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn fits_when_fewer_lines_than_screen() {
+        let mut doc = Document::from_string("line 1\nline 2\nline 3".to_string());
+        // Screen height 5: 1 status line + 4 content rows. 3 lines < 4 rows.
+        assert_eq!(
+            content_fits_on_screen(&mut doc, &Options::default(), 80, 5),
+            true
+        );
+    }
+
+    #[test]
+    fn does_not_fit_when_lines_fill_screen() {
+        let mut doc = Document::from_string("line 1\nline 2\nline 3\nline 4".to_string());
+        // Screen height 5: 1 status line + 4 content rows. 4 lines == 4 rows.
+        assert_eq!(
+            content_fits_on_screen(&mut doc, &Options::default(), 80, 5),
+            false
+        );
+    }
+
+    #[test]
+    fn does_not_fit_when_lines_exceed_screen() {
+        let mut doc = Document::from_string("line 1\nline 2\nline 3\nline 4\nline 5".to_string());
+        // Screen height 5: 1 status line + 4 content rows. 5 lines > 4 rows.
+        assert_eq!(
+            content_fits_on_screen(&mut doc, &Options::default(), 80, 5),
+            false
+        );
+    }
+
+    #[test]
+    fn wrapping_increases_row_count() {
+        // "abcdefghij" (10 chars) wraps to 2 rows at width 5.
+        let mut doc = Document::from_string("abcdefghij\nshort".to_string());
+        // Screen height 4: 1 status + 3 content rows. 2 lines => 3 rows (wrapping).
+        assert_eq!(
+            content_fits_on_screen(&mut doc, &Options::default(), 5, 4),
+            false
+        );
+    }
+
+    #[test]
+    fn fits_with_header() {
+        let mut doc = Document::from_string("header\nline 1\nline 2".to_string());
+        let options = Options {
+            header: 1,
+            ..Default::default()
+        };
+        // Screen height 5: 1 status + 1 header + 3 content rows.
+        // Content below header: 2 lines < 3 rows.
+        assert_eq!(content_fits_on_screen(&mut doc, &options, 80, 5), true);
+    }
+
+    #[test]
+    fn empty_document_fits() {
+        let mut doc = Document::from_string(String::new());
+        assert_eq!(
+            content_fits_on_screen(&mut doc, &Options::default(), 80, 5),
+            true
+        );
     }
 }
