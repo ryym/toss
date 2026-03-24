@@ -183,10 +183,15 @@ impl<S: Screen> App<S> {
         log::debug!("Enter search mode: {direction:?}");
         self.scroll_physics.stop();
         let saved_top_line = self.page.viewport.top_line_index();
-        self.page.status.set_content(direction.prompt().to_string());
+        let editor = LineEditor::new();
+        self.page.status.set_content(format!(
+            "{}{}",
+            direction.prompt(),
+            editor.input_with_cursor()
+        ));
         self.mode = AppMode::Search {
             direction,
-            editor: LineEditor::new(),
+            editor,
             saved_top_line,
             preview: None,
         };
@@ -273,7 +278,7 @@ impl<S: Screen> App<S> {
                     self.page.status.set_content(format!(
                         "{}{}",
                         direction.prompt(),
-                        editor.input()
+                        editor.input_with_cursor()
                     ));
                 }
                 self.update_search_preview();
@@ -287,7 +292,7 @@ impl<S: Screen> App<S> {
                     self.page.status.set_content(format!(
                         "{}{}",
                         direction.prompt(),
-                        editor.input()
+                        editor.input_with_cursor()
                     ));
                 }
                 self.update_search_preview();

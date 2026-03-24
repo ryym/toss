@@ -76,25 +76,25 @@ line 5
 line 3
 line 4
 line 5
-?
+?█
 -----
 [EVENT]:char:t
 {reverse}t{/reverse}op line
 line 2
 line 3
-?t
+?t█
 -----
 [EVENT]:char:o
 {reverse}to{/reverse}p line
 line 2
 line 3
-?to
+?to█
 -----
 [EVENT]:char:p
 {reverse}top{/reverse} line
 line 2
 line 3
-?top
+?top█
 -----
 [EVENT]:other
 {reverse}top{/reverse} line
@@ -312,19 +312,19 @@ line 3
 line 1
 line 2
 line 3
-/
+/█
 -----
 [EVENT]:char:l
 {reverse}l{/reverse}ine 1
 {dim}{reverse}l{/reverse}{/dim}ine 2
 {dim}{reverse}l{/reverse}{/dim}ine 3
-/l
+/l█
 -----
 [EVENT]:char:i
 {reverse}li{/reverse}ne 1
 {dim}{reverse}li{/reverse}{/dim}ne 2
 {dim}{reverse}li{/reverse}{/dim}ne 3
-/li
+/li█
 -----
 [EVENT]:other
 {reverse}li{/reverse}ne 1
@@ -348,19 +348,19 @@ line 3
 {dim}{reverse}li{/reverse}{/dim}ne 3
 {dim}{reverse}li{/reverse}{/dim}ne 4
 {dim}{reverse}li{/reverse}{/dim}ne 5
-/
+/█
 -----
 [EVENT]:char:n
 li{reverse}n{/reverse}e 3
 li{dim}{reverse}n{/reverse}{/dim}e 4
 li{dim}{reverse}n{/reverse}{/dim}e 5
-/n
+/n█
 -----
 [EVENT]:char:e
 li{reverse}ne{/reverse} 3
 li{dim}{reverse}ne{/reverse}{/dim} 4
 li{dim}{reverse}ne{/reverse}{/dim} 5
-/ne
+/ne█
 -----
 [EVENT]:other
 li{reverse}ne{/reverse} 3
@@ -501,14 +501,14 @@ line 1
 line 2
 line 3
 line 4
-/
+/█
 -----
 [EVENT]:char:9
 line 7
 line 8
 line {reverse}9{/reverse}
 line 10
-/9
+/9█
 -----
 [EVENT]:other
 line 7

@@ -46,19 +46,19 @@ line 3
 line 1
 line 2
 line 3
-/
+/█
 -----
 [EVENT]:char:a
 line 1
 line 2
 line 3
-/a
+/a█
 -----
 [EVENT]:char:b
 line 1
 line 2
 line 3
-/ab
+/ab█
 -----
 [EVENT]:esc
 line 1
@@ -98,13 +98,13 @@ line 3
 line 1
 line 2
 line 3
-?
+?█
 -----
 [EVENT]:char:x
 line 1
 line 2
 line 3
-?x
+?x█
 -----
 [EVENT]:other
 line 1
@@ -143,25 +143,25 @@ line 3
 line 1
 line 2
 line 3
-/
+/█
 -----
 [EVENT]:char:a
 line 1
 line 2
 line 3
-/a
+/a█
 -----
 [EVENT]:char:b
 line 1
 line 2
 line 3
-/ab
+/ab█
 -----
 [EVENT]:other
 line 1
 line 2
 line 3
-/a
+/a█
 -----
 [EVENT]:esc
 line 1

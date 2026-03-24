@@ -44,25 +44,25 @@ foo bar
 line 1
 line 2
 foo bar
-/
+/█
 -----
 [EVENT]:char:f
 {reverse}f{/reverse}oo bar
 line 4
 line 5
-/f
+/f█
 -----
 [EVENT]:char:o
 {reverse}fo{/reverse}o bar
 line 4
 line 5
-/fo
+/fo█
 -----
 [EVENT]:char:o
 {reverse}foo{/reverse} bar
 line 4
 line 5
-/foo
+/foo█
 -----
 [EVENT]:esc
 line 1
@@ -275,31 +275,31 @@ line 3
 ab here
 abc there
 line 3
-/
+/█
 -----
 [EVENT]:char:a
 {reverse}a{/reverse}b here
 {dim}{reverse}a{/reverse}{/dim}bc there
 line 3
-/a
+/a█
 -----
 [EVENT]:char:b
 {reverse}ab{/reverse} here
 {dim}{reverse}ab{/reverse}{/dim}c there
 line 3
-/ab
+/ab█
 -----
 [EVENT]:char:c
 {reverse}abc{/reverse} there
 line 3
 line 4
-/abc
+/abc█
 -----
 [EVENT]:other
 {reverse}ab{/reverse} here
 {dim}{reverse}ab{/reverse}{/dim}c there
 line 3
-/ab
+/ab█
 -----
 [EVENT]:esc
 ab here

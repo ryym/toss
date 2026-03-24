@@ -30,6 +30,14 @@ impl LineEditor {
     pub fn input(&self) -> String {
         self.input.iter().collect()
     }
+
+    /// Return the input with a block cursor character at the current position.
+    pub fn input_with_cursor(&self) -> String {
+        let mut result: String = self.input[..self.cursor].iter().collect();
+        result.push('█');
+        result.extend(&self.input[self.cursor..]);
+        result
+    }
 }
 
 #[cfg(test)]
@@ -48,6 +56,19 @@ mod tests {
         editor.backspace();
         assert_eq!(editor.input(), "ab");
         assert_eq!(editor.cursor, 2);
+    }
+
+    #[test]
+    fn input_with_cursor_shows_block_at_position() {
+        let mut editor = LineEditor::new();
+        assert_eq!(editor.input_with_cursor(), "█");
+
+        editor.insert('a');
+        editor.insert('b');
+        assert_eq!(editor.input_with_cursor(), "ab█");
+
+        editor.backspace();
+        assert_eq!(editor.input_with_cursor(), "a█");
     }
 
     #[test]
