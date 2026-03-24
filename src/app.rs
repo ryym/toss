@@ -297,6 +297,34 @@ impl<S: Screen> App<S> {
                 }
                 self.update_search_preview();
             }
+            KeyCode::Left => {
+                if let AppMode::Search {
+                    direction, editor, ..
+                } = &mut self.mode
+                {
+                    editor.move_left();
+                    self.page.status.set_content(format!(
+                        "{}{}",
+                        direction.prompt(),
+                        editor.input_with_cursor()
+                    ));
+                }
+                self.needs_status_redraw = true;
+            }
+            KeyCode::Right => {
+                if let AppMode::Search {
+                    direction, editor, ..
+                } = &mut self.mode
+                {
+                    editor.move_right();
+                    self.page.status.set_content(format!(
+                        "{}{}",
+                        direction.prompt(),
+                        editor.input_with_cursor()
+                    ));
+                }
+                self.needs_status_redraw = true;
+            }
             _ => {}
         }
     }

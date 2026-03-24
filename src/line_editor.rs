@@ -26,6 +26,20 @@ impl LineEditor {
         }
     }
 
+    /// Move the cursor one position to the left.
+    pub fn move_left(&mut self) {
+        if self.cursor > 0 {
+            self.cursor -= 1;
+        }
+    }
+
+    /// Move the cursor one position to the right.
+    pub fn move_right(&mut self) {
+        if self.cursor < self.input.len() {
+            self.cursor += 1;
+        }
+    }
+
     /// Return the current input as a string.
     pub fn input(&self) -> String {
         self.input.iter().collect()
@@ -69,6 +83,59 @@ mod tests {
 
         editor.backspace();
         assert_eq!(editor.input_with_cursor(), "a█");
+    }
+
+    #[test]
+    fn move_left_and_right() {
+        let mut editor = LineEditor::new();
+        editor.insert('a');
+        editor.insert('b');
+        editor.insert('c');
+        assert_eq!(editor.cursor, 3);
+
+        editor.move_left();
+        assert_eq!(editor.cursor, 2);
+        assert_eq!(editor.input_with_cursor(), "ab█c");
+
+        editor.move_left();
+        assert_eq!(editor.cursor, 1);
+        assert_eq!(editor.input_with_cursor(), "a█bc");
+
+        // Insert at middle position.
+        editor.insert('x');
+        assert_eq!(editor.input(), "axbc");
+        assert_eq!(editor.input_with_cursor(), "ax█bc");
+
+        editor.move_right();
+        assert_eq!(editor.input_with_cursor(), "axb█c");
+
+        // Backspace at middle position.
+        editor.backspace();
+        assert_eq!(editor.input(), "axc");
+        assert_eq!(editor.input_with_cursor(), "ax█c");
+    }
+
+    #[test]
+    fn move_left_at_start_does_nothing() {
+        let mut editor = LineEditor::new();
+        editor.move_left();
+        assert_eq!(editor.cursor, 0);
+
+        editor.insert('a');
+        editor.move_left();
+        editor.move_left(); // Already at 0
+        assert_eq!(editor.cursor, 0);
+    }
+
+    #[test]
+    fn move_right_at_end_does_nothing() {
+        let mut editor = LineEditor::new();
+        editor.move_right();
+        assert_eq!(editor.cursor, 0);
+
+        editor.insert('a');
+        editor.move_right(); // Already at end
+        assert_eq!(editor.cursor, 1);
     }
 
     #[test]

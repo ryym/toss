@@ -3,6 +3,14 @@ use pretty_assertions::assert_eq;
 
 use super::{TestCase, key, run_test_screen};
 
+fn left() -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))
+}
+
+fn right() -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))
+}
+
 fn esc() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
 }
@@ -162,6 +170,97 @@ line 1
 line 2
 line 3
 /a█
+-----
+[EVENT]:esc
+line 1
+line 2
+line 3
+:
+-----
+"
+    );
+}
+
+// Arrow keys move the cursor within the search input.
+#[test]
+fn arrow_keys_move_cursor() {
+    let out = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content: "\
+line 1
+line 2
+line 3
+line 4",
+        events: vec![
+            key('/'),
+            key('a'),
+            key('b'),
+            key('c'),
+            left(),
+            left(),
+            key('x'),
+            right(),
+            esc(),
+        ],
+        ..Default::default()
+    })
+    .out();
+    assert_eq!(
+        out,
+        "\
+line 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:/
+line 1
+line 2
+line 3
+/█
+-----
+[EVENT]:char:a
+line 1
+line 2
+line 3
+/a█
+-----
+[EVENT]:char:b
+line 1
+line 2
+line 3
+/ab█
+-----
+[EVENT]:char:c
+line 1
+line 2
+line 3
+/abc█
+-----
+[EVENT]:other
+line 1
+line 2
+line 3
+/ab█c
+-----
+[EVENT]:other
+line 1
+line 2
+line 3
+/a█bc
+-----
+[EVENT]:char:x
+line 1
+line 2
+line 3
+/ax█bc
+-----
+[EVENT]:other
+line 1
+line 2
+line 3
+/axb█c
 -----
 [EVENT]:esc
 line 1
