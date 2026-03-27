@@ -74,8 +74,11 @@ impl Screen for TermScreen {
     }
 
     fn clear_row(&mut self, screen_y: u16) -> io::Result<()> {
+        // Reset SGR attributes before clearing to prevent BCE (Background Color Erase) from
+        // filling the row with a stale background color left over from previously written content.
         queue!(
             self.stdout,
+            Print("\x1b[0m"),
             cursor::MoveTo(0, screen_y),
             terminal::Clear(ClearType::CurrentLine),
         )
