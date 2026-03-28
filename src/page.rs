@@ -85,21 +85,33 @@ impl Page {
     }
 
     /// Jump to a line, ensuring it is visible below any sticky section header.
-    /// After the jump, syncs the section cache and scrolls up by the overlay
-    /// amount so the target line is not hidden behind the section header.
+    /// Iteratively scrolls up until the target line clears the overlay, because
+    /// with multi-line section headers the push-up mechanism can increase the
+    /// overlay as the viewport moves up.
     pub fn jump_to_visible(&mut self, line: usize) -> bool {
         if !self.viewport.jump_to(&mut self.doc, line) {
             return false;
         }
-        // Sync the section cache for the new position.
-        let width = self.viewport.width();
-        let top = self.viewport.top_line_index();
-        let top_wrap = self.viewport.top_wrap_index();
-        self.header
-            .resolve(&mut self.doc, width, top, top_wrap, true);
-        let overlay = self.header.section_overlay();
-        if overlay > 0 {
-            self.viewport.scroll_up(overlay, &mut self.doc);
+        loop {
+            let width = self.viewport.width();
+            let top = self.viewport.top_line_index();
+            let top_wrap = self.viewport.top_wrap_index();
+            self.header
+                .resolve(&mut self.doc, width, top, top_wrap, true);
+            let overlay = self.header.section_overlay();
+            let target_row = self
+                .viewport
+                .rows()
+                .iter()
+                .position(|r| r.line_index == line && r.wrap_index == 0);
+            match target_row {
+                Some(row) if row >= overlay => break,
+                _ => {
+                    if self.viewport.scroll_up(1, &mut self.doc).is_none() {
+                        break;
+                    }
+                }
+            }
         }
         true
     }

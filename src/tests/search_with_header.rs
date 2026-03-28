@@ -8,10 +8,10 @@ fn enter() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
 }
 
-fn section_opts(pattern: &str) -> Option<SectionOptions> {
+fn section_opts(pattern: &str, header_lines: usize) -> Option<SectionOptions> {
     Some(SectionOptions {
         pattern: regex::Regex::new(pattern).unwrap(),
-        header_lines: 1,
+        header_lines,
     })
 }
 
@@ -172,7 +172,7 @@ line 6
         screen_height: 4,
         content,
         options: Options {
-            section: section_opts("^# "),
+            section: section_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![key('/'), key('3'), enter()],
@@ -228,7 +228,7 @@ line 6
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# "),
+            section: section_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![
@@ -299,6 +299,98 @@ line 6
 {reverse}AA{/reverse}B
 line 4
 # Section 2
+:
+-----
+";
+    assert_eq!(want, screen.out());
+}
+
+#[test]
+fn search_with_section_header_multi_line() {
+    let content = "\
+# Section 1
+description 1-1
+description 1-2
+line 1
+line 2
+A
+line 3
+line 4
+line 5
+AB
+# Section 2
+description 2-1
+description 2-2
+AC
+line 6
+line 7
+line 8
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 6,
+        content,
+        options: Options {
+            section: section_opts("^# ", 3),
+            ..Default::default()
+        },
+        events: vec![
+            // Search with "A"
+            key('/'),
+            key('A'),
+            enter(),
+            // Jump
+            key('n'),
+            key('n'),
+        ],
+        ..Default::default()
+    });
+    let want = "\
+# Section 1
+description 1-1
+description 1-2
+line 1
+line 2
+:
+-----
+[EVENT]:char:/
+# Section 1
+description 1-1
+description 1-2
+line 1
+line 2
+/█
+-----
+[EVENT]:char:A
+# Section 1
+description 1-1
+description 1-2
+{reverse}A{/reverse}
+line 3
+/A█
+-----
+[EVENT]:enter
+# Section 1
+description 1-1
+description 1-2
+{reverse}A{/reverse}
+line 3
+:
+-----
+[EVENT]:char:n
+# Section 1
+description 1-1
+description 1-2
+{reverse}A{/reverse}B
+# Section 2
+:
+-----
+[EVENT]:char:n
+# Section 2
+description 2-1
+description 2-2
+{reverse}A{/reverse}C
+line 6
 :
 -----
 ";
