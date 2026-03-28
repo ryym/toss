@@ -28,8 +28,10 @@ When you finish work, all your changes must be committed.
 ```bash
 cargo check  # Run typecheck
 cargo test   # Run tests
-cargo clippy # Run linter
 cargo fmt    # Run formatter
+
+# Run linter with auto fix
+cargo clippy --fix --allow dirty
 ```
 
 NOTE: Since it uses terminal interactively, AI agents should not run `cargo run`.
