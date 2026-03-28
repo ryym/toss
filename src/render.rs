@@ -172,24 +172,23 @@ pub fn apply_jump_scroll<S: Screen>(
             let header_height = page.resolve_header().len();
             let rows = page.viewport.rows();
             let visible_rows = &rows[overlay.min(rows.len())..];
-            let content_height = visible_rows.len();
 
             let (dirty_from, dirty_to) = scroll_dirty_range(visible_rows, scroll_rows, direction);
             let overlap_range = match direction {
                 Direction::Down => 0..dirty_from,
-                Direction::Up => dirty_to..content_height,
+                Direction::Up => dirty_to..visible_rows.len(),
             };
-            let dirty_groups: Vec<ScreenRow> = visible_rows[overlap_range]
+            let dirty_rows: Vec<ScreenRow> = visible_rows[overlap_range]
                 .iter()
                 .filter(|r| highlight_dirty_lines.contains(&r.line_index))
                 .copied()
                 .collect();
-            if !dirty_groups.is_empty() {
+            if !dirty_rows.is_empty() {
                 draw_dirty_rows_at_positions(
                     screen,
                     &mut page.doc,
                     visible_rows,
-                    &dirty_groups,
+                    &dirty_rows,
                     width,
                     search,
                     header_height,
