@@ -103,8 +103,7 @@ pub fn draw_full_page<S: Screen>(
 
     // Draw viewport rows below the header, skipping overlaid rows.
     let rows = page.viewport.rows();
-    let skip = overlay.min(rows.len());
-    let visible_rows = &rows[skip..];
+    let visible_rows = &rows[overlay.min(rows.len())..];
     draw_rows_grouped(
         screen,
         &mut page.doc,
@@ -115,7 +114,7 @@ pub fn draw_full_page<S: Screen>(
     )?;
 
     // Clear any rows below content that may have stale content.
-    let visible_capacity = page.viewport.height().saturating_sub(skip);
+    let visible_capacity = page.viewport.height().saturating_sub(overlay);
     for y in visible_rows.len()..visible_capacity {
         screen.clear_row((y + header_height) as u16)?;
     }
@@ -163,10 +162,8 @@ pub fn apply_jump_scroll<S: Screen>(
     };
     screen.scroll_terminal(&plan)?;
 
-    // Work with visible rows (viewport rows after skipping overlay).
     let rows = page.viewport.rows();
-    let skip = overlay.min(rows.len());
-    let visible_rows = &rows[skip..];
+    let visible_rows = &rows[overlay.min(rows.len())..];
     let content_height = visible_rows.len();
 
     let (scroll_draw_from, scroll_draw_to) =
@@ -247,8 +244,7 @@ pub fn draw_search_highlight_update<S: Screen>(
 
     // Redraw viewport rows that need highlight updates.
     let rows = page.viewport.rows();
-    let skip = overlay.min(rows.len());
-    let visible_rows = &rows[skip..];
+    let visible_rows = &rows[overlay.min(rows.len())..];
     let dirty_rows = filter_dirty_rows(visible_rows, &mut page.doc, search, old_match_lines);
     if !dirty_rows.is_empty() {
         // We need to draw each dirty group at its correct screen position.
@@ -428,10 +424,8 @@ fn apply_scroll_no_flush<S: Screen>(
     // We redraw the header and status line after scrolling.
     screen.scroll_terminal(plan)?;
 
-    // Work with visible rows (viewport rows after skipping overlay).
     let rows = page.viewport.rows();
-    let skip = overlay.min(rows.len());
-    let visible_rows = &rows[skip..];
+    let visible_rows = &rows[overlay.min(rows.len())..];
     let n_scroll = plan.terminal_scroll.get();
 
     let (draw_from, draw_to) = scroll_dirty_range(visible_rows, n_scroll, plan.direction);
