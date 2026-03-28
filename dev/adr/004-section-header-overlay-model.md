@@ -73,16 +73,10 @@ Rejected because:
   which depends on the viewport top, which depends on the viewport height.
   This circular dependency requires careful stabilization that the overlay model avoids.
 
-**Re-evaluation after ADR-003:** The removal of DECSTBM and incremental scroll (ADR-003) weakened both rejection reasons above.
-Since every scroll now triggers a full page redraw, viewport resizing is no longer expensive (just a rows vector rebuild),
-and the circular dependency is already handled by the `sync_section_for_redraw` convergence loop. The resize model is now viable.
-
-Its main advantage would be **mental model simplicity**:
-`viewport.rows()` would always correspond exactly to what the user sees, eliminating the overlay concept entirely.
-This would simplify `draw_full_page` (no row skipping), `jump_to_visible` (no iterative overlay correction), and general reasoning about visible content.
-
-However, the overlay model's complexity is already well-localized (a single `usize`, a slice skip, and one iterative loop),
-so the mental model benefit alone does not justify the migration cost.
+**Re-evaluation after ADR-003 (now invalidated):** ADR-003's full page redraw temporarily weakened both rejection reasons above,
+since viewport resizing would no longer be expensive. However, ADR-005 restored incremental scroll rendering due to flickering,
+so viewport resizing on every scroll is expensive again (it would force a full redraw instead of an incremental one).
+The original rejection reasons remain valid.
 
 ### Separate header viewport
 

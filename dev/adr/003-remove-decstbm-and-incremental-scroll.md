@@ -2,9 +2,9 @@
 
 ## Status
 
-Partially superseded — DECSTBM removal stands, but full page redraw was reverted
-back to incremental scroll rendering due to flickering with colored content
-during fast scrolling.
+Partially superseded by [ADR-005](005-restore-incremental-scroll.md) — DECSTBM
+removal stands, but full page redraw was reverted back to incremental scroll
+rendering due to flickering with colored content during fast scrolling.
 
 ## Context
 
