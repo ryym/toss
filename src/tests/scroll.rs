@@ -4,22 +4,21 @@ use super::{TestCase, key, run_test_screen};
 
 #[test]
 fn up_down() {
-    let out = run_test_screen(TestCase {
-        screen_width: 10,
-        screen_height: 4,
-        content: "\
+    let content = "\
 line 1
 line 2
 line 3
 line 4
-line 5",
+line 5
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content,
         events: vec![key('j'), key('j'), key('k'), key('q')],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 line 1
 line 2
 line 3
@@ -44,16 +43,13 @@ line 4
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 #[test]
 fn half_page() {
-    let out = run_test_screen(TestCase {
-        screen_width: 10,
-        screen_height: 5,
-        content: "\
+    let content = "\
 line 1
 line 2
 line 3
@@ -61,14 +57,16 @@ line 4
 line 5
 line 6
 line 7
-line 8",
+line 8
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 5,
+        content,
         events: vec![key('d'), key('u'), key('q')],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 line 1
 line 2
 line 3
@@ -90,16 +88,13 @@ line 4
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 #[test]
 fn top_bottom() {
-    let out = run_test_screen(TestCase {
-        screen_width: 10,
-        screen_height: 4,
-        content: "\
+    let content = "\
 line 1
 line 2
 line 3
@@ -107,14 +102,16 @@ line 4
 line 5
 line 6
 line 7
-line 8",
+line 8
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content,
         events: vec![key('G'), key('g'), key('q')],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 line 1
 line 2
 line 3
@@ -133,26 +130,25 @@ line 3
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 #[test]
 fn cannot_past_boundaries() {
-    let out = run_test_screen(TestCase {
-        screen_width: 10,
-        screen_height: 4,
-        content: "\
+    let content = "\
 line 1
 line 2
-line 3",
+line 3
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content,
         events: vec![key('k'), key('j'), key('q')],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 line 1
 line 2
 line 3
@@ -161,6 +157,6 @@ line 3
 [EVENT]:char:k
 [EVENT]:char:j
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }

@@ -6,20 +6,19 @@ use super::{TestCase, key, run_test_screen};
 // Initial display shows them with soft wrap marker '>'.
 #[test]
 fn soft_wrap() {
-    let out = run_test_screen(TestCase {
-        screen_width: 5,
-        screen_height: 4,
-        content: "\
+    let content = "\
 short
 abcdefgh
-end",
+end
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 5,
+        screen_height: 4,
+        content,
         events: vec![key('j'), key('j'), key('k'), key('q')],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 short
 abcde>
 fgh
@@ -39,8 +38,8 @@ fgh
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 // When scrolling down reveals a new wrap row, the entire visible
@@ -48,23 +47,22 @@ fgh
 // Line "aaabbbccc" wraps to 3 rows at width 3.
 #[test]
 fn down_reveals_wrap_continuation() {
-    let out = run_test_screen(TestCase {
-        screen_width: 3,
-        screen_height: 5,
-        content: "\
+    let content = "\
 xx
 aaabbbccc
-yy",
+yy
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 3,
+        screen_height: 5,
+        content,
         events: vec![key('j'), key('j'), key('q')],
         ..Default::default()
-    })
-    .out();
+    });
     // Initial: xx, aaa>, bbb>, ccc
     // After j: aaa>, bbb>, ccc, yy
     // After j: can't scroll (yy is last)
-    assert_eq!(
-        out,
-        "\
+    let want = "\
 xx
 aaa>
 bbb>
@@ -80,32 +78,31 @@ yy
 -----
 [EVENT]:char:j
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 // Scrolling up to reveal a new wrap row that has the same line as rows below.
 #[test]
 fn up_reveals_wrap_start() {
-    let out = run_test_screen(TestCase {
-        screen_width: 5,
-        screen_height: 4,
-        content: "\
+    let content = "\
 xx
 abcdefgh
-yy",
+yy
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 5,
+        screen_height: 4,
+        content,
         events: vec![key('j'), key('j'), key('k'), key('q')],
         ..Default::default()
-    })
-    .out();
+    });
     // "abcdefgh" wraps to "abcde" + "fgh"
     // Initial: xx, abcde>, fgh
     // j: abcde>, fgh, yy
     // j: can't scroll (yy is last)
     // k from [abcde>, fgh, yy]: back to [xx, abcde>, fgh]
-    assert_eq!(
-        out,
-        "\
+    let want = "\
 xx
 abcde>
 fgh
@@ -125,30 +122,29 @@ fgh
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 #[test]
 fn top_bottom_with_wrap() {
-    let out = run_test_screen(TestCase {
-        screen_width: 5,
-        screen_height: 4,
-        content: "\
+    let content = "\
 line1
 line2
-abcdefgh",
+abcdefgh
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 5,
+        screen_height: 4,
+        content,
         events: vec![key('G'), key('g'), key('q')],
         ..Default::default()
-    })
-    .out();
+    });
     // "abcdefgh" wraps to "abcde" + "fgh"
     // Initial: line1, line2, abcde (fgh off-screen, no soft wrap)
     // G: line2, abcde>, fgh
     // g: line1, line2, abcde (fgh off-screen again)
-    assert_eq!(
-        out,
-        "\
+    let want = "\
 line1
 line2
 abcde
@@ -167,8 +163,8 @@ abcde
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 // When the top of the screen shows the middle of a wrapped line,
@@ -176,23 +172,22 @@ abcde
 // "abcdefghijk" wraps to "abcde" + "fghij" + "k" at width 5.
 #[test]
 fn midline_at_top_of_screen() {
-    let out = run_test_screen(TestCase {
+    let content = "\
+abcdefghijk
+end
+";
+    let screen = run_test_screen(TestCase {
         screen_width: 5,
         screen_height: 4,
-        content: "\
-abcdefghijk
-end",
+        content,
         events: vec![key('j'), key('q')],
         ..Default::default()
-    })
-    .out();
+    });
     // Initial: abcde>, fghij>, k
     // j: fghij>, k, end
     // Even though "abcde" is off-screen, "fghij" and "k" should be
     // soft-wrapped together.
-    assert_eq!(
-        out,
-        "\
+    let want = "\
 abcde>
 fghij>
 k
@@ -205,6 +200,6 @@ end
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }

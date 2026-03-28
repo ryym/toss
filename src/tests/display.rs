@@ -4,30 +4,29 @@ use super::{TestCase, key, run_test_screen};
 
 #[test]
 fn open_and_quit() {
-    let out = run_test_screen(TestCase {
-        screen_width: 10,
-        screen_height: 4,
-        content: "\
+    let content = "\
 line 1
 line 2
 line 3
 line 4
-line 5",
+line 5
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content,
         events: vec![key('q')],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 line 1
 line 2
 line 3
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 // Lines with ANSI escape sequences should display correctly.
@@ -39,20 +38,19 @@ fn ansi_escape_sequences() {
     // Line 1 visible: "Hello" (5 cols, fits in width 5)
     // Line 2 visible: "abcdefgh" (8 cols, wraps to "abcde" + "fgh" at width 5)
     // Line 3 visible: "end" (3 cols)
-    let out = run_test_screen(TestCase {
-        screen_width: 5,
-        screen_height: 5,
-        content: "\
+    let content = "\
 \x1b[1mHello\x1b[0m
 \x1b[31mabcde\x1b[0mfgh
-end",
+end
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 5,
+        screen_height: 5,
+        content,
         events: vec![key('q')],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 {bold}Hello{reset}
 {red}abcde{reset}>
 fgh
@@ -60,29 +58,28 @@ end
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 // Verify the status line appears on the last row and survives scroll operations.
 #[test]
 fn status_line() {
-    let out = run_test_screen(TestCase {
-        screen_width: 10,
-        screen_height: 4,
-        content: "\
+    let content = "\
 line 1
 line 2
 line 3
 line 4
-line 5",
+line 5
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content,
         events: vec![key('j'), key('k'), key('q')],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 line 1
 line 2
 line 3
@@ -101,6 +98,6 @@ line 3
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }

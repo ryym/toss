@@ -28,23 +28,22 @@ fn backspace() -> Event {
 // Esc cancels and restores the original position.
 #[test]
 fn forward_search_input_and_cancel() {
-    let out = run_test_screen(TestCase {
-        screen_width: 10,
-        screen_height: 4,
-        content: "\
+    let content = "\
 line 1
 line 2
 line 3
-line 4",
+line 4
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content,
         events: vec![key('/'), key('a'), key('b'), esc()],
         ..Default::default()
-    })
-    .out();
+    });
     // No match for "a" or "ab" so position stays the same.
     // Esc restores original position.
-    assert_eq!(
-        out,
-        "\
+    let want = "\
 line 1
 line 2
 line 3
@@ -74,29 +73,28 @@ line 2
 line 3
 :
 -----
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 // Typing ? enters backward search mode with "?" prompt.
 // Enter submits and returns to view mode.
 #[test]
 fn backward_search_input_and_submit() {
-    let out = run_test_screen(TestCase {
-        screen_width: 10,
-        screen_height: 4,
-        content: "\
+    let content = "\
 line 1
 line 2
 line 3
-line 4",
+line 4
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content,
         events: vec![key('?'), key('x'), enter()],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 line 1
 line 2
 line 3
@@ -120,28 +118,27 @@ line 2
 line 3
 :
 -----
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 // Backspace removes the last character from input.
 #[test]
 fn backspace_removes_character() {
-    let out = run_test_screen(TestCase {
-        screen_width: 10,
-        screen_height: 4,
-        content: "\
+    let content = "\
 line 1
 line 2
 line 3
-line 4",
+line 4
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content,
         events: vec![key('/'), key('a'), key('b'), backspace(), esc()],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 line 1
 line 2
 line 3
@@ -177,21 +174,23 @@ line 2
 line 3
 :
 -----
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 // Arrow keys move the cursor within the search input.
 #[test]
 fn arrow_keys_move_cursor() {
-    let out = run_test_screen(TestCase {
-        screen_width: 10,
-        screen_height: 4,
-        content: "\
+    let content = "\
 line 1
 line 2
 line 3
-line 4",
+line 4
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content,
         events: vec![
             key('/'),
             key('a'),
@@ -204,11 +203,8 @@ line 4",
             esc(),
         ],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 line 1
 line 2
 line 3
@@ -268,6 +264,6 @@ line 2
 line 3
 :
 -----
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }

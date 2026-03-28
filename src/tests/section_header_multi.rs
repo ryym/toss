@@ -12,28 +12,27 @@ fn section_opts_n(pattern: &str, header_lines: usize) -> Option<SectionOptions> 
 
 #[test]
 fn sticky_header() {
-    let out = run_test_screen(TestCase {
-        screen_width: 20,
-        screen_height: 6,
-        content: "\
+    let content = "\
 # Section A
 description A
 line 1
 line 2
 line 3
 line 4
-line 5",
+line 5
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 6,
+        content,
         options: Options {
             section: section_opts_n("^# ", 2),
             ..Default::default()
         },
         events: vec![key('j'), key('j'), key('q')],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 # Section A
 description A
 line 1
@@ -58,16 +57,13 @@ line 5
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 #[test]
 fn header_switching() {
-    let out = run_test_screen(TestCase {
-        screen_width: 20,
-        screen_height: 6,
-        content: "\
+    let content = "\
 # Section A
 description A
 line 1
@@ -80,7 +76,12 @@ line 5
 line 6
 line 7
 line 8
-line 10",
+line 10
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 6,
+        content,
         options: Options {
             section: section_opts_n("^# ", 2),
             ..Default::default()
@@ -95,11 +96,8 @@ line 10",
             key('q'),
         ],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 # Section A
 description A
 line 1
@@ -156,16 +154,13 @@ line 7
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 #[test]
 fn wrapped_header_switching() {
-    let out = run_test_screen(TestCase {
-        screen_width: 7,
-        screen_height: 6,
-        content: "\
+    let content = "\
 # abcde
 012345678
 line 1
@@ -175,7 +170,12 @@ line 3
 012345678
 line 4
 line 5
-line 6",
+line 6
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 7,
+        screen_height: 6,
+        content,
         options: Options {
             section: section_opts_n("^# ", 2),
             ..Default::default()
@@ -190,11 +190,8 @@ line 6",
             key('q'),
         ],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 # abcde
 0123456>
 78
@@ -251,8 +248,8 @@ line 5
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 /// When a line within the header block also matches the section pattern,
@@ -260,10 +257,7 @@ line 5
 /// a new section start.
 #[test]
 fn pattern_match_within_header_block() {
-    let out = run_test_screen(TestCase {
-        screen_width: 68,
-        screen_height: 6,
-        content: "\
+    let content = "\
 # Changelog
 
 ## 2.0.74
@@ -271,22 +265,19 @@ fn pattern_match_within_header_block() {
 - Added LSP (Language Server Protocol) tool for code intelligence features like go-to-definition, find references, and hover documentation
 - Added `/terminal-setup` support for Kitty, Alacritty, Zed, and Warp terminals
 - Added ctrl+t shortcut in `/theme` to toggle syntax highlighting on/off
-",
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 68,
+        screen_height: 6,
+        content,
         options: Options {
             section: section_opts_n("^#", 3),
             ..Default::default()
         },
-        events: vec![
-            key('j'),
-            key('j'),
-            key('q'),
-        ],
+        events: vec![key('j'), key('j'), key('q')],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 # Changelog
 
 ## 2.0.74
@@ -311,16 +302,13 @@ on
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 #[test]
 fn regression_wrapped_header_switching() {
-    let out = run_test_screen(TestCase {
-        screen_width: 68,
-        screen_height: 7,
-        content: "\
+    let content = "\
 # Changelog
 
 ## 2.0.74
@@ -333,7 +321,11 @@ fn regression_wrapped_header_switching() {
 - Added clickable `[Image #N]` links that open attached images in the default viewer
 - Added alt-y yank-pop to cycle through kill ring history after ctrl-y yank
 - Added search filtering to the plugin discover screen (type to filter by name, description, or marketplace)
-",
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 68,
+        screen_height: 7,
+        content,
         options: Options {
             section: section_opts_n("^##", 3),
             ..Default::default()
@@ -351,11 +343,8 @@ fn regression_wrapped_header_switching() {
             key('q'),
         ],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 # Changelog
 
 ## 2.0.74
@@ -446,8 +435,8 @@ e default viewer
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 /// When section-header N equals the viewport content rows, the section header
@@ -455,10 +444,7 @@ e default viewer
 /// in a frozen display. Scrolling back up reveals pre-section content.
 #[test]
 fn section_header_fills_viewport() {
-    let out = run_test_screen(TestCase {
-        screen_width: 20,
-        screen_height: 5,
-        content: "\
+    let content = "\
 pre 1
 pre 2
 # Section A
@@ -468,7 +454,12 @@ body 1
 body 2
 body 3
 body 4
-body 5",
+body 5
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 5,
+        content,
         options: Options {
             section: section_opts_n("^# ", 4),
             ..Default::default()
@@ -485,11 +476,8 @@ body 5",
             key('q'),
         ],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 pre 1
 pre 2
 # Section A
@@ -553,8 +541,8 @@ desc 1
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }
 
 /// When section-header N exceeds the viewport content rows, only the first
@@ -562,10 +550,7 @@ desc 1
 /// truncated). The display freezes on the header while scrolling down.
 #[test]
 fn section_header_exceeds_viewport() {
-    let out = run_test_screen(TestCase {
-        screen_width: 20,
-        screen_height: 5,
-        content: "\
+    let content = "\
 pre 1
 pre 2
 # Section A
@@ -577,7 +562,12 @@ desc 5
 body 1
 body 2
 body 3
-body 4",
+body 4
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 5,
+        content,
         options: Options {
             section: section_opts_n("^# ", 6),
             ..Default::default()
@@ -594,11 +584,8 @@ body 4",
             key('q'),
         ],
         ..Default::default()
-    })
-    .out();
-    assert_eq!(
-        out,
-        "\
+    });
+    let want = "\
 pre 1
 pre 2
 # Section A
@@ -662,6 +649,6 @@ desc 1
 :
 -----
 [EVENT]:char:q
-"
-    );
+";
+    assert_eq!(screen.out(), want);
 }

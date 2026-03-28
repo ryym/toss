@@ -63,7 +63,7 @@ line 4
 :
 -----
 ";
-    assert_eq!(want, screen.out());
+    assert_eq!(screen.out(), want);
 }
 
 /// When searching and jumping with a global header,
@@ -151,7 +151,7 @@ line 5
 :
 -----
 ";
-    assert_eq!(want, screen.out());
+    assert_eq!(screen.out(), want);
 }
 
 /// When searching with a section header,
@@ -203,7 +203,7 @@ line 4
 :
 -----
 ";
-    assert_eq!(want, screen.out());
+    assert_eq!(screen.out(), want);
 }
 
 /// When searching and jumping with a section header,
@@ -302,7 +302,7 @@ line 4
 :
 -----
 ";
-    assert_eq!(want, screen.out());
+    assert_eq!(screen.out(), want);
 }
 
 #[test]
@@ -396,7 +396,7 @@ fn search_with_section_header_jump_back_one_line() {
 :
 -----
 ";
-    assert_eq!(want, screen.out());
+    assert_eq!(screen.out(), want);
 }
 
 #[test]
@@ -488,7 +488,7 @@ line 6
 :
 -----
 ";
-    assert_eq!(want, screen.out());
+    assert_eq!(screen.out(), want);
 }
 
 #[test]
@@ -591,5 +591,5 @@ line 4
 :
 -----
 ";
-    assert_eq!(want, screen.out());
+    assert_eq!(screen.out(), want);
 }
