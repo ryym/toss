@@ -418,10 +418,12 @@ impl<S: Screen> App<S> {
 
         // Try to move to the next match within the same line first.
         if let Some(current) = search.current {
-            let query = search.query.clone();
-            if let Some(next_mi) =
-                search::find_next_match_in_line(&mut self.page.doc, &query, current, direction)
-            {
+            if let Some(next_mi) = search::find_next_match_in_line(
+                &mut self.page.doc,
+                &search.query,
+                current,
+                direction,
+            ) {
                 log::debug!("Next match on same line: index={next_mi}");
                 if let Some(ref mut search) = self.search {
                     search.current = Some(MatchPosition {
@@ -506,7 +508,6 @@ impl<S: Screen> App<S> {
         let Some(search) = search else {
             return Vec::new();
         };
-        let query = search.query.clone();
         let rows = self.page.viewport.rows();
         let mut lines = Vec::new();
         let mut last_line = None;
@@ -516,7 +517,7 @@ impl<S: Screen> App<S> {
             }
             last_line = Some(row.line_index);
             if let Some(line) = self.page.doc.line(row.line_index)
-                && line.has_match(&query)
+                && line.has_match(&search.query)
             {
                 lines.push(row.line_index);
             }
@@ -530,7 +531,7 @@ impl<S: Screen> App<S> {
             }
             last_line = Some(row.line_index);
             if let Some(line) = self.page.doc.line(row.line_index)
-                && line.has_match(&query)
+                && line.has_match(&search.query)
             {
                 lines.push(row.line_index);
             }
