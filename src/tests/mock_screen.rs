@@ -227,6 +227,14 @@ impl Screen for MockScreen {
         Ok(())
     }
 
+    fn begin_sync(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn end_sync(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+
     fn flush(&mut self) -> io::Result<()> {
         self.take_snapshot();
         Ok(())

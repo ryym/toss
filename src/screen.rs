@@ -5,7 +5,7 @@ use crossterm::{
     event::{self, Event},
     execute, queue,
     style::Print,
-    terminal::{self, ClearType},
+    terminal::{self, BeginSynchronizedUpdate, ClearType, EndSynchronizedUpdate},
 };
 mod highlight;
 
@@ -27,6 +27,13 @@ pub trait Screen {
     /// Caller must clear target rows beforehand.
     fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()>;
 
+    /// Begin synchronized output. The terminal buffers all subsequent writes
+    /// until `end_sync` and renders them in a single frame.
+    fn begin_sync(&mut self) -> io::Result<()>;
+
+    /// End synchronized output and let the terminal render the buffered frame.
+    fn end_sync(&mut self) -> io::Result<()>;
+
     fn flush(&mut self) -> io::Result<()>;
 }
 
@@ -46,7 +53,12 @@ impl TermScreen {
 
 impl Drop for TermScreen {
     fn drop(&mut self) {
-        let _ = execute!(self.stdout, cursor::Show, terminal::LeaveAlternateScreen,);
+        let _ = execute!(
+            self.stdout,
+            EndSynchronizedUpdate,
+            cursor::Show,
+            terminal::LeaveAlternateScreen,
+        );
         let _ = terminal::disable_raw_mode();
     }
 }
@@ -77,6 +89,14 @@ impl Screen for TermScreen {
 
     fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()> {
         queue!(self.stdout, cursor::MoveTo(0, screen_y), Print(text),)
+    }
+
+    fn begin_sync(&mut self) -> io::Result<()> {
+        queue!(self.stdout, BeginSynchronizedUpdate)
+    }
+
+    fn end_sync(&mut self) -> io::Result<()> {
+        queue!(self.stdout, EndSynchronizedUpdate)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -148,7 +168,9 @@ fn draw_rows_grouped<S: Screen>(
 
 /// Draw the status line, computing its position from the page layout.
 pub fn draw_status_line<S: Screen>(screen: &mut S, page: &mut Page) -> io::Result<()> {
+    screen.begin_sync()?;
     draw_status_line_no_flush(screen, page)?;
+    screen.end_sync()?;
     screen.flush()
 }
 
@@ -167,6 +189,7 @@ pub fn draw_full_page<S: Screen>(
     page: &mut Page,
     search: Option<&SearchState>,
 ) -> io::Result<()> {
+    screen.begin_sync()?;
     let width = page.viewport.width();
     let header_rows = page.resolve_header();
     let header_height = header_rows.len();
@@ -197,5 +220,6 @@ pub fn draw_full_page<S: Screen>(
     }
     draw_status_line_no_flush(screen, page)?;
 
+    screen.end_sync()?;
     screen.flush()
 }
