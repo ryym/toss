@@ -1,4 +1,5 @@
-/// Search state and navigation for finding matches in a document.
+//! Search state and navigation for finding matches in a document.
+
 use regex::Regex;
 
 use crate::document::Document;

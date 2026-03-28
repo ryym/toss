@@ -1,4 +1,5 @@
-/// Command-line argument parsing.
+//! Command-line argument parsing.
+
 use std::path::PathBuf;
 
 use crate::options::{Options, SectionOptions};

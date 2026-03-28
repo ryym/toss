@@ -1,8 +1,9 @@
-/// Search match highlighting for lines containing ANSI escape sequences.
-///
-/// Converts match positions from plain text coordinates to raw text coordinates,
-/// then injects reverse-video escape sequences to highlight matches while
-/// preserving existing styling.
+//! Search match highlighting for lines containing ANSI escape sequences.
+//!
+//! Converts match positions from plain text coordinates to raw text coordinates,
+//! then injects reverse-video escape sequences to highlight matches while
+//! preserving existing styling.
+
 use std::ops::Range;
 
 /// Highlight style for search matches.
