@@ -8,6 +8,7 @@ use crate::page::Page;
 use crate::screen::{self, Screen};
 use crate::scroll::ScrollPhysics;
 use crate::search::{self, MatchPosition, SearchDirection, SearchState};
+use crate::viewport::{Direction, ScreenRow};
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
@@ -22,6 +23,13 @@ enum RedrawState {
     SearchHighlight {
         /// Line indices that had highlights before the change.
         old_match_lines: Vec<usize>,
+    },
+    /// Viewport jumped with overlap — use incremental scroll + highlight update.
+    JumpScroll {
+        scroll_rows: usize,
+        direction: Direction,
+        /// Lines whose highlight style changed (old/new current match).
+        highlight_dirty_lines: Vec<usize>,
     },
 }
 
@@ -125,6 +133,21 @@ impl<S: Screen> App<S> {
                         &mut self.page,
                         search,
                         &old_match_lines,
+                    )?;
+                }
+                RedrawState::JumpScroll {
+                    scroll_rows,
+                    direction,
+                    highlight_dirty_lines,
+                } => {
+                    let search = active_search(&self.mode, &self.search);
+                    screen::apply_jump_scroll(
+                        &mut self.screen,
+                        &mut self.page,
+                        scroll_rows,
+                        direction,
+                        search,
+                        &highlight_dirty_lines,
                     )?;
                 }
                 RedrawState::None => {
@@ -437,16 +460,35 @@ impl<S: Screen> App<S> {
         let matched = search::find_next_match(&mut self.page.doc, &search.query, from, direction);
         log::debug!("Next match from line {from}: {matched:?}");
         if let Some(ref pos) = matched {
+            let old_rows = self.page.viewport.rows().to_vec();
+            let old_header_height = self.page.resolve_header().len();
+
             let scrolled = self.page.jump_to_visible(pos.line);
+
+            let mut dirty = Vec::new();
+            if let Some(old_line) = old_current_line {
+                dirty.push(old_line);
+            }
+            dirty.push(pos.line);
+
             if scrolled {
-                self.redraw = RedrawState::Full;
-            } else {
-                // Only the old and new current match lines need redraw.
-                let mut dirty = Vec::new();
-                if let Some(old_line) = old_current_line {
-                    dirty.push(old_line);
+                let new_header_height = self.page.resolve_header().len();
+                if old_header_height == new_header_height {
+                    if let Some((n, dir)) =
+                        compute_scroll_overlap(&old_rows, self.page.viewport.rows())
+                    {
+                        self.redraw = RedrawState::JumpScroll {
+                            scroll_rows: n,
+                            direction: dir,
+                            highlight_dirty_lines: dirty,
+                        };
+                    } else {
+                        self.redraw = RedrawState::Full;
+                    }
+                } else {
+                    self.redraw = RedrawState::Full;
                 }
-                dirty.push(pos.line);
+            } else {
                 self.redraw = RedrawState::SearchHighlight {
                     old_match_lines: dirty,
                 };
@@ -556,4 +598,32 @@ fn active_search<'a>(
         AppMode::Search { preview, .. } => preview.as_ref(),
         _ => committed.as_ref(),
     }
+}
+
+/// Detect overlap between old and new viewport rows after a jump.
+/// Returns the scroll distance and direction if the viewports overlap.
+/// We determine the direction by comparing actual rows rather than using SearchDirection,
+/// because wraparound can cause the scroll direction to be opposite to the search direction.
+fn compute_scroll_overlap(
+    old_rows: &[ScreenRow],
+    new_rows: &[ScreenRow],
+) -> Option<(usize, Direction)> {
+    if old_rows.is_empty() || new_rows.is_empty() {
+        return None;
+    }
+    // Scroll down: new viewport starts partway into old viewport.
+    let new_first = new_rows[0];
+    for (i, row) in old_rows.iter().enumerate().skip(1) {
+        if *row == new_first {
+            return Some((i, Direction::Down));
+        }
+    }
+    // Scroll up: old viewport starts partway into new viewport.
+    let old_first = old_rows[0];
+    for (i, row) in new_rows.iter().enumerate().skip(1) {
+        if *row == old_first {
+            return Some((i, Direction::Up));
+        }
+    }
+    None
 }

@@ -1,4 +1,5 @@
 use std::io::{self, Stdout, Write};
+use std::num::NonZeroUsize;
 
 use crossterm::{
     cursor,
@@ -234,6 +235,122 @@ pub fn draw_full_page<S: Screen>(
     for y in visible_rows.len()..visible_capacity {
         screen.clear_row((y + header_height) as u16)?;
     }
+    draw_status_line_no_flush(screen, page)?;
+
+    screen.end_sync()?;
+    screen.flush()
+}
+
+/// Apply incremental rendering for a viewport jump (e.g., n/N search jump).
+///
+/// When a jump scrolls the viewport by a small amount, we can reuse the
+/// overlapping content via terminal scroll instead of redrawing everything.
+/// Additionally redraws rows in the overlap area whose highlight state changed.
+pub fn apply_jump_scroll<S: Screen>(
+    screen: &mut S,
+    page: &mut Page,
+    scroll_rows: usize,
+    direction: Direction,
+    search: Option<&SearchState>,
+    highlight_dirty_lines: &[usize],
+) -> io::Result<()> {
+    screen.begin_sync()?;
+
+    let width = page.viewport.width();
+    let overlay = page.section_overlay();
+
+    let visible_height = page.viewport.height().saturating_sub(overlay);
+    if visible_height == 0 {
+        let header_rows = page.resolve_header();
+        if !header_rows.is_empty() {
+            draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
+        }
+        draw_status_line_no_flush(screen, page)?;
+        screen.end_sync()?;
+        return screen.flush();
+    }
+
+    let header_height = page.resolve_header().len();
+
+    // Issue terminal scroll to shift existing content in-place.
+    let plan = ScrollPlan {
+        terminal_scroll: NonZeroUsize::new(scroll_rows).unwrap(),
+        direction,
+    };
+    screen.scroll_terminal(&plan)?;
+
+    // Work with visible rows (viewport rows after skipping overlay).
+    let rows = page.viewport.rows();
+    let skip = overlay.min(rows.len());
+    let visible_rows = &rows[skip..];
+    let content_height = visible_rows.len();
+
+    // Compute dirty range: new rows that scrolled in, extending to include
+    // adjacent rows from the same logical line for correct soft-wrap grouping.
+    let (scroll_draw_from, scroll_draw_to) = match direction {
+        Direction::Down => {
+            let new_start = content_height.saturating_sub(scroll_rows);
+            let mut from = new_start;
+            while from > 0
+                && visible_rows[from - 1].line_index == visible_rows[new_start].line_index
+            {
+                from -= 1;
+            }
+            (from, content_height)
+        }
+        Direction::Up => {
+            let new_end = scroll_rows.min(content_height);
+            let mut to = new_end;
+            while to < content_height
+                && visible_rows[to].line_index == visible_rows[new_end - 1].line_index
+            {
+                to += 1;
+            }
+            (0, to)
+        }
+    };
+
+    // Draw the newly scrolled-in rows.
+    draw_rows_grouped(
+        screen,
+        &mut page.doc,
+        &visible_rows[scroll_draw_from..scroll_draw_to],
+        width,
+        search,
+        header_height + scroll_draw_from,
+    )?;
+
+    // In the overlap area (rows not scrolled in), redraw any rows whose
+    // highlight state changed (e.g., old/new current match line for n/N).
+    if !highlight_dirty_lines.is_empty() {
+        let overlap_range = match direction {
+            Direction::Down => 0..scroll_draw_from,
+            Direction::Up => scroll_draw_to..content_height,
+        };
+        let dirty_groups: Vec<ScreenRow> = visible_rows[overlap_range]
+            .iter()
+            .filter(|r| highlight_dirty_lines.contains(&r.line_index))
+            .copied()
+            .collect();
+        if !dirty_groups.is_empty() {
+            draw_dirty_rows_at_positions(
+                screen,
+                &mut page.doc,
+                visible_rows,
+                &dirty_groups,
+                width,
+                search,
+                header_height,
+            )?;
+        }
+    }
+
+    // Redraw header (shifted by terminal scroll).
+    let header_rows = page.resolve_header();
+    if !header_rows.is_empty() {
+        draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
+    }
+
     draw_status_line_no_flush(screen, page)?;
 
     screen.end_sync()?;
