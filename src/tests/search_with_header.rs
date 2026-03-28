@@ -306,6 +306,100 @@ line 4
 }
 
 #[test]
+fn search_with_section_header_jump_back_one_line() {
+    let content = "\
+# Section A
+127
+128
+129
+130
+131
+132
+133
+134
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 4,
+        content,
+        options: Options {
+            section: section_opts("^# ", 1),
+            ..Default::default()
+        },
+        events: vec![
+            // Search by "13"
+            key('/'),
+            key('1'),
+            key('3'),
+            enter(),
+            // Jump
+            key('n'),
+            key('n'),
+            // Jump back
+            key('N'),
+            key('N'),
+        ],
+        ..Default::default()
+    });
+    let want = "\
+# Section A
+127
+128
+:
+-----
+[EVENT]:char:/
+# Section A
+127
+128
+/█
+-----
+[EVENT]:char:1
+# Section A
+{reverse}1{/reverse}27
+{dim}{reverse}1{/reverse}{/dim}28
+/1█
+-----
+[EVENT]:char:3
+# Section A
+{reverse}13{/reverse}0
+{dim}{reverse}13{/reverse}{/dim}1
+/13█
+-----
+[EVENT]:enter
+# Section A
+{reverse}13{/reverse}0
+{dim}{reverse}13{/reverse}{/dim}1
+:
+-----
+[EVENT]:char:n
+# Section A
+{reverse}13{/reverse}1
+{dim}{reverse}13{/reverse}{/dim}2
+:
+-----
+[EVENT]:char:n
+# Section A
+{reverse}13{/reverse}2
+{dim}{reverse}13{/reverse}{/dim}3
+:
+-----
+[EVENT]:char:N
+# Section A
+{reverse}13{/reverse}1
+{dim}{reverse}13{/reverse}{/dim}2
+:
+-----
+[EVENT]:char:N
+# Section A
+{reverse}13{/reverse}0
+{dim}{reverse}13{/reverse}{/dim}1
+:
+-----
+";
+    assert_eq!(want, screen.out());
+}
+
+#[test]
 fn search_with_section_header_multi_line() {
     let content = "\
 # Section 1

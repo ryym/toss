@@ -89,9 +89,7 @@ impl Page {
     /// with multi-line section headers the push-up mechanism can increase the
     /// overlay as the viewport moves up.
     pub fn jump_to_visible(&mut self, line: usize) -> bool {
-        if !self.viewport.jump_to(&mut self.doc, line) {
-            return false;
-        }
+        let mut changed = self.viewport.jump_to(&mut self.doc, line);
         loop {
             let width = self.viewport.width();
             let top = self.viewport.top_line_index();
@@ -110,10 +108,11 @@ impl Page {
                     if !self.viewport.scroll_up(1, &mut self.doc) {
                         break;
                     }
+                    changed = true;
                 }
             }
         }
-        true
+        changed
     }
 
     /// Number of viewport rows overlaid by the section header.
