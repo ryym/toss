@@ -12,8 +12,8 @@ Screen    Terminal I/O abstraction
 ```
 
 - **Document** loads lines from a file or stdin and owns the parsed data. It knows nothing about the screen.
-- **Viewport** tracks which document lines (and which wrap segments) occupy each content area row. It computes a **ScrollPlan** — a minimal diff describing what changed — but never touches the terminal itself. It knows only about the content area dimensions (excluding status line, sticky header, etc.); screen layout is managed by App.
-- **Screen** is a trait that abstracts terminal operations. Production code uses crossterm; tests use an in-memory mock. Rendering functions live alongside the trait and translate a ScrollPlan into terminal commands.
+- **Viewport** tracks which document lines (and which wrap segments) occupy each content area row. It never touches the terminal itself. It knows only about the content area dimensions (excluding status line, sticky header, etc.); screen layout is managed by App.
+- **Screen** is a trait that abstracts terminal operations. Production code uses crossterm; tests use an in-memory mock. Rendering functions live alongside the trait.
 - **App** ties everything together: it runs the event loop, dispatches input by mode, drives animations, and decides when to render.
 
 ## Frame-Driven Event Loop
@@ -27,16 +27,11 @@ Instead of blocking on input, App runs a game-loop:
 
 This design exists because smooth scroll animation requires rendering intermediate frames between user inputs. A blocking-input loop cannot do this.
 
-## Incremental Rendering via ScrollPlan
+## Full Page Redraw
 
-Full screen redraws cause visible flicker. To avoid this, scrolling works incrementally:
+Every scroll frame redraws all visible rows via `draw_full_page`. Modern terminal emulators buffer output and render it in a single frame when the application flushes, so intermediate states are never visible to the user.
 
-1. Viewport receives "scroll N rows down/up"
-2. It shifts its internal row array and fills in the newly exposed rows
-3. It returns a ScrollPlan: the direction, how many rows shifted, and the new row contents
-4. The rendering function issues a terminal scroll command (which shifts existing content in-place) and only draws the newly revealed rows
-
-Full redraws happen only on resize or mode transitions.
+To prevent tearing in environments where output may be split across multiple `write()` syscalls (e.g. SSH, tmux/screen), each rendering cycle is wrapped with Synchronized Output (DEC Private Mode 2026). Supporting terminals buffer all output between these markers and render atomically; non-supporting terminals simply ignore the sequences.
 
 ## ANSI-Aware Wrapping and Highlighting
 

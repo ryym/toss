@@ -44,7 +44,7 @@ fn prev_row(doc: &mut Document, width: usize, row: ScreenRow) -> Option<ScreenRo
 
 /// Viewport of the content area (excludes header, status line, etc.).
 /// Tracks which document rows are currently visible and provides scroll
-/// operations that return minimal diffs for rendering.
+/// operations.
 pub struct Viewport {
     /// What each screen row currently shows.
     rows: Vec<ScreenRow>,

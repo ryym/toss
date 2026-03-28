@@ -446,16 +446,13 @@ impl<S: Screen> App<S> {
     fn apply_scroll(&mut self, rows: isize) -> io::Result<()> {
         let old_header_height = self.page.resolve_header().len();
 
-        if self.page.plan_scroll(rows) {
+        if self.page.scroll(rows) {
             let new_header_height = self.page.resolve_header().len();
 
             if old_header_height != new_header_height {
-                // Header height changed (section change, push-up, or overlay change):
-                // need viewport resize + full redraw.
                 let (w, h) = self.screen.size()?;
                 self.page.resize(w as usize, h as usize);
             }
-            // Always use full redraw since we no longer use incremental terminal scroll.
             self.needs_full_redraw = true;
         }
         Ok(())

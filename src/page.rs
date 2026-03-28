@@ -69,7 +69,7 @@ impl Page {
 
     /// Scroll by the given number of rows (positive = down, negative = up).
     /// Returns whether any scrolling occurred.
-    pub fn plan_scroll(&mut self, rows: isize) -> bool {
+    pub fn scroll(&mut self, rows: isize) -> bool {
         let old_top = self.viewport.top_line_index();
         let scrolled = if rows > 0 {
             self.viewport.scroll_down(rows as usize, &mut self.doc)
