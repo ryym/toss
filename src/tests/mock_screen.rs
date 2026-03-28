@@ -103,7 +103,11 @@ impl MockScreen {
                 }
             }
             KeyCode::Esc => "[EVENT]:esc\n".to_string(),
-            _ => "[EVENT]:other\n".to_string(),
+            KeyCode::Enter => "[EVENT]:enter\n".to_string(),
+            KeyCode::Backspace => "[EVENT]:backspace\n".to_string(),
+            KeyCode::Left => "[EVENT]:left\n".to_string(),
+            KeyCode::Right => "[EVENT]:right\n".to_string(),
+            _ => format!("[EVENT]:ERROR:unexpected:{}\n", key.code),
         };
         self.entries.push(OutputEntry::Event(text));
     }

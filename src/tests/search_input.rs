@@ -114,7 +114,7 @@ line 2
 line 3
 ?x█
 -----
-[EVENT]:other
+[EVENT]:enter
 line 1
 line 2
 line 3
@@ -165,7 +165,7 @@ line 2
 line 3
 /ab█
 -----
-[EVENT]:other
+[EVENT]:backspace
 line 1
 line 2
 line 3
@@ -238,13 +238,13 @@ line 2
 line 3
 /abc█
 -----
-[EVENT]:other
+[EVENT]:left
 line 1
 line 2
 line 3
 /ab█c
 -----
-[EVENT]:other
+[EVENT]:left
 line 1
 line 2
 line 3
@@ -256,7 +256,7 @@ line 2
 line 3
 /ax█bc
 -----
-[EVENT]:other
+[EVENT]:right
 line 1
 line 2
 line 3

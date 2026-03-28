@@ -96,7 +96,7 @@ line 2
 line 3
 ?top█
 -----
-[EVENT]:other
+[EVENT]:enter
 {reverse}top{/reverse} line
 line 2
 line 3
@@ -326,7 +326,7 @@ line 3
 {dim}{reverse}li{/reverse}{/dim}ne 3
 /li█
 -----
-[EVENT]:other
+[EVENT]:enter
 {reverse}li{/reverse}ne 1
 {dim}{reverse}li{/reverse}{/dim}ne 2
 {dim}{reverse}li{/reverse}{/dim}ne 3
@@ -362,7 +362,7 @@ li{dim}{reverse}ne{/reverse}{/dim} 4
 li{dim}{reverse}ne{/reverse}{/dim} 5
 /ne█
 -----
-[EVENT]:other
+[EVENT]:enter
 li{reverse}ne{/reverse} 3
 li{dim}{reverse}ne{/reverse}{/dim} 4
 li{dim}{reverse}ne{/reverse}{/dim} 5
@@ -510,7 +510,7 @@ line {reverse}9{/reverse}
 line 10
 /9█
 -----
-[EVENT]:other
+[EVENT]:enter
 line 7
 line 8
 line {reverse}9{/reverse}

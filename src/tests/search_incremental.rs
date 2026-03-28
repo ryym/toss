@@ -295,7 +295,7 @@ line 3
 line 4
 /abc█
 -----
-[EVENT]:other
+[EVENT]:backspace
 {reverse}ab{/reverse} here
 {dim}{reverse}ab{/reverse}{/dim}c there
 line 3
