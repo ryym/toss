@@ -3,7 +3,7 @@ use std::num::NonZeroUsize;
 use crate::document::Document;
 
 /// Identifies a single screen row: which document line, which wrap row within it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScreenRow {
     pub line_index: usize,
     pub wrap_index: usize,

@@ -457,16 +457,13 @@ fn draw_dirty_rows_at_positions<S: Screen>(
     search: Option<&SearchState>,
     header_height: usize,
 ) -> io::Result<()> {
-    // Build a set of dirty (line_index, wrap_index) pairs for lookup.
-    let dirty_set: std::collections::HashSet<(usize, usize)> = dirty_rows
-        .iter()
-        .map(|r| (r.line_index, r.wrap_index))
-        .collect();
+    // Build a set of dirty rows for lookup.
+    let dirty_set: std::collections::HashSet<ScreenRow> = dirty_rows.iter().copied().collect();
 
     // Walk visible_rows and find contiguous groups of dirty rows.
     let mut i = 0;
     while i < visible_rows.len() {
-        if !dirty_set.contains(&(visible_rows[i].line_index, visible_rows[i].wrap_index)) {
+        if !dirty_set.contains(&visible_rows[i]) {
             i += 1;
             continue;
         }
@@ -475,7 +472,7 @@ fn draw_dirty_rows_at_positions<S: Screen>(
         let line_idx = visible_rows[i].line_index;
         while i < visible_rows.len()
             && visible_rows[i].line_index == line_idx
-            && dirty_set.contains(&(visible_rows[i].line_index, visible_rows[i].wrap_index))
+            && dirty_set.contains(&visible_rows[i])
         {
             i += 1;
         }
