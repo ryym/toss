@@ -83,6 +83,20 @@ pub fn draw_status_line<S: Screen>(screen: &mut S, page: &mut Page) -> io::Resul
     with_sync(screen, |screen| draw_status_line_inner(screen, page))
 }
 
+/// Resolve and redraw header rows at the top of the screen.
+fn redraw_header<S: Screen>(
+    screen: &mut S,
+    page: &mut Page,
+    width: usize,
+    search: Option<&SearchState>,
+) -> io::Result<()> {
+    let header_rows = page.resolve_header();
+    if !header_rows.is_empty() {
+        draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
+    }
+    Ok(())
+}
+
 fn draw_status_line_inner<S: Screen>(screen: &mut S, page: &mut Page) -> io::Result<()> {
     let header_height = page.resolve_header().len();
     let overlay = page.section_overlay();
@@ -149,10 +163,7 @@ pub fn apply_jump_scroll<S: Screen>(
 
         let visible_height = page.viewport.height().saturating_sub(overlay);
         if visible_height == 0 {
-            let header_rows = page.resolve_header();
-            if !header_rows.is_empty() {
-                draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
-            }
+            redraw_header(screen, page, width, search)?;
             return draw_status_line_inner(screen, page);
         }
 
@@ -208,10 +219,7 @@ pub fn apply_jump_scroll<S: Screen>(
         }
 
         // Redraw header (shifted by terminal scroll).
-        let header_rows = page.resolve_header();
-        if !header_rows.is_empty() {
-            draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
-        }
+        redraw_header(screen, page, width, search)?;
 
         draw_status_line_inner(screen, page)
     })
@@ -396,10 +404,7 @@ pub fn apply_scroll<S: Screen>(
         // Just redraw the header and status line.
         let visible_height = page.viewport.height().saturating_sub(overlay);
         if visible_height == 0 {
-            let header_rows = page.resolve_header();
-            if !header_rows.is_empty() {
-                draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
-            }
+            redraw_header(screen, page, width, search)?;
             return draw_status_line_inner(screen, page);
         }
 
@@ -425,10 +430,7 @@ pub fn apply_scroll<S: Screen>(
         )?;
 
         // Redraw header (scrolled away by terminal scroll).
-        let header_rows = page.resolve_header();
-        if !header_rows.is_empty() {
-            draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
-        }
+        redraw_header(screen, page, width, search)?;
 
         draw_status_line_inner(screen, page)
     })
