@@ -12,7 +12,7 @@ mod highlight;
 use crate::document::Document;
 use crate::page::Page;
 use crate::search::SearchState;
-use crate::viewport::{Direction, ScreenRow, ScrollPlan};
+use crate::viewport::ScreenRow;
 
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {
@@ -26,8 +26,6 @@ pub trait Screen {
     /// width, the terminal wraps it to subsequent rows as soft wraps.
     /// Caller must clear target rows beforehand.
     fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()>;
-
-    fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()>;
 
     fn flush(&mut self) -> io::Result<()>;
 }
@@ -79,19 +77,6 @@ impl Screen for TermScreen {
 
     fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()> {
         queue!(self.stdout, cursor::MoveTo(0, screen_y), Print(text),)
-    }
-
-    fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()> {
-        let n = plan.terminal_scroll.get() as u16;
-        match plan.direction {
-            Direction::Down => {
-                queue!(self.stdout, terminal::ScrollUp(n))?;
-            }
-            Direction::Up => {
-                queue!(self.stdout, terminal::ScrollDown(n))?;
-            }
-        }
-        Ok(())
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -213,98 +198,4 @@ pub fn draw_full_page<S: Screen>(
     draw_status_line_no_flush(screen, page)?;
 
     screen.flush()
-}
-
-/// Apply a scroll plan with soft-wrap-aware rendering.
-///
-/// After terminal scroll, we determine the "dirty range": the new rows plus
-/// any adjacent existing rows that belong to the same logical line. The dirty
-/// range is then redrawn with grouped continuous writes to maintain soft wraps.
-///
-/// When a header is present, a scroll region is used to keep it in place.
-pub fn apply_scroll<S: Screen>(
-    screen: &mut S,
-    plan: &ScrollPlan,
-    page: &mut Page,
-    search: Option<&SearchState>,
-) -> io::Result<()> {
-    apply_scroll_no_flush(screen, plan, page, search)?;
-    screen.flush()
-}
-
-fn apply_scroll_no_flush<S: Screen>(
-    screen: &mut S,
-    plan: &ScrollPlan,
-    page: &mut Page,
-    search: Option<&SearchState>,
-) -> io::Result<()> {
-    let width = page.viewport.width();
-    let overlay = page.section_overlay();
-
-    // When overlay covers the entire viewport, there are no content rows to scroll.
-    // Just redraw the header and status line.
-    let viewport_height = page.viewport.height();
-    let visible_height = viewport_height.saturating_sub(overlay);
-    if visible_height == 0 {
-        let header_rows = page.resolve_header();
-        if !header_rows.is_empty() {
-            draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
-        }
-        return draw_status_line_no_flush(screen, page);
-    }
-
-    let header_height = page.resolve_header().len();
-
-    // Terminal scroll shifts the entire screen (including header and status line).
-    // We redraw the header and status line after scrolling.
-    screen.scroll_terminal(plan)?;
-
-    // Work with visible rows (viewport rows after skipping overlay).
-    let rows = page.viewport.rows();
-    let skip = overlay.min(rows.len());
-    let visible_rows = &rows[skip..];
-    let content_height = visible_rows.len();
-    let n_scroll = plan.terminal_scroll.get();
-
-    let (draw_from, draw_to) = match plan.direction {
-        Direction::Down => {
-            let new_start = content_height.saturating_sub(n_scroll);
-            // Extend backwards: include existing rows of the same line
-            let mut from = new_start;
-            while from > 0
-                && visible_rows[from - 1].line_index == visible_rows[new_start].line_index
-            {
-                from -= 1;
-            }
-            (from, content_height)
-        }
-        Direction::Up => {
-            let new_end = n_scroll.min(content_height);
-            // Extend forwards: include existing rows of the same line
-            let mut to = new_end;
-            while to < content_height
-                && visible_rows[to].line_index == visible_rows[new_end - 1].line_index
-            {
-                to += 1;
-            }
-            (0, to)
-        }
-    };
-
-    draw_rows_grouped(
-        screen,
-        &mut page.doc,
-        &visible_rows[draw_from..draw_to],
-        width,
-        search,
-        header_height + draw_from,
-    )?;
-
-    // Redraw header (scrolled away by terminal scroll).
-    let header_rows = page.resolve_header();
-    if !header_rows.is_empty() {
-        draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
-    }
-
-    draw_status_line_no_flush(screen, page)
 }

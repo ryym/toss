@@ -1,5 +1,3 @@
-use std::num::NonZeroUsize;
-
 use crate::document::Document;
 
 /// Identifies a single screen row: which document line, which wrap row within it.
@@ -7,22 +5,6 @@ use crate::document::Document;
 pub struct ScreenRow {
     pub line_index: usize,
     pub wrap_index: usize,
-}
-
-/// Direction of scrolling.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Direction {
-    Down,
-    Up,
-}
-
-/// Instructions for incremental rendering after a scroll operation.
-/// Only constructed when scrolling actually occurs.
-#[derive(Debug)]
-pub struct ScrollPlan {
-    /// How many rows to scroll the terminal (always non-zero).
-    pub terminal_scroll: NonZeroUsize,
-    pub direction: Direction,
 }
 
 /// Move one row forward in the document. Returns None at the end.
@@ -115,10 +97,10 @@ impl Viewport {
         self.rows.first().map(|r| r.wrap_index).unwrap_or(0)
     }
 
-    /// Scroll down by n screen rows. Returns `None` if no scrolling occurred.
-    pub fn scroll_down(&mut self, n: usize, doc: &mut Document) -> Option<ScrollPlan> {
+    /// Scroll down by n screen rows. Returns whether any scrolling occurred.
+    pub fn scroll_down(&mut self, n: usize, doc: &mut Document) -> bool {
         if n == 0 || self.rows.is_empty() {
-            return None;
+            return false;
         }
 
         let height = self.rows.len();
@@ -126,40 +108,36 @@ impl Viewport {
         // Find new rows to add at the bottom
         let last = self.rows[height - 1];
         let new_rows = Self::advance_forward(doc, self.width, last, n);
-        let actual = NonZeroUsize::new(new_rows.len())?;
+        if new_rows.is_empty() {
+            return false;
+        }
 
-        // Update rows: remove `actual` from top, add new at bottom
-        self.rows.drain(..actual.get());
+        // Update rows: remove scrolled rows from top, add new at bottom
+        self.rows.drain(..new_rows.len());
         self.rows.extend_from_slice(&new_rows);
-
-        Some(ScrollPlan {
-            terminal_scroll: actual,
-            direction: Direction::Down,
-        })
+        true
     }
 
-    /// Scroll up by n screen rows. Returns `None` if no scrolling occurred.
-    pub fn scroll_up(&mut self, n: usize, doc: &mut Document) -> Option<ScrollPlan> {
+    /// Scroll up by n screen rows. Returns whether any scrolling occurred.
+    pub fn scroll_up(&mut self, n: usize, doc: &mut Document) -> bool {
         if n == 0 || self.rows.is_empty() {
-            return None;
+            return false;
         }
 
         let first = self.rows[0];
         let new_rows = Self::advance_backward(doc, self.width, first, n, self.fixed_line_len);
-        let actual = NonZeroUsize::new(new_rows.len())?;
+        if new_rows.is_empty() {
+            return false;
+        }
 
-        // Update rows: remove `actual` from bottom, prepend new at top
+        // Update rows: remove scrolled rows from bottom, prepend new at top
         let height = self.rows.len();
-        self.rows.truncate(height - actual.get());
+        self.rows.truncate(height - new_rows.len());
         // Prepend: new_rows is in top-to-bottom order
         let mut new_vec = new_rows.clone();
         new_vec.append(&mut self.rows);
         self.rows = new_vec;
-
-        Some(ScrollPlan {
-            terminal_scroll: actual,
-            direction: Direction::Up,
-        })
+        true
     }
 
     /// Jump to a specific line, rebuilding the screen from there.
@@ -367,10 +345,7 @@ mod tests {
     fn scroll_down_one() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc", "ddd"]);
         let mut state = Viewport::new(&mut doc, 80, 3, 0);
-        let plan = state.scroll_down(1, &mut doc).unwrap();
-
-        assert_eq!(plan.terminal_scroll.get(), 1);
-        assert_eq!(plan.direction, Direction::Down);
+        assert!(state.scroll_down(1, &mut doc));
         assert_eq!(
             state.rows(),
             &[
@@ -394,7 +369,7 @@ mod tests {
     fn scroll_down_at_end() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc"]);
         let mut state = Viewport::new(&mut doc, 80, 3, 0);
-        assert!(state.scroll_down(1, &mut doc).is_none());
+        assert!(!state.scroll_down(1, &mut doc));
         // State unchanged
         assert_eq!(state.rows()[0].line_index, 0);
     }
@@ -413,8 +388,7 @@ mod tests {
             }
         );
 
-        let plan = state.scroll_down(1, &mut doc).unwrap();
-        assert_eq!(plan.terminal_scroll.get(), 1);
+        assert!(state.scroll_down(1, &mut doc));
         // After: [abcde/0, fgh/1, end/0]
         assert_eq!(
             state.rows(),
@@ -442,9 +416,7 @@ mod tests {
         state.scroll_down(1, &mut doc);
         // Now: [bbb, ccc, ddd]
 
-        let plan = state.scroll_up(1, &mut doc).unwrap();
-        assert_eq!(plan.terminal_scroll.get(), 1);
-        assert_eq!(plan.direction, Direction::Up);
+        assert!(state.scroll_up(1, &mut doc));
         assert_eq!(
             state.rows(),
             &[
@@ -468,7 +440,7 @@ mod tests {
     fn scroll_up_at_top() {
         let mut doc = make_doc(&["aaa", "bbb"]);
         let mut state = Viewport::new(&mut doc, 80, 2, 0);
-        assert!(state.scroll_up(1, &mut doc).is_none());
+        assert!(!state.scroll_up(1, &mut doc));
     }
 
     #[test]
@@ -479,8 +451,7 @@ mod tests {
         state.scroll_down(1, &mut doc);
         // Now: [fgh/1, short/0]
 
-        let plan = state.scroll_up(1, &mut doc).unwrap();
-        assert_eq!(plan.terminal_scroll.get(), 1);
+        assert!(state.scroll_up(1, &mut doc));
         // Back to: [abcde/0, fgh/1]
         assert_eq!(
             state.rows(),
@@ -501,9 +472,7 @@ mod tests {
     fn scroll_down_multiple() {
         let mut doc = make_doc(&["a", "b", "c", "d", "e", "f"]);
         let mut state = Viewport::new(&mut doc, 80, 3, 0);
-        let plan = state.scroll_down(3, &mut doc).unwrap();
-
-        assert_eq!(plan.terminal_scroll.get(), 3);
+        assert!(state.scroll_down(3, &mut doc));
         assert_eq!(
             state.rows(),
             &[
@@ -528,9 +497,7 @@ mod tests {
         let mut doc = make_doc(&["a", "b", "c", "d"]);
         let mut state = Viewport::new(&mut doc, 80, 3, 0);
         // Try to scroll down by 10, but only 1 row available
-        let plan = state.scroll_down(10, &mut doc).unwrap();
-
-        assert_eq!(plan.terminal_scroll.get(), 1);
+        assert!(state.scroll_down(10, &mut doc));
         assert_eq!(
             state.rows(),
             &[

@@ -2,7 +2,7 @@ use crate::document::Document;
 use crate::header::Header;
 use crate::options::Options;
 use crate::status_line::StatusLine;
-use crate::viewport::{ScreenRow, ScrollPlan, Viewport};
+use crate::viewport::{ScreenRow, Viewport};
 
 /// Bundles the document, header, viewport, and status line — everything the
 /// rendering functions need to draw a frame (except search highlight).
@@ -68,20 +68,20 @@ impl Page {
     }
 
     /// Scroll by the given number of rows (positive = down, negative = up).
-    /// Returns `None` if no scrolling occurred (e.g. already at boundary).
-    pub fn plan_scroll(&mut self, rows: isize) -> Option<ScrollPlan> {
+    /// Returns whether any scrolling occurred.
+    pub fn plan_scroll(&mut self, rows: isize) -> bool {
         let old_top = self.viewport.top_line_index();
-        let plan = if rows > 0 {
+        let scrolled = if rows > 0 {
             self.viewport.scroll_down(rows as usize, &mut self.doc)
         } else {
             self.viewport.scroll_up((-rows) as usize, &mut self.doc)
         };
-        if plan.is_some() {
+        if scrolled {
             let new_top = self.viewport.top_line_index();
             self.header
                 .update_section_on_scroll(&mut self.doc, old_top, new_top, rows > 0);
         }
-        plan
+        scrolled
     }
 
     /// Jump to a line, ensuring it is visible below any sticky section header.
@@ -107,7 +107,7 @@ impl Page {
             match target_row {
                 Some(row) if row >= overlay => break,
                 _ => {
-                    if self.viewport.scroll_up(1, &mut self.doc).is_none() {
+                    if !self.viewport.scroll_up(1, &mut self.doc) {
                         break;
                     }
                 }
