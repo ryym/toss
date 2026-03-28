@@ -417,26 +417,26 @@ impl<S: Screen> App<S> {
         let old_current_line = search.current.map(|c| c.line);
 
         // Try to move to the next match within the same line first.
-        if let Some(current) = search.current {
-            if let Some(next_mi) = search::find_next_match_in_line(
+        if let Some(current) = search.current
+            && let Some(next_mi) = search::find_next_match_in_line(
                 &mut self.page.doc,
                 &search.query,
                 current,
                 direction,
-            ) {
-                log::debug!("Next match on same line: index={next_mi}");
-                if let Some(ref mut search) = self.search {
-                    search.current = Some(MatchPosition {
-                        line: current.line,
-                        match_index: next_mi,
-                    });
-                }
-                // Same line, just current match index changed — delta redraw.
-                self.redraw = RedrawState::SearchHighlight {
-                    old_match_lines: vec![current.line],
-                };
-                return;
+            )
+        {
+            log::debug!("Next match on same line: index={next_mi}");
+            if let Some(ref mut search) = self.search {
+                search.current = Some(MatchPosition {
+                    line: current.line,
+                    match_index: next_mi,
+                });
             }
+            // Same line, just current match index changed — delta redraw.
+            self.redraw = RedrawState::SearchHighlight {
+                old_match_lines: vec![current.line],
+            };
+            return;
         }
 
         // No more matches on the current line; search the next line.
