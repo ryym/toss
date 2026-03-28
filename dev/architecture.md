@@ -27,11 +27,18 @@ Instead of blocking on input, App runs a game-loop:
 
 This design exists because smooth scroll animation requires rendering intermediate frames between user inputs. A blocking-input loop cannot do this.
 
-## Full Page Redraw
+## Incremental Scroll Rendering
 
-Every scroll frame redraws all visible rows via `draw_full_page`. Modern terminal emulators buffer output and render it in a single frame when the application flushes, so intermediate states are never visible to the user.
+To minimize flicker during scrolling (especially with colored content), scrolling uses incremental rendering:
 
-To prevent tearing in environments where output may be split across multiple `write()` syscalls (e.g. SSH, tmux/screen), each rendering cycle is wrapped with Synchronized Output (DEC Private Mode 2026). Supporting terminals buffer all output between these markers and render atomically; non-supporting terminals simply ignore the sequences.
+1. Viewport receives "scroll N rows down/up"
+2. It shifts its internal row array and fills in the newly exposed rows
+3. It returns a ScrollPlan: the direction and how many rows shifted
+4. The rendering function issues a terminal scroll command (which shifts existing content in-place) and only redraws the newly revealed rows plus the header
+
+Full redraws happen only on resize, mode transitions, or when the header height changes.
+
+To prevent tearing, each rendering cycle (both incremental and full) is wrapped with Synchronized Output (DEC Private Mode 2026). Supporting terminals buffer all output between these markers and render atomically; non-supporting terminals simply ignore the sequences.
 
 ## ANSI-Aware Wrapping and Highlighting
 
