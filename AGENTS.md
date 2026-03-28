@@ -13,12 +13,12 @@ Instead, Toss will have these modern features:
 ## Status
 
 The development is still in an early stage.
-See `dev/docs/architecture.md` for the overall design.
+See `dev/architecture.md` for the overall design.
 
 ## Development
 
-- Follow `dev/docs/conventions/rust.md` when writing Rust code.
-- Follow `dev/docs/conventions/git.md` when using Git.
+- Follow `dev/conventions/rust.md` when writing Rust code.
+- Follow `dev/conventions/git.md` when using Git.
 
 Whenever you develop, commit changes as you progress.
 When you finish work, all your changes must be committed.

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Validate commit message format based on dev/docs/conventions/git.md.
+# Validate commit message format based on dev/conventions/git.md.
 # Also allows Git auto-messages (Merge, Revert, Reapply) and
 # temporary commit markers like fixup!, squash!, etc.
 
