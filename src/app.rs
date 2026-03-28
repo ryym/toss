@@ -516,7 +516,7 @@ impl<S: Screen> App<S> {
             }
             last_line = Some(row.line_index);
             if let Some(line) = self.page.doc.line(row.line_index)
-                && !line.find_matches(&query).is_empty()
+                && line.has_match(&query)
             {
                 lines.push(row.line_index);
             }
@@ -530,7 +530,7 @@ impl<S: Screen> App<S> {
             }
             last_line = Some(row.line_index);
             if let Some(line) = self.page.doc.line(row.line_index)
-                && !line.find_matches(&query).is_empty()
+                && line.has_match(&query)
             {
                 lines.push(row.line_index);
             }

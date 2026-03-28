@@ -145,6 +145,11 @@ impl Line {
         start..ends[to - 1]
     }
 
+    /// Check if the plain text contains any match for the given regex.
+    pub fn has_match(&self, query: &Regex) -> bool {
+        query.is_match(&self.plain)
+    }
+
     /// Find all matches of a regex in the plain text.
     /// Returns a list of (start, end) byte ranges in the plain text.
     pub fn find_matches(&self, query: &Regex) -> Vec<(usize, usize)> {

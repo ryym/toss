@@ -270,7 +270,7 @@ fn filter_dirty_rows(
             || search
                 .and_then(|s| {
                     doc.line(row.line_index)
-                        .map(|line| !line.find_matches(&s.query).is_empty())
+                        .map(|line| line.has_match(&s.query))
                 })
                 .unwrap_or(false);
 
