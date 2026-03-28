@@ -145,16 +145,15 @@ impl Viewport {
         }
 
         let first = self.rows[0];
-        let new_rows = Self::advance_backward(doc, self.width, first, n, self.fixed_line_len);
+        let mut new_rows = Self::advance_backward(doc, self.width, first, n, self.fixed_line_len);
         let actual = NonZeroUsize::new(new_rows.len())?;
 
         // Update rows: remove `actual` from bottom, prepend new at top
         let height = self.rows.len();
         self.rows.truncate(height - actual.get());
         // Prepend: new_rows is in top-to-bottom order
-        let mut new_vec = new_rows.clone();
-        new_vec.append(&mut self.rows);
-        self.rows = new_vec;
+        new_rows.append(&mut self.rows);
+        self.rows = new_rows;
 
         Some(ScrollPlan {
             terminal_scroll: actual,
