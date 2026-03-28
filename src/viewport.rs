@@ -70,24 +70,23 @@ pub struct Viewport {
     width: usize,
     /// Height of the content area.
     height: usize,
-    /// Minimum line index the viewport can scroll to (lines below this
-    /// are reserved for the header).
-    min_top_line: usize,
+    /// Number of fixed header lines. The viewport cannot scroll above this line.
+    fixed_line_len: usize,
 }
 
 impl Viewport {
     /// Build initial viewport from the top of the document.
     /// `width` and `height` are the content area dimensions
     /// (excluding status line, header, etc.).
-    /// `min_top_line` is the first line the viewport may show (lines
-    /// before it are reserved for the header).
-    pub fn new(doc: &mut Document, width: usize, height: usize, min_top_line: usize) -> Self {
-        let rows = Self::build_rows_forward(doc, width, min_top_line, 0, height);
+    /// `fixed_line_len` is the number of fixed header lines. The viewport
+    /// starts after these lines.
+    pub fn new(doc: &mut Document, width: usize, height: usize, fixed_line_len: usize) -> Self {
+        let rows = Self::build_rows_forward(doc, width, fixed_line_len, 0, height);
         Self {
             rows,
             width,
             height,
-            min_top_line,
+            fixed_line_len,
         }
     }
 
@@ -146,7 +145,7 @@ impl Viewport {
         }
 
         let first = self.rows[0];
-        let new_rows = Self::advance_backward(doc, self.width, first, n, self.min_top_line);
+        let new_rows = Self::advance_backward(doc, self.width, first, n, self.fixed_line_len);
         let actual = NonZeroUsize::new(new_rows.len())?;
 
         // Update rows: remove `actual` from bottom, prepend new at top
@@ -166,13 +165,13 @@ impl Viewport {
     /// Jump to a specific line, rebuilding the screen from there.
     /// Returns None if the position hasn't changed.
     pub fn jump_to(&mut self, doc: &mut Document, line_index: usize) -> bool {
-        let line_index = line_index.max(self.min_top_line);
+        let line_index = line_index.max(self.fixed_line_len);
         let height = self.rows.len();
         let mut new_rows = Self::build_rows_forward(doc, self.width, line_index, 0, height);
         if new_rows.len() < height {
             // Near end of document: back-fill from the end to keep the screen full.
             new_rows =
-                Self::build_rows_backward_from_end(doc, self.width, height, self.min_top_line);
+                Self::build_rows_backward_from_end(doc, self.width, height, self.fixed_line_len);
         }
         if new_rows == self.rows {
             return false;
@@ -185,7 +184,7 @@ impl Viewport {
     pub fn jump_to_end(&mut self, doc: &mut Document) -> bool {
         let height = self.rows.len();
         let new_rows =
-            Self::build_rows_backward_from_end(doc, self.width, height, self.min_top_line);
+            Self::build_rows_backward_from_end(doc, self.width, height, self.fixed_line_len);
         if new_rows == self.rows {
             return false;
         }
@@ -197,10 +196,10 @@ impl Viewport {
     /// `width` and `height` are the content area dimensions.
     pub fn resize(&mut self, doc: &mut Document, width: usize, height: usize) {
         let top = self.rows.first().copied().unwrap_or(ScreenRow {
-            line_index: self.min_top_line,
+            line_index: self.fixed_line_len,
             wrap_index: 0,
         });
-        let top_line = top.line_index.max(self.min_top_line);
+        let top_line = top.line_index.max(self.fixed_line_len);
         self.width = width;
         self.height = height;
         self.rows = Self::build_rows_forward(doc, width, top_line, top.wrap_index, height);
@@ -237,10 +236,10 @@ impl Viewport {
         doc: &mut Document,
         width: usize,
         count: usize,
-        min_top_line: usize,
+        fixed_line_len: usize,
     ) -> Vec<ScreenRow> {
         let line_count = doc.line_count();
-        if line_count == 0 || line_count <= min_top_line {
+        if line_count == 0 || line_count <= fixed_line_len {
             return vec![];
         }
         let last_line = doc.line(line_count - 1).unwrap();
@@ -253,7 +252,7 @@ impl Viewport {
             let Some(prev) = prev_row(doc, width, current) else {
                 break;
             };
-            if prev.line_index < min_top_line {
+            if prev.line_index < fixed_line_len {
                 break;
             }
             rows.push(prev);
@@ -289,7 +288,7 @@ impl Viewport {
         width: usize,
         before: ScreenRow,
         n: usize,
-        min_top_line: usize,
+        fixed_line_len: usize,
     ) -> Vec<ScreenRow> {
         let mut rows = Vec::with_capacity(n);
         let mut current = before;
@@ -297,7 +296,7 @@ impl Viewport {
             let Some(prev) = prev_row(doc, width, current) else {
                 break;
             };
-            if prev.line_index < min_top_line {
+            if prev.line_index < fixed_line_len {
                 break;
             }
             rows.push(prev);

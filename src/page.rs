@@ -19,7 +19,7 @@ impl Page {
         let header = Header::new(options.header, options.section.as_ref());
         let header_height = header.resolve_fixed_height(&mut doc, width);
         let content_height = height.saturating_sub(1).saturating_sub(header_height);
-        let viewport = Viewport::new(&mut doc, width, content_height, header.min_top_line());
+        let viewport = Viewport::new(&mut doc, width, content_height, header.fixed_line_len());
         let status = StatusLine::new();
         Self {
             doc,

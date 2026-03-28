@@ -30,9 +30,8 @@ impl Header {
         }
     }
 
-    /// The minimum line index that the viewport may start from.
-    /// Lines below this are reserved for the fixed header display.
-    pub fn min_top_line(&self) -> usize {
+    /// The number of fixed header lines.
+    pub fn fixed_line_len(&self) -> usize {
         self.fixed_lines
     }
 
