@@ -8,6 +8,7 @@ mod line_editor;
 mod logger;
 mod options;
 mod page;
+mod render;
 mod screen;
 mod scroll;
 mod search;

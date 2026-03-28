@@ -5,7 +5,8 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::line_editor::LineEditor;
 use crate::page::Page;
-use crate::screen::{self, Screen};
+use crate::render;
+use crate::screen::Screen;
 use crate::scroll::ScrollPhysics;
 use crate::search::{self, MatchPosition, SearchDirection, SearchState};
 use crate::viewport::{Direction, ScreenRow};
@@ -87,7 +88,7 @@ impl<S: Screen> App<S> {
         let (_, h) = self.screen.size()?;
         self.page.sync_section_for_redraw(h as usize);
         let search = active_search(&self.mode, &self.search);
-        screen::draw_full_page(&mut self.screen, &mut self.page, search)?;
+        render::draw_full_page(&mut self.screen, &mut self.page, search)?;
         self.redraw = RedrawState::None;
 
         loop {
@@ -124,11 +125,11 @@ impl<S: Screen> App<S> {
                     let (_, h) = self.screen.size()?;
                     self.page.sync_section_for_redraw(h as usize);
                     let search = active_search(&self.mode, &self.search);
-                    screen::draw_full_page(&mut self.screen, &mut self.page, search)?;
+                    render::draw_full_page(&mut self.screen, &mut self.page, search)?;
                 }
                 RedrawState::SearchHighlight { old_match_lines } => {
                     let search = active_search(&self.mode, &self.search);
-                    screen::draw_search_highlight_update(
+                    render::draw_search_highlight_update(
                         &mut self.screen,
                         &mut self.page,
                         search,
@@ -141,7 +142,7 @@ impl<S: Screen> App<S> {
                     highlight_dirty_lines,
                 } => {
                     let search = active_search(&self.mode, &self.search);
-                    screen::apply_jump_scroll(
+                    render::apply_jump_scroll(
                         &mut self.screen,
                         &mut self.page,
                         scroll_rows,
@@ -152,7 +153,7 @@ impl<S: Screen> App<S> {
                 }
                 RedrawState::None => {
                     if self.page.status.is_dirty() {
-                        screen::draw_status_line(&mut self.screen, &mut self.page)?;
+                        render::draw_status_line(&mut self.screen, &mut self.page)?;
                     }
                 }
             }
@@ -582,7 +583,7 @@ impl<S: Screen> App<S> {
                 self.redraw = RedrawState::Full;
             } else {
                 let search = active_search(&self.mode, &self.search);
-                screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
+                render::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
             }
         }
         Ok(())
