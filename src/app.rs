@@ -12,6 +12,19 @@ use crate::search::{self, MatchPosition, SearchDirection, SearchState};
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
 
+/// What kind of redraw is needed for the next frame.
+enum RedrawState {
+    /// No redraw needed.
+    None,
+    /// Full page redraw (resize, scroll jump, cancel search, etc.).
+    Full,
+    /// Only search highlight changes — redraw affected rows only.
+    SearchHighlight {
+        /// Line indices that had highlights before the change.
+        old_match_lines: Vec<usize>,
+    },
+}
+
 /// Current input mode of the application.
 enum AppMode {
     View,
@@ -32,7 +45,7 @@ pub struct App<S> {
     search: Option<SearchState>,
     scroll_physics: ScrollPhysics,
     instant_scroll: bool,
-    needs_full_redraw: bool,
+    redraw: RedrawState,
 }
 
 impl<S: Screen> App<S> {
@@ -47,7 +60,7 @@ impl<S: Screen> App<S> {
             search: None,
             scroll_physics,
             instant_scroll: false,
-            needs_full_redraw: true,
+            redraw: RedrawState::Full,
         })
     }
 
@@ -67,7 +80,7 @@ impl<S: Screen> App<S> {
         self.page.sync_section_for_redraw(h as usize);
         let search = active_search(&self.mode, &self.search);
         screen::draw_full_page(&mut self.screen, &mut self.page, search)?;
-        self.needs_full_redraw = false;
+        self.redraw = RedrawState::None;
 
         loop {
             // 1. Poll input
@@ -88,7 +101,7 @@ impl<S: Screen> App<S> {
                         log::debug!("Resize: {w}x{h}");
                         self.page.resize(w as usize, h as usize);
                         self.scroll_physics.configure(h as usize);
-                        self.needs_full_redraw = true;
+                        self.redraw = RedrawState::Full;
                     }
                     _ => {}
                 }
@@ -98,14 +111,27 @@ impl<S: Screen> App<S> {
             self.update_animation()?;
 
             // 3. Render if needed
-            if self.needs_full_redraw {
-                let (_, h) = self.screen.size()?;
-                self.page.sync_section_for_redraw(h as usize);
-                let search = active_search(&self.mode, &self.search);
-                screen::draw_full_page(&mut self.screen, &mut self.page, search)?;
-                self.needs_full_redraw = false;
-            } else if self.page.status.is_dirty() {
-                screen::draw_status_line(&mut self.screen, &mut self.page)?;
+            match std::mem::replace(&mut self.redraw, RedrawState::None) {
+                RedrawState::Full => {
+                    let (_, h) = self.screen.size()?;
+                    self.page.sync_section_for_redraw(h as usize);
+                    let search = active_search(&self.mode, &self.search);
+                    screen::draw_full_page(&mut self.screen, &mut self.page, search)?;
+                }
+                RedrawState::SearchHighlight { old_match_lines } => {
+                    let search = active_search(&self.mode, &self.search);
+                    screen::draw_search_highlight_update(
+                        &mut self.screen,
+                        &mut self.page,
+                        search,
+                        &old_match_lines,
+                    )?;
+                }
+                RedrawState::None => {
+                    if self.page.status.is_dirty() {
+                        screen::draw_status_line(&mut self.screen, &mut self.page)?;
+                    }
+                }
             }
         }
     }
@@ -149,13 +175,13 @@ impl<S: Screen> App<S> {
             KeyCode::Char('g') => {
                 self.scroll_physics.stop();
                 if self.page.viewport.jump_to(&mut self.page.doc, 0) {
-                    self.needs_full_redraw = true;
+                    self.redraw = RedrawState::Full;
                 }
             }
             KeyCode::Char('G') => {
                 self.scroll_physics.stop();
                 if self.page.viewport.jump_to_end(&mut self.page.doc) {
-                    self.needs_full_redraw = true;
+                    self.redraw = RedrawState::Full;
                 }
             }
             KeyCode::Char('/') => {
@@ -204,7 +230,7 @@ impl<S: Screen> App<S> {
         if let AppMode::Search { saved_top_line, .. } = &self.mode {
             let top = *saved_top_line;
             self.page.viewport.jump_to(&mut self.page.doc, top);
-            self.needs_full_redraw = true;
+            self.redraw = RedrawState::Full;
         }
         self.exit_search_mode();
     }
@@ -221,6 +247,9 @@ impl<S: Screen> App<S> {
             _ => return,
         };
 
+        // Collect lines with current highlights before making changes.
+        let old_match_lines = self.collect_visible_match_lines();
+
         if input.is_empty() {
             // No query: clear preview and restore position.
             if let AppMode::Search { preview, .. } = &mut self.mode {
@@ -229,7 +258,7 @@ impl<S: Screen> App<S> {
             self.page
                 .viewport
                 .jump_to(&mut self.page.doc, saved_top_line);
-            self.needs_full_redraw = true;
+            self.redraw = RedrawState::Full;
             return;
         }
 
@@ -237,9 +266,11 @@ impl<S: Screen> App<S> {
         let matched = search::find_next_match(&mut self.page.doc, &re, saved_top_line, direction);
         log::debug!("Search preview: query={input:?}, result={matched:?}");
 
-        if let Some(ref pos) = matched {
-            self.page.jump_to_visible(pos.line);
-        }
+        let scrolled = if let Some(ref pos) = matched {
+            self.page.jump_to_visible(pos.line)
+        } else {
+            false
+        };
 
         if let AppMode::Search { preview, .. } = &mut self.mode {
             *preview = Some(SearchState {
@@ -248,7 +279,12 @@ impl<S: Screen> App<S> {
                 current: matched,
             });
         }
-        self.needs_full_redraw = true;
+
+        if scrolled {
+            self.redraw = RedrawState::Full;
+        } else {
+            self.redraw = RedrawState::SearchHighlight { old_match_lines };
+        }
     }
 
     fn handle_key_search(&mut self, key: KeyEvent) {
@@ -354,6 +390,8 @@ impl<S: Screen> App<S> {
             search.current
         );
 
+        let old_current_line = search.current.map(|c| c.line);
+
         // Try to move to the next match within the same line first.
         if let Some(current) = search.current {
             let query = search.query.clone();
@@ -367,7 +405,10 @@ impl<S: Screen> App<S> {
                         match_index: next_mi,
                     });
                 }
-                self.needs_full_redraw = true;
+                // Same line, just current match index changed — delta redraw.
+                self.redraw = RedrawState::SearchHighlight {
+                    old_match_lines: vec![current.line],
+                };
                 return;
             }
         }
@@ -396,12 +437,62 @@ impl<S: Screen> App<S> {
         let matched = search::find_next_match(&mut self.page.doc, &search.query, from, direction);
         log::debug!("Next match from line {from}: {matched:?}");
         if let Some(ref pos) = matched {
-            self.page.jump_to_visible(pos.line);
-            self.needs_full_redraw = true;
+            let scrolled = self.page.jump_to_visible(pos.line);
+            if scrolled {
+                self.redraw = RedrawState::Full;
+            } else {
+                // Only the old and new current match lines need redraw.
+                let mut dirty = Vec::new();
+                if let Some(old_line) = old_current_line {
+                    dirty.push(old_line);
+                }
+                dirty.push(pos.line);
+                self.redraw = RedrawState::SearchHighlight {
+                    old_match_lines: dirty,
+                };
+            }
         }
         if let Some(ref mut search) = self.search {
             search.current = matched;
         }
+    }
+
+    /// Collect line indices of visible rows that have search matches.
+    fn collect_visible_match_lines(&mut self) -> Vec<usize> {
+        let search = active_search(&self.mode, &self.search);
+        let Some(search) = search else {
+            return Vec::new();
+        };
+        let query = search.query.clone();
+        let rows = self.page.viewport.rows();
+        let mut lines = Vec::new();
+        let mut last_line = None;
+        for row in rows {
+            if last_line == Some(row.line_index) {
+                continue;
+            }
+            last_line = Some(row.line_index);
+            if let Some(line) = self.page.doc.line(row.line_index)
+                && !line.find_matches(&query).is_empty()
+            {
+                lines.push(row.line_index);
+            }
+        }
+        // Also include header rows.
+        let header_rows = self.page.resolve_header();
+        let mut last_line = None;
+        for row in &header_rows {
+            if last_line == Some(row.line_index) {
+                continue;
+            }
+            last_line = Some(row.line_index);
+            if let Some(line) = self.page.doc.line(row.line_index)
+                && !line.find_matches(&query).is_empty()
+            {
+                lines.push(row.line_index);
+            }
+        }
+        lines
     }
 
     fn scroll_immediate(&mut self, rows: isize) -> io::Result<()> {
@@ -446,7 +537,7 @@ impl<S: Screen> App<S> {
                 // need viewport resize + full redraw.
                 let (w, h) = self.screen.size()?;
                 self.page.resize(w as usize, h as usize);
-                self.needs_full_redraw = true;
+                self.redraw = RedrawState::Full;
             } else {
                 let search = active_search(&self.mode, &self.search);
                 screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;

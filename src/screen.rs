@@ -240,6 +240,141 @@ pub fn draw_full_page<S: Screen>(
     screen.flush()
 }
 
+/// Redraw only the rows whose search highlights have changed.
+///
+/// `old_match_lines` contains line indices that had highlights before the change.
+/// This function redraws rows belonging to those lines (to clear old highlights)
+/// plus rows belonging to lines that match the current search (to draw new highlights).
+pub fn draw_search_highlight_update<S: Screen>(
+    screen: &mut S,
+    page: &mut Page,
+    search: Option<&SearchState>,
+    old_match_lines: &[usize],
+) -> io::Result<()> {
+    screen.begin_sync()?;
+
+    let width = page.viewport.width();
+    let header_rows = page.resolve_header();
+    let header_height = header_rows.len();
+    let overlay = page.section_overlay();
+
+    // Redraw header rows that need highlight updates.
+    if header_height > 0 {
+        let dirty_header = filter_dirty_rows(&header_rows, &mut page.doc, search, old_match_lines);
+        if !dirty_header.is_empty() {
+            draw_rows_grouped(screen, &mut page.doc, &dirty_header, width, search, 0)?;
+        }
+    }
+
+    // Redraw viewport rows that need highlight updates.
+    let rows = page.viewport.rows();
+    let skip = overlay.min(rows.len());
+    let visible_rows = &rows[skip..];
+    let dirty_rows = filter_dirty_rows(visible_rows, &mut page.doc, search, old_match_lines);
+    if !dirty_rows.is_empty() {
+        // We need to draw each dirty group at its correct screen position.
+        // Since dirty_rows may be non-contiguous, draw them group by group.
+        draw_dirty_rows_at_positions(
+            screen,
+            &mut page.doc,
+            visible_rows,
+            &dirty_rows,
+            width,
+            search,
+            header_height,
+        )?;
+    }
+
+    draw_status_line_no_flush(screen, page)?;
+
+    screen.end_sync()?;
+    screen.flush()
+}
+
+/// Filter rows to only those belonging to lines that need highlight redraw.
+fn filter_dirty_rows(
+    rows: &[ScreenRow],
+    doc: &mut Document,
+    search: Option<&SearchState>,
+    old_match_lines: &[usize],
+) -> Vec<ScreenRow> {
+    let mut dirty = Vec::new();
+    let mut last_line = None;
+    let mut last_dirty = false;
+
+    for row in rows {
+        if last_line == Some(row.line_index) {
+            // Same logical line as previous row: same dirty status.
+            if last_dirty {
+                dirty.push(*row);
+            }
+            continue;
+        }
+        last_line = Some(row.line_index);
+
+        let is_dirty = old_match_lines.contains(&row.line_index)
+            || search
+                .and_then(|s| {
+                    doc.line(row.line_index)
+                        .map(|line| !line.find_matches(&s.query).is_empty())
+                })
+                .unwrap_or(false);
+
+        last_dirty = is_dirty;
+        if is_dirty {
+            dirty.push(*row);
+        }
+    }
+    dirty
+}
+
+/// Draw dirty rows at their correct screen positions within visible_rows.
+/// Each contiguous group of dirty rows from the same logical line is drawn
+/// as a single write via draw_rows_grouped.
+fn draw_dirty_rows_at_positions<S: Screen>(
+    screen: &mut S,
+    doc: &mut Document,
+    visible_rows: &[ScreenRow],
+    dirty_rows: &[ScreenRow],
+    width: usize,
+    search: Option<&SearchState>,
+    header_height: usize,
+) -> io::Result<()> {
+    // Build a set of dirty (line_index, wrap_index) pairs for lookup.
+    let dirty_set: std::collections::HashSet<(usize, usize)> = dirty_rows
+        .iter()
+        .map(|r| (r.line_index, r.wrap_index))
+        .collect();
+
+    // Walk visible_rows and find contiguous groups of dirty rows.
+    let mut i = 0;
+    while i < visible_rows.len() {
+        if !dirty_set.contains(&(visible_rows[i].line_index, visible_rows[i].wrap_index)) {
+            i += 1;
+            continue;
+        }
+        // Found a dirty row. Collect the contiguous group from the same line.
+        let group_start = i;
+        let line_idx = visible_rows[i].line_index;
+        while i < visible_rows.len()
+            && visible_rows[i].line_index == line_idx
+            && dirty_set.contains(&(visible_rows[i].line_index, visible_rows[i].wrap_index))
+        {
+            i += 1;
+        }
+        let group = &visible_rows[group_start..i];
+        draw_rows_grouped(
+            screen,
+            doc,
+            group,
+            width,
+            search,
+            header_height + group_start,
+        )?;
+    }
+    Ok(())
+}
+
 /// Apply a scroll plan with incremental rendering.
 ///
 /// After terminal scroll, we determine the "dirty range": the new rows plus
