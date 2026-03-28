@@ -157,48 +157,27 @@ pub fn apply_jump_scroll<S: Screen>(
     search: Option<&SearchState>,
     highlight_dirty_lines: &[usize],
 ) -> io::Result<()> {
+    let plan = ScrollPlan {
+        terminal_scroll: NonZeroUsize::new(scroll_rows).unwrap(),
+        direction,
+    };
     with_sync(screen, |screen| {
         let width = page.viewport.width();
-        let overlay = page.section_overlay();
-
-        let visible_height = page.viewport.height().saturating_sub(overlay);
-        if visible_height == 0 {
-            redraw_header(screen, page, width, search)?;
-            return draw_status_line_inner(screen, page);
-        }
-
-        let header_height = page.resolve_header().len();
-
-        // Issue terminal scroll to shift existing content in-place.
-        let plan = ScrollPlan {
-            terminal_scroll: NonZeroUsize::new(scroll_rows).unwrap(),
-            direction,
-        };
-        screen.scroll_terminal(&plan)?;
-
-        let rows = page.viewport.rows();
-        let visible_rows = &rows[overlay.min(rows.len())..];
-        let content_height = visible_rows.len();
-
-        let (scroll_draw_from, scroll_draw_to) =
-            scroll_dirty_range(visible_rows, scroll_rows, direction);
-
-        // Draw the newly scrolled-in rows.
-        draw_rows_grouped(
-            screen,
-            &mut page.doc,
-            &visible_rows[scroll_draw_from..scroll_draw_to],
-            width,
-            search,
-            header_height + scroll_draw_from,
-        )?;
+        apply_scroll_inner(screen, &plan, page, search)?;
 
         // In the overlap area (rows not scrolled in), redraw any rows whose
         // highlight state changed (e.g., old/new current match line for n/N).
         if !highlight_dirty_lines.is_empty() {
+            let overlay = page.section_overlay();
+            let header_height = page.resolve_header().len();
+            let rows = page.viewport.rows();
+            let visible_rows = &rows[overlay.min(rows.len())..];
+            let content_height = visible_rows.len();
+
+            let (dirty_from, dirty_to) = scroll_dirty_range(visible_rows, scroll_rows, direction);
             let overlap_range = match direction {
-                Direction::Down => 0..scroll_draw_from,
-                Direction::Up => scroll_draw_to..content_height,
+                Direction::Down => 0..dirty_from,
+                Direction::Up => dirty_to..content_height,
             };
             let dirty_groups: Vec<ScreenRow> = visible_rows[overlap_range]
                 .iter()
@@ -217,11 +196,7 @@ pub fn apply_jump_scroll<S: Screen>(
                 )?;
             }
         }
-
-        // Redraw header (shifted by terminal scroll).
-        redraw_header(screen, page, width, search)?;
-
-        draw_status_line_inner(screen, page)
+        Ok(())
     })
 }
 
@@ -397,41 +372,55 @@ pub fn apply_scroll<S: Screen>(
     search: Option<&SearchState>,
 ) -> io::Result<()> {
     with_sync(screen, |screen| {
-        let width = page.viewport.width();
-        let overlay = page.section_overlay();
-
-        // When overlay covers the entire viewport, there are no content rows to scroll.
-        // Just redraw the header and status line.
-        let visible_height = page.viewport.height().saturating_sub(overlay);
-        if visible_height == 0 {
-            redraw_header(screen, page, width, search)?;
-            return draw_status_line_inner(screen, page);
-        }
-
-        let header_height = page.resolve_header().len();
-
-        // Terminal scroll shifts the entire screen (including header and status line).
-        // We redraw the header and status line after scrolling.
-        screen.scroll_terminal(plan)?;
-
-        let rows = page.viewport.rows();
-        let visible_rows = &rows[overlay.min(rows.len())..];
-        let n_scroll = plan.terminal_scroll.get();
-
-        let (draw_from, draw_to) = scroll_dirty_range(visible_rows, n_scroll, plan.direction);
-
-        draw_rows_grouped(
-            screen,
-            &mut page.doc,
-            &visible_rows[draw_from..draw_to],
-            width,
-            search,
-            header_height + draw_from,
-        )?;
-
-        // Redraw header (scrolled away by terminal scroll).
-        redraw_header(screen, page, width, search)?;
-
-        draw_status_line_inner(screen, page)
+        apply_scroll_inner(screen, plan, page, search)
     })
+}
+
+/// Core scroll rendering shared by apply_scroll and apply_jump_scroll.
+///
+/// Issues a terminal scroll command, redraws the newly exposed rows plus
+/// any adjacent rows from the same logical line, then redraws the header
+/// and status line.
+fn apply_scroll_inner<S: Screen>(
+    screen: &mut S,
+    plan: &ScrollPlan,
+    page: &mut Page,
+    search: Option<&SearchState>,
+) -> io::Result<()> {
+    let width = page.viewport.width();
+    let overlay = page.section_overlay();
+
+    // When overlay covers the entire viewport, there are no content rows to scroll.
+    // Just redraw the header and status line.
+    let visible_height = page.viewport.height().saturating_sub(overlay);
+    if visible_height == 0 {
+        redraw_header(screen, page, width, search)?;
+        return draw_status_line_inner(screen, page);
+    }
+
+    let header_height = page.resolve_header().len();
+
+    // Terminal scroll shifts the entire screen (including header and status line).
+    // We redraw the header and status line after scrolling.
+    screen.scroll_terminal(plan)?;
+
+    let rows = page.viewport.rows();
+    let visible_rows = &rows[overlay.min(rows.len())..];
+    let n_scroll = plan.terminal_scroll.get();
+
+    let (draw_from, draw_to) = scroll_dirty_range(visible_rows, n_scroll, plan.direction);
+
+    draw_rows_grouped(
+        screen,
+        &mut page.doc,
+        &visible_rows[draw_from..draw_to],
+        width,
+        search,
+        header_height + draw_from,
+    )?;
+
+    // Redraw header (scrolled away by terminal scroll).
+    redraw_header(screen, page, width, search)?;
+
+    draw_status_line_inner(screen, page)
 }
