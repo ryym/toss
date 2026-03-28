@@ -396,3 +396,106 @@ line 6
 ";
     assert_eq!(want, screen.out());
 }
+
+#[test]
+fn search_with_section_header_containing_match() {
+    let content = "\
+# Section A1
+AX
+line 1
+line 2
+line 3
+AY
+line 4
+# Section A2
+line 5
+AZ
+line 6
+line 7
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 4,
+        content,
+        options: Options {
+            section: section_opts("^# ", 1),
+            ..Default::default()
+        },
+        events: vec![
+            // Search with "A"
+            key('/'),
+            key('A'),
+            enter(),
+            // Jump
+            key('n'),
+            key('n'),
+            key('n'),
+            key('n'),
+            key('N'),
+            key('N'),
+        ],
+        ..Default::default()
+    });
+    let want = "\
+# Section A1
+AX
+line 1
+:
+-----
+[EVENT]:char:/
+# Section A1
+AX
+line 1
+/█
+-----
+[EVENT]:char:A
+# Section {reverse}A{/reverse}1
+{dim}{reverse}A{/reverse}{/dim}X
+line 1
+/A█
+-----
+[EVENT]:enter
+# Section {reverse}A{/reverse}1
+{dim}{reverse}A{/reverse}{/dim}X
+line 1
+:
+-----
+[EVENT]:char:n
+# Section {dim}{reverse}A{/reverse}{/dim}1
+{reverse}A{/reverse}X
+line 1
+:
+-----
+[EVENT]:char:n
+# Section {dim}{reverse}A{/reverse}{/dim}1
+{reverse}A{/reverse}Y
+line 4
+:
+-----
+[EVENT]:char:n
+# Section {reverse}A{/reverse}2
+line 5
+{dim}{reverse}A{/reverse}{/dim}Z
+:
+-----
+[EVENT]:char:n
+# Section {dim}{reverse}A{/reverse}{/dim}2
+{reverse}A{/reverse}Z
+line 6
+:
+-----
+[EVENT]:char:N
+# Section {reverse}A{/reverse}2
+line 5
+{dim}{reverse}A{/reverse}{/dim}Z
+:
+-----
+[EVENT]:char:N
+# Section {dim}{reverse}A{/reverse}{/dim}1
+{reverse}A{/reverse}Y
+line 4
+:
+-----
+";
+    assert_eq!(want, screen.out());
+}
