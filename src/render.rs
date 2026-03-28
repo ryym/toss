@@ -169,30 +169,8 @@ pub fn apply_jump_scroll<S: Screen>(
     let visible_rows = &rows[skip..];
     let content_height = visible_rows.len();
 
-    // Compute dirty range: new rows that scrolled in, extending to include
-    // adjacent rows from the same logical line for correct soft-wrap grouping.
-    let (scroll_draw_from, scroll_draw_to) = match direction {
-        Direction::Down => {
-            let new_start = content_height.saturating_sub(scroll_rows);
-            let mut from = new_start;
-            while from > 0
-                && visible_rows[from - 1].line_index == visible_rows[new_start].line_index
-            {
-                from -= 1;
-            }
-            (from, content_height)
-        }
-        Direction::Up => {
-            let new_end = scroll_rows.min(content_height);
-            let mut to = new_end;
-            while to < content_height
-                && visible_rows[to].line_index == visible_rows[new_end - 1].line_index
-            {
-                to += 1;
-            }
-            (0, to)
-        }
-    };
+    let (scroll_draw_from, scroll_draw_to) =
+        scroll_dirty_range(visible_rows, scroll_rows, direction);
 
     // Draw the newly scrolled-in rows.
     draw_rows_grouped(
@@ -329,6 +307,39 @@ fn filter_dirty_rows(
     dirty
 }
 
+/// Compute the range of rows that need redrawing after a scroll.
+///
+/// After terminal scroll shifts content, `scroll_rows` new rows appear at one
+/// edge. This function returns the range extended to include adjacent existing
+/// rows from the same logical line, so soft-wrap groups are drawn correctly.
+fn scroll_dirty_range(
+    visible_rows: &[ScreenRow],
+    scroll_rows: usize,
+    direction: Direction,
+) -> (usize, usize) {
+    let len = visible_rows.len();
+    match direction {
+        Direction::Down => {
+            let new_start = len.saturating_sub(scroll_rows);
+            let mut from = new_start;
+            while from > 0
+                && visible_rows[from - 1].line_index == visible_rows[new_start].line_index
+            {
+                from -= 1;
+            }
+            (from, len)
+        }
+        Direction::Up => {
+            let new_end = scroll_rows.min(len);
+            let mut to = new_end;
+            while to < len && visible_rows[to].line_index == visible_rows[new_end - 1].line_index {
+                to += 1;
+            }
+            (0, to)
+        }
+    }
+}
+
 /// Draw dirty rows at their correct screen positions within visible_rows.
 /// Each contiguous group of dirty rows from the same logical line is drawn
 /// as a single write via draw_rows_grouped.
@@ -421,33 +432,9 @@ fn apply_scroll_no_flush<S: Screen>(
     let rows = page.viewport.rows();
     let skip = overlay.min(rows.len());
     let visible_rows = &rows[skip..];
-    let content_height = visible_rows.len();
     let n_scroll = plan.terminal_scroll.get();
 
-    let (draw_from, draw_to) = match plan.direction {
-        Direction::Down => {
-            let new_start = content_height.saturating_sub(n_scroll);
-            // Extend backwards: include existing rows of the same line
-            let mut from = new_start;
-            while from > 0
-                && visible_rows[from - 1].line_index == visible_rows[new_start].line_index
-            {
-                from -= 1;
-            }
-            (from, content_height)
-        }
-        Direction::Up => {
-            let new_end = n_scroll.min(content_height);
-            // Extend forwards: include existing rows of the same line
-            let mut to = new_end;
-            while to < content_height
-                && visible_rows[to].line_index == visible_rows[new_end - 1].line_index
-            {
-                to += 1;
-            }
-            (0, to)
-        }
-    };
+    let (draw_from, draw_to) = scroll_dirty_range(visible_rows, n_scroll, plan.direction);
 
     draw_rows_grouped(
         screen,
