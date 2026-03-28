@@ -8,7 +8,7 @@ pre-commit:
     - run: cargo clippy
       glob:
         - "*.rs"
-    - run: cargo test
+    - run: cargo test --quiet
       glob:
         - "src/*"
         - "Cargo.toml"
