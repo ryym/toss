@@ -5,6 +5,7 @@ use unicode_width::UnicodeWidthChar;
 
 use crate::ansi;
 use crate::screen::Screen;
+use crate::viewport::{Direction, ScrollPlan};
 
 #[derive(Debug, Clone)]
 struct GridRow {
@@ -221,6 +222,31 @@ impl Screen for MockScreen {
                         self.grid[y].text.push(ch);
                         col += ch_w;
                     }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()> {
+        let n = plan.terminal_scroll.get();
+        let height = self.height as usize;
+
+        match plan.direction {
+            Direction::Down => {
+                // Content moves up: remove n rows from top, add blank at bottom.
+                let remove = n.min(height);
+                for _ in 0..remove {
+                    self.grid.remove(0);
+                    self.grid.push(GridRow::new());
+                }
+            }
+            Direction::Up => {
+                // Content moves down: remove n rows from bottom, add blank at top.
+                let remove = n.min(height);
+                for _ in 0..remove {
+                    self.grid.pop();
+                    self.grid.insert(0, GridRow::new());
                 }
             }
         }
