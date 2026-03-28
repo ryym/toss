@@ -84,6 +84,26 @@ impl Page {
         plan
     }
 
+    /// Jump to a line, ensuring it is visible below any sticky section header.
+    /// After the jump, syncs the section cache and scrolls up by the overlay
+    /// amount so the target line is not hidden behind the section header.
+    pub fn jump_to_visible(&mut self, line: usize) -> bool {
+        if !self.viewport.jump_to(&mut self.doc, line) {
+            return false;
+        }
+        // Sync the section cache for the new position.
+        let width = self.viewport.width();
+        let top = self.viewport.top_line_index();
+        let top_wrap = self.viewport.top_wrap_index();
+        self.header
+            .resolve(&mut self.doc, width, top, top_wrap, true);
+        let overlay = self.header.section_overlay();
+        if overlay > 0 {
+            self.viewport.scroll_up(overlay, &mut self.doc);
+        }
+        true
+    }
+
     /// Returns the current sticky section start line, if any.
     pub fn current_section(&self) -> Option<usize> {
         self.header.current_section()

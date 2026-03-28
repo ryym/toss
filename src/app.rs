@@ -244,7 +244,7 @@ impl<S: Screen> App<S> {
         log::debug!("Search preview: query={input:?}, result={matched:?}");
 
         if let Some(ref pos) = matched {
-            self.page.viewport.jump_to(&mut self.page.doc, pos.line);
+            self.page.jump_to_visible(pos.line);
         }
 
         if let AppMode::Search { preview, .. } = &mut self.mode {
@@ -404,7 +404,7 @@ impl<S: Screen> App<S> {
         let matched = search::find_next_match(&mut self.page.doc, &search.query, from, direction);
         log::debug!("Next match from line {from}: {matched:?}");
         if let Some(ref pos) = matched {
-            self.page.viewport.jump_to(&mut self.page.doc, pos.line);
+            self.page.jump_to_visible(pos.line);
             self.needs_full_redraw = true;
         }
         if let Some(ref mut search) = self.search {
