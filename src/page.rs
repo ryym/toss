@@ -116,11 +116,6 @@ impl Page {
         true
     }
 
-    /// Returns the current sticky section start line, if any.
-    pub fn current_section(&self) -> Option<usize> {
-        self.header.current_section()
-    }
-
     /// Number of viewport rows overlaid by the section header.
     pub fn section_overlay(&self) -> usize {
         self.header.section_overlay()

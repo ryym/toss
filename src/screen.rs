@@ -29,13 +29,6 @@ pub trait Screen {
 
     fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()>;
 
-    /// Restrict which rows are affected by scroll commands (DECSTBM).
-    /// `top` and `bottom` are 0-indexed inclusive row bounds.
-    fn set_scroll_region(&mut self, top: u16, bottom: u16) -> io::Result<()>;
-
-    /// Reset the scroll region to the full screen.
-    fn reset_scroll_region(&mut self) -> io::Result<()>;
-
     fn flush(&mut self) -> io::Result<()>;
 }
 
@@ -99,19 +92,6 @@ impl Screen for TermScreen {
             }
         }
         Ok(())
-    }
-
-    fn set_scroll_region(&mut self, top: u16, bottom: u16) -> io::Result<()> {
-        // DECSTBM: CSI top ; bottom r (1-indexed)
-        queue!(
-            self.stdout,
-            Print(format!("\x1b[{};{}r", top + 1, bottom + 1))
-        )
-    }
-
-    fn reset_scroll_region(&mut self) -> io::Result<()> {
-        // CSI r with no parameters resets to full screen.
-        queue!(self.stdout, Print("\x1b[r"))
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -196,33 +176,6 @@ fn draw_status_line_no_flush<S: Screen>(screen: &mut S, page: &mut Page) -> io::
     Ok(())
 }
 
-/// Redraw only the header area without flushing.
-fn redraw_header_no_flush<S: Screen>(
-    screen: &mut S,
-    page: &mut Page,
-    search: Option<&SearchState>,
-) -> io::Result<()> {
-    let width = page.viewport.width();
-    let header_rows = page.resolve_header();
-    if !header_rows.is_empty() {
-        draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
-    }
-    Ok(())
-}
-
-/// Apply a scroll plan and redraw the header area in a single flush.
-/// Used when section header changes but header height stays the same.
-pub fn apply_scroll_and_redraw_header<S: Screen>(
-    screen: &mut S,
-    plan: &ScrollPlan,
-    page: &mut Page,
-    search: Option<&SearchState>,
-) -> io::Result<()> {
-    apply_scroll_no_flush(screen, plan, page, search)?;
-    redraw_header_no_flush(screen, page, search)?;
-    screen.flush()
-}
-
 /// Render a full page (used on initial draw and resize).
 pub fn draw_full_page<S: Screen>(
     screen: &mut S,
@@ -286,15 +239,12 @@ fn apply_scroll_no_flush<S: Screen>(
     search: Option<&SearchState>,
 ) -> io::Result<()> {
     let width = page.viewport.width();
-    let header_height = page.resolve_header().len();
     let overlay = page.section_overlay();
-
-    // Set scroll region to exclude header (including overlay) and status line.
-    let viewport_height = page.viewport.height();
-    let visible_height = viewport_height.saturating_sub(overlay);
 
     // When overlay covers the entire viewport, there are no content rows to scroll.
     // Just redraw the header and status line.
+    let viewport_height = page.viewport.height();
+    let visible_height = viewport_height.saturating_sub(overlay);
     if visible_height == 0 {
         let header_rows = page.resolve_header();
         if !header_rows.is_empty() {
@@ -303,17 +253,11 @@ fn apply_scroll_no_flush<S: Screen>(
         return draw_status_line_no_flush(screen, page);
     }
 
-    if header_height > 0 {
-        let region_top = header_height as u16;
-        let region_bottom = (header_height + visible_height - 1) as u16;
-        screen.set_scroll_region(region_top, region_bottom)?;
-    }
+    let header_height = page.resolve_header().len();
 
+    // Terminal scroll shifts the entire screen (including header and status line).
+    // We redraw the header and status line after scrolling.
     screen.scroll_terminal(plan)?;
-
-    if header_height > 0 {
-        screen.reset_scroll_region()?;
-    }
 
     // Work with visible rows (viewport rows after skipping overlay).
     let rows = page.viewport.rows();
@@ -355,5 +299,12 @@ fn apply_scroll_no_flush<S: Screen>(
         search,
         header_height + draw_from,
     )?;
+
+    // Redraw header (scrolled away by terminal scroll).
+    let header_rows = page.resolve_header();
+    if !header_rows.is_empty() {
+        draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
+    }
+
     draw_status_line_no_flush(screen, page)
 }

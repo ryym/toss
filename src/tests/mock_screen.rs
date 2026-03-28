@@ -42,8 +42,6 @@ pub struct MockScreen {
     events: Vec<Event>,
     event_index: usize,
     entries: Vec<OutputEntry>,
-    /// Active scroll region (top, bottom) in 0-indexed rows. None means full screen.
-    scroll_region: Option<(u16, u16)>,
 }
 
 impl MockScreen {
@@ -56,7 +54,6 @@ impl MockScreen {
             events: Vec::new(),
             event_index: 0,
             entries: Vec::new(),
-            scroll_region: None,
         }
     }
 
@@ -233,40 +230,26 @@ impl Screen for MockScreen {
 
     fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()> {
         let n = plan.terminal_scroll.get();
-        let (region_top, region_bottom) = match self.scroll_region {
-            Some((t, b)) => (t as usize, b as usize),
-            None => (0, self.height as usize - 1),
-        };
-        let region_len = region_bottom - region_top + 1;
+        let height = self.height as usize;
 
         match plan.direction {
             Direction::Down => {
-                // Content moves up: remove n rows from region top, add blank at bottom.
-                let remove = n.min(region_len);
+                // Content moves up: remove n rows from top, add blank at bottom.
+                let remove = n.min(height);
                 for _ in 0..remove {
-                    self.grid.remove(region_top);
-                    self.grid.insert(region_bottom, GridRow::new());
+                    self.grid.remove(0);
+                    self.grid.push(GridRow::new());
                 }
             }
             Direction::Up => {
-                // Content moves down: remove n rows from region bottom, add blank at top.
-                let remove = n.min(region_len);
+                // Content moves down: remove n rows from bottom, add blank at top.
+                let remove = n.min(height);
                 for _ in 0..remove {
-                    self.grid.remove(region_bottom);
-                    self.grid.insert(region_top, GridRow::new());
+                    self.grid.pop();
+                    self.grid.insert(0, GridRow::new());
                 }
             }
         }
-        Ok(())
-    }
-
-    fn set_scroll_region(&mut self, top: u16, bottom: u16) -> io::Result<()> {
-        self.scroll_region = Some((top, bottom));
-        Ok(())
-    }
-
-    fn reset_scroll_region(&mut self) -> io::Result<()> {
-        self.scroll_region = None;
         Ok(())
     }
 

@@ -35,13 +35,6 @@ impl Header {
         self.fixed_lines
     }
 
-    /// Returns the current sticky section start line, if any.
-    pub fn current_section(&self) -> Option<usize> {
-        self.section_index
-            .as_ref()
-            .and_then(|idx| idx.current_section())
-    }
-
     /// Number of viewport screen rows overlaid by the section header.
     /// For multi-line section headers (N>=2), the section header overlays
     /// viewport rows. For single-line headers (N=1), this is 0.

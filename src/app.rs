@@ -444,12 +444,10 @@ impl<S: Screen> App<S> {
 
     /// Apply a scroll and handle section header changes.
     fn apply_scroll(&mut self, rows: isize) -> io::Result<()> {
-        let old_section = self.page.current_section();
         let old_header_height = self.page.resolve_header().len();
 
         if let Some(plan) = self.page.plan_scroll(rows) {
             let new_header_height = self.page.resolve_header().len();
-            let new_section = self.page.current_section();
 
             if old_header_height != new_header_height {
                 // Header height changed (section change, push-up, or overlay change):
@@ -457,15 +455,6 @@ impl<S: Screen> App<S> {
                 let (w, h) = self.screen.size()?;
                 self.page.resize(w as usize, h as usize);
                 self.needs_full_redraw = true;
-            } else if old_section != new_section {
-                // Section changed but height is the same: incremental scroll + header redraw.
-                let search = active_search(&self.mode, &self.search);
-                screen::apply_scroll_and_redraw_header(
-                    &mut self.screen,
-                    &plan,
-                    &mut self.page,
-                    search,
-                )?;
             } else {
                 let search = active_search(&self.mode, &self.search);
                 screen::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
