@@ -219,7 +219,8 @@ impl Viewport {
             line_index: start_line,
             wrap_index: start_wrap,
         };
-        let mut rows = vec![current];
+        let mut rows = Vec::with_capacity(count);
+        rows.push(current);
         while rows.len() < count {
             let Some(next) = next_row(doc, width, current) else {
                 break;
@@ -246,7 +247,8 @@ impl Viewport {
             line_index: line_count - 1,
             wrap_index: last_line.row_count(width) - 1,
         };
-        let mut rows = vec![current];
+        let mut rows = Vec::with_capacity(count);
+        rows.push(current);
         while rows.len() < count {
             let Some(prev) = prev_row(doc, width, current) else {
                 break;
