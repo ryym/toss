@@ -33,7 +33,6 @@ pub struct App<S> {
     scroll_physics: ScrollPhysics,
     instant_scroll: bool,
     needs_full_redraw: bool,
-    needs_status_redraw: bool,
 }
 
 impl<S: Screen> App<S> {
@@ -49,7 +48,6 @@ impl<S: Screen> App<S> {
             scroll_physics,
             instant_scroll: false,
             needs_full_redraw: true,
-            needs_status_redraw: false,
         })
     }
 
@@ -106,10 +104,8 @@ impl<S: Screen> App<S> {
                 let search = active_search(&self.mode, &self.search);
                 screen::draw_full_page(&mut self.screen, &mut self.page, search)?;
                 self.needs_full_redraw = false;
-                self.needs_status_redraw = false;
-            } else if self.needs_status_redraw {
+            } else if self.page.status.is_dirty() {
                 screen::draw_status_line(&mut self.screen, &mut self.page)?;
-                self.needs_status_redraw = false;
             }
         }
     }
@@ -195,14 +191,12 @@ impl<S: Screen> App<S> {
             saved_top_line,
             preview: None,
         };
-        self.needs_status_redraw = true;
     }
 
     fn exit_search_mode(&mut self) {
         log::debug!("Exit search mode");
         self.mode = AppMode::View;
         self.page.status.set_content(":".to_string());
-        self.needs_status_redraw = true;
     }
 
     /// Cancel search: discard preview and restore the original scroll position.
@@ -309,7 +303,6 @@ impl<S: Screen> App<S> {
                         editor.input_with_cursor()
                     ));
                 }
-                self.needs_status_redraw = true;
             }
             KeyCode::Right => {
                 if let AppMode::Search {
@@ -323,7 +316,6 @@ impl<S: Screen> App<S> {
                         editor.input_with_cursor()
                     ));
                 }
-                self.needs_status_redraw = true;
             }
             _ => {}
         }
