@@ -1,9 +1,40 @@
 use regex::Regex;
 
-use super::HeaderLayout;
 use super::viewport::ScreenRow;
 use crate::document::Document;
 use crate::options::SectionOptions;
+
+/// Resolved header layout for the current viewport position.
+pub struct HeaderLayout {
+    rows: Vec<ScreenRow>,
+    fixed_height: usize,
+}
+
+impl HeaderLayout {
+    /// All header rows (fixed + section overlay).
+    #[inline]
+    pub fn rows(&self) -> &[ScreenRow] {
+        &self.rows
+    }
+
+    /// Total height of the header (fixed + section overlay).
+    #[inline]
+    pub fn height(&self) -> usize {
+        self.rows.len()
+    }
+
+    /// Number of screen rows occupied by the fixed header.
+    #[inline]
+    pub fn fixed_height(&self) -> usize {
+        self.fixed_height
+    }
+
+    /// Number of screen rows overlaied on the viewport.
+    #[inline]
+    pub fn overlay_height(&self) -> usize {
+        self.rows.len() - self.fixed_height
+    }
+}
 
 /// Manages sticky header lines pinned at the top of the screen.
 pub struct Header {

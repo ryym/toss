@@ -1,44 +1,13 @@
 mod header;
 pub mod viewport;
 
+pub use header::HeaderLayout;
 pub use viewport::{Direction, ScreenRow, ScrollPlan, Viewport};
 
 use crate::document::Document;
 use crate::options::Options;
 use crate::status_line::StatusLine;
 use header::Header;
-
-/// Resolved header layout for the current viewport position.
-pub struct HeaderLayout {
-    pub(crate) rows: Vec<ScreenRow>,
-    pub(crate) fixed_height: usize,
-}
-
-impl HeaderLayout {
-    /// All header rows (fixed + section overlay).
-    #[inline]
-    pub fn rows(&self) -> &[ScreenRow] {
-        &self.rows
-    }
-
-    /// Total height of the header (fixed + section overlay).
-    #[inline]
-    pub fn height(&self) -> usize {
-        self.rows.len()
-    }
-
-    /// Number of screen rows occupied by the fixed header.
-    #[inline]
-    pub fn fixed_height(&self) -> usize {
-        self.fixed_height
-    }
-
-    /// Number of screen rows overlaied on the viewport.
-    #[inline]
-    pub fn overlay_height(&self) -> usize {
-        self.rows.len() - self.fixed_height
-    }
-}
 
 /// Bundles the document, header, viewport, and status line — everything the
 /// rendering functions need to draw a frame (except search highlight).
