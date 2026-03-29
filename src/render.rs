@@ -32,7 +32,7 @@ fn draw_rows_grouped<S: Screen>(
         }
         // Write the combined text for this group as one continuous piece
         if let Some(line) = doc.line(line_idx) {
-            let raw_range = rows[group_start].raw_start..rows[i - 1].raw_end;
+            let raw_range = rows[group_start].raw_range.start..rows[i - 1].raw_range.end;
 
             let matches = search.map(|sh| line.find_matches(&sh.query));
             match (search, matches) {
@@ -161,7 +161,7 @@ pub fn apply_jump_scroll<S: Screen>(
             let dirty_rows: Vec<ScreenRow> = visible_rows[overlap_range]
                 .iter()
                 .filter(|r| highlight_dirty_lines.contains(&r.line_index))
-                .copied()
+                .cloned()
                 .collect();
             if !dirty_rows.is_empty() {
                 draw_dirty_rows_at_positions(
@@ -235,7 +235,7 @@ fn filter_dirty_rows(
         if last_line == Some(row.line_index) {
             // Same logical line as previous row: same dirty status.
             if last_dirty {
-                dirty.push(*row);
+                dirty.push(row.clone());
             }
             continue;
         }
@@ -251,7 +251,7 @@ fn filter_dirty_rows(
 
         last_dirty = is_dirty;
         if is_dirty {
-            dirty.push(*row);
+            dirty.push(row.clone());
         }
     }
     dirty
@@ -302,7 +302,7 @@ fn draw_dirty_rows_at_positions<S: Screen>(
     header_height: usize,
 ) -> io::Result<()> {
     // Build a set of dirty rows for lookup.
-    let dirty_set: std::collections::HashSet<ScreenRow> = dirty_rows.iter().copied().collect();
+    let dirty_set: std::collections::HashSet<ScreenRow> = dirty_rows.iter().cloned().collect();
 
     // Walk visible_rows and find contiguous groups of dirty rows.
     let mut i = 0;

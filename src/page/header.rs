@@ -104,12 +104,11 @@ impl Header {
             let mut block_rows = Vec::new();
             for i in effective_start..section_start + index.header_lines() {
                 if let Some(line) = doc.line(i) {
-                    for (w, range) in line.wrap(width).into_iter().enumerate() {
+                    for (w, raw_range) in line.wrap(width).into_iter().enumerate() {
                         block_rows.push(ScreenRow {
                             line_index: i,
                             wrap_index: w,
-                            raw_start: range.start,
-                            raw_end: range.end,
+                            raw_range,
                         });
                     }
                 }
@@ -147,12 +146,11 @@ impl Header {
         let mut rows = vec![];
         for i in 0..self.fixed_lines {
             if let Some(line) = doc.line(i) {
-                for (w, range) in line.wrap(width).into_iter().enumerate() {
+                for (w, raw_range) in line.wrap(width).into_iter().enumerate() {
                     rows.push(ScreenRow {
                         line_index: i,
                         wrap_index: w,
-                        raw_start: range.start,
-                        raw_end: range.end,
+                        raw_range,
                     });
                 }
             }

@@ -658,7 +658,7 @@ fn is_match_visible(
     let raw_offset = line.plain_to_raw()[start];
     visible_rows
         .iter()
-        .any(|r| r.line_index == pos.line && r.raw_start <= raw_offset && raw_offset < r.raw_end)
+        .any(|r| r.line_index == pos.line && r.raw_range.contains(&raw_offset))
 }
 
 /// Find the first match that falls on a visible wrap row in the viewport.
@@ -672,7 +672,7 @@ fn find_first_match_in_viewport(
         let matches = line.find_matches(query);
         for (mi, &(start, _)) in matches.iter().enumerate() {
             let raw_offset = line.plain_to_raw()[start];
-            if row.raw_start <= raw_offset && raw_offset < row.raw_end {
+            if row.raw_range.contains(&raw_offset) {
                 return Some(MatchPosition {
                     line: row.line_index,
                     match_index: mi,
@@ -695,16 +695,16 @@ fn compute_scroll_overlap(
         return None;
     }
     // Scroll down: new viewport starts partway into old viewport.
-    let new_first = new_rows[0];
+    let new_first = &new_rows[0];
     for (i, row) in old_rows.iter().enumerate().skip(1) {
-        if *row == new_first {
+        if row == new_first {
             return Some((i, Direction::Down));
         }
     }
     // Scroll up: old viewport starts partway into new viewport.
-    let old_first = old_rows[0];
+    let old_first = &old_rows[0];
     for (i, row) in new_rows.iter().enumerate().skip(1) {
-        if *row == old_first {
+        if row == old_first {
             return Some((i, Direction::Up));
         }
     }

@@ -1,16 +1,15 @@
 use std::num::NonZeroUsize;
+use std::ops::Range;
 
 use crate::document::Document;
 
 /// Identifies a single screen row: which document line, which wrap row within it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ScreenRow {
     pub line_index: usize,
     pub wrap_index: usize,
-    /// Start byte offset in the raw text for this wrap row (inclusive).
-    pub raw_start: usize,
-    /// End byte offset in the raw text for this wrap row (exclusive).
-    pub raw_end: usize,
+    /// Byte range in the raw text for this wrap row.
+    pub raw_range: Range<usize>,
 }
 
 /// Direction of scrolling.
@@ -39,11 +38,10 @@ fn screen_rows_for_line(
         line.wrap(width)
             .into_iter()
             .enumerate()
-            .map(|(wrap_index, range)| ScreenRow {
+            .map(|(wrap_index, raw_range)| ScreenRow {
                 line_index,
                 wrap_index,
-                raw_start: range.start,
-                raw_end: range.end,
+                raw_range,
             })
             .collect()
     })
@@ -134,7 +132,7 @@ impl Viewport {
         let height = self.rows.len();
 
         // Find new rows to add at the bottom
-        let last = self.rows[height - 1];
+        let last = &self.rows[height - 1];
         let new_rows = Self::advance_forward(doc, self.width, last, n);
         let actual = NonZeroUsize::new(new_rows.len())?;
 
@@ -154,7 +152,7 @@ impl Viewport {
             return None;
         }
 
-        let first = self.rows[0];
+        let first = &self.rows[0];
         let mut new_rows = Self::advance_backward(doc, self.width, first, n, self.fixed_line_len);
         let actual = NonZeroUsize::new(new_rows.len())?;
 
@@ -204,16 +202,15 @@ impl Viewport {
     /// Update dimensions and rebuild from current top position.
     /// `width` and `height` are the content area dimensions.
     pub fn resize(&mut self, doc: &mut Document, width: usize, height: usize) {
-        let top = self.rows.first().copied().unwrap_or(ScreenRow {
-            line_index: self.fixed_line_len,
-            wrap_index: 0,
-            raw_start: 0,
-            raw_end: 0,
-        });
-        let top_line = top.line_index.max(self.fixed_line_len);
+        let (top_line_index, top_wrap_index) = self
+            .rows
+            .first()
+            .map(|row| (row.line_index, row.wrap_index))
+            .unwrap_or((0, 0));
+        let top_line = top_line_index.max(self.fixed_line_len);
         self.width = width;
         self.height = height;
-        self.rows = Self::build_rows_forward(doc, width, top_line, top.wrap_index, height);
+        self.rows = Self::build_rows_forward(doc, width, top_line, top_wrap_index, height);
     }
 
     /// Build rows starting from (line_index, wrap_index), going forward.
@@ -267,7 +264,7 @@ impl Viewport {
     fn advance_forward(
         doc: &mut Document,
         width: usize,
-        after: ScreenRow,
+        after: &ScreenRow,
         n: usize,
     ) -> Vec<ScreenRow> {
         Self::build_rows_forward(doc, width, after.line_index, after.wrap_index + 1, n)
@@ -278,7 +275,7 @@ impl Viewport {
     fn advance_backward(
         doc: &mut Document,
         width: usize,
-        before: ScreenRow,
+        before: &ScreenRow,
         n: usize,
         fixed_line_len: usize,
     ) -> Vec<ScreenRow> {
@@ -491,12 +488,9 @@ mod tests {
         let state = Viewport::new(&mut doc, 5, 4, 0);
         let rows = state.rows();
         // "abcdefgh" wraps at width 5: "abcde" (0..5), "fgh" (5..8)
-        assert_eq!(rows[0].raw_start, 0);
-        assert_eq!(rows[0].raw_end, 5);
-        assert_eq!(rows[1].raw_start, 5);
-        assert_eq!(rows[1].raw_end, 8);
+        assert_eq!(rows[0].raw_range, 0..5);
+        assert_eq!(rows[1].raw_range, 5..8);
         // "xy": 0..2
-        assert_eq!(rows[2].raw_start, 0);
-        assert_eq!(rows[2].raw_end, 2);
+        assert_eq!(rows[2].raw_range, 0..2);
     }
 }
