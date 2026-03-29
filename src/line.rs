@@ -145,6 +145,30 @@ impl Line {
         start..ends[to - 1]
     }
 
+    /// Determine which wrap row a plain-text byte offset falls on.
+    pub fn wrap_row_for_plain_offset(&self, width: usize, plain_offset: usize) -> usize {
+        if width == 0 {
+            return 0;
+        }
+        let mut row = 0;
+        let mut col = 0;
+        let mut i_plain_byte = 0;
+        for ch in self.plain.chars() {
+            if i_plain_byte >= plain_offset {
+                break;
+            }
+            let ch_width = ch.width().unwrap_or(0);
+            if col + ch_width > width && col > 0 {
+                row += 1;
+                col = ch_width;
+            } else {
+                col += ch_width;
+            }
+            i_plain_byte += ch.len_utf8();
+        }
+        row
+    }
+
     /// Check if the plain text contains any match for the given regex.
     pub fn has_match(&self, query: &Regex) -> bool {
         query.is_match(&self.plain)

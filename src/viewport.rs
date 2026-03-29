@@ -115,11 +115,6 @@ impl Viewport {
         self.rows.first().map(|r| r.wrap_index).unwrap_or(0)
     }
 
-    /// Whether the given line is visible in the viewport.
-    pub fn contains_line(&self, line_index: usize) -> bool {
-        self.rows.iter().any(|r| r.line_index == line_index)
-    }
-
     /// Scroll down by n screen rows. Returns `None` if no scrolling occurred.
     pub fn scroll_down(&mut self, n: usize, doc: &mut Document) -> Option<ScrollPlan> {
         if n == 0 || self.rows.is_empty() {
