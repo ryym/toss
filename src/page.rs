@@ -114,21 +114,18 @@ impl Page {
         let mut changed = self.viewport.jump_to(&mut self.doc, line);
         loop {
             self.resolve_header_synced();
-            let overlay = self.viewport.overlay_height();
-            let target_row = self
+            let found = self
                 .viewport
-                .rows()
+                .visible_rows()
                 .iter()
-                .position(|r| r.line_index == line && r.wrap_index == 0);
-            match target_row {
-                Some(row) if row >= overlay => break,
-                _ => {
-                    if self.viewport.scroll_up(1, &mut self.doc).is_none() {
-                        break;
-                    }
-                    changed = true;
-                }
+                .any(|r| r.line_index == line && r.wrap_index == 0);
+            if found {
+                break;
             }
+            if self.viewport.scroll_up(1, &mut self.doc).is_none() {
+                break;
+            }
+            changed = true;
         }
         changed
     }
