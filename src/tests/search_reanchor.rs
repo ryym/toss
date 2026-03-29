@@ -2,6 +2,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
 use super::{TestCase, key, run_test_screen};
+use crate::options::{Options, SectionOptions};
 
 fn enter() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
@@ -226,4 +227,120 @@ line 6
 :
 "
     );
+}
+
+fn section_opts(pattern: &str, header_lines: usize) -> Option<SectionOptions> {
+    Some(SectionOptions {
+        pattern: regex::Regex::new(pattern).unwrap(),
+        header_lines,
+    })
+}
+
+// When a section header overlay hides a match, re-anchor should skip it
+// and find the first truly visible match (not one behind the overlay).
+#[test]
+fn reanchor_skips_match_hidden_by_section_header() {
+    // Section header "# Sec" is sticky (1 line).
+    // After scrolling, the overlay hides the first viewport row.
+    let content = "\
+# Sec
+foo 1
+line 2
+line 3
+line 4
+foo 5
+line 6
+foo 7
+line 8
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 5,
+        content,
+        options: Options {
+            section: section_opts("^# ", 1),
+            ..Default::default()
+        },
+        events: vec![
+            key('/'),
+            key('f'),
+            key('o'),
+            key('o'),
+            enter(),
+            // Jump to end — cursor ("foo 1") goes off-screen.
+            // The sticky header "# Sec" overlays the first viewport row.
+            key('G'),
+            // n: re-anchor. "foo 5" is in the viewport rows but hidden by overlay.
+            // Should re-anchor to "foo 7" (first actually visible match).
+            key('n'),
+            // n: jump from "foo 7" forward, wrapping to "foo 1".
+            key('n'),
+        ],
+        ..Default::default()
+    });
+    // Final state shows "foo 1" — proves re-anchor landed on "foo 7", not "foo 5".
+    let want = "\
+# Sec
+{reverse}foo{/reverse} 1
+line 2
+line 3
+:
+";
+    assert_eq!(screen.last_snapshot(), want);
+}
+
+// When a long line wraps and only the later wrap rows are visible,
+// a match on an off-screen wrap row should not be treated as visible.
+// Re-anchor should find the first match on a visible wrap row.
+#[test]
+fn reanchor_with_wrapped_line() {
+    // At width 5, line 1 "foo12foo34end" wraps to:
+    //   wrap row 0: "foo12" (match index 0)
+    //   wrap row 1: "foo34" (match index 1)
+    //   wrap row 2: "end"
+    // After scrolling, wrap row 0 goes off-screen.
+    // "last foo" wraps to "last " + "foo", so the match is on wrap row 1.
+    let content = "\
+short
+foo12foo34end
+last foo
+";
+    let out = run_test_screen(TestCase {
+        screen_width: 5,
+        screen_height: 4,
+        content,
+        events: vec![
+            key('/'),
+            key('f'),
+            key('o'),
+            key('o'),
+            enter(),
+            // Scroll so wrap row 0 of line 1 (with match 0) goes off-screen.
+            key('j'),
+            key('j'),
+            // n: cursor (match 0, wrap row 0) is off-screen.
+            // Should re-anchor to the first match on a visible wrap row.
+            // Wrap row 2 of line 1 ("end") has no match.
+            // Line 2 wrap row 1 ("foo") has the match → re-anchor there.
+            key('n'),
+        ],
+        ..Default::default()
+    })
+    .out();
+
+    let snapshots: Vec<&str> = out.split("-----\n").collect();
+    let len = snapshots.len();
+    let after_n = snapshots[len - 2]
+        .trim_start_matches(|c: char| c != '\n')
+        .trim_start();
+    // The viewport still shows [end, "last ", "foo"] without scrolling.
+    // "foo" from "last foo" is highlighted as the current match.
+    // The wrap continuation marker ">" appears inside the highlight span.
+    let want = "\
+end
+last {reverse}>
+foo{/reverse}
+:
+";
+    assert_eq!(after_n, want);
 }
