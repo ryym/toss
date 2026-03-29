@@ -134,11 +134,7 @@ pub fn draw_full_page<S: Screen>(
         )?;
 
         // Clear any rows below content that may have stale content.
-        let visible_capacity = page
-            .viewport
-            .height()
-            .saturating_sub(page.viewport.overlay_len());
-        for y in visible_rows.len()..visible_capacity {
+        for y in visible_rows.len()..page.viewport.visible_height() {
             screen.clear_row((y + header_height) as u16)?;
         }
         draw_status_line_inner(screen, page)
@@ -384,12 +380,10 @@ fn apply_scroll_inner<S: Screen>(
     search: Option<&SearchState>,
 ) -> io::Result<()> {
     let width = page.viewport.width();
-    let overlay = page.viewport.overlay_len();
 
     // When overlay covers the entire viewport, there are no content rows to scroll.
     // Just redraw the header and status line.
-    let visible_height = page.viewport.height().saturating_sub(overlay);
-    if visible_height == 0 {
+    if page.viewport.visible_height() == 0 {
         redraw_header(screen, page, width, search)?;
         return draw_status_line_inner(screen, page);
     }

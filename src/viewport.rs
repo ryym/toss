@@ -106,6 +106,11 @@ impl Viewport {
         self.height
     }
 
+    /// Height of the content area visible to the user (excluding overlay).
+    pub fn visible_height(&self) -> usize {
+        self.height.saturating_sub(self.overlay_len)
+    }
+
     /// Current screen rows.
     pub fn rows(&self) -> &[ScreenRow] {
         &self.rows
