@@ -6,6 +6,7 @@ mod scroll_wrap;
 mod search_execution;
 mod search_incremental;
 mod search_input;
+mod search_reanchor;
 mod search_with_header;
 mod search_wrap;
 mod section_header;
