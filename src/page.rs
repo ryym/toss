@@ -82,14 +82,7 @@ impl Page {
     /// Resize the viewport to fit the new terminal dimensions, accounting for
     /// the header and status line.
     pub fn resize(&mut self, width: usize, height: usize) {
-        let header = self.header.resolve(
-            &mut self.doc,
-            width,
-            self.viewport.top_line_index(),
-            self.viewport.top_wrap_index(),
-            true,
-        );
-        self.viewport.set_overlay_len(header.overlay_height());
+        let header = self.resolve_header_within(width, true);
         let content_height = height
             .saturating_sub(1)
             .saturating_sub(header.fixed_height());
@@ -144,23 +137,24 @@ impl Page {
     /// Uses `sync_section=false` (assumes cache is already up to date from scroll).
     /// Updates the viewport overlay.
     pub fn resolve_header(&mut self) -> HeaderLayout {
-        self.resolve_header_inner(false)
+        self.resolve_header_within(self.viewport.width(), false)
     }
 
     /// Resolve the header rows, synchronizing the section index cache.
     /// Used on full redraws where the cache may be stale.
     /// Updates the viewport overlay.
     pub fn resolve_header_synced(&mut self) -> HeaderLayout {
-        self.resolve_header_inner(true)
+        self.resolve_header_within(self.viewport.width(), true)
     }
 
-    fn resolve_header_inner(&mut self, sync_section: bool) -> HeaderLayout {
-        let width = self.viewport.width();
-        let top = self.viewport.top_line_index();
-        let top_wrap = self.viewport.top_wrap_index();
-        let header = self
-            .header
-            .resolve(&mut self.doc, width, top, top_wrap, sync_section);
+    fn resolve_header_within(&mut self, width: usize, sync_section: bool) -> HeaderLayout {
+        let header = self.header.resolve(
+            &mut self.doc,
+            width,
+            self.viewport.top_line_index(),
+            self.viewport.top_wrap_index(),
+            sync_section,
+        );
         self.viewport.set_overlay_len(header.overlay_height());
         header
     }
