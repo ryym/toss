@@ -258,17 +258,7 @@ impl Viewport {
             return vec![];
         }
         let mut rows = Vec::with_capacity(count);
-        let mut line_index = line_count;
-        while rows.len() < count && line_index > fixed_line_len {
-            line_index -= 1;
-            let line_rows = screen_rows_for_line(doc, width, line_index).unwrap_or_default();
-            for r in line_rows.into_iter().rev() {
-                rows.push(r);
-                if rows.len() >= count {
-                    break;
-                }
-            }
-        }
+        Self::collect_rows_backward(doc, width, &mut rows, line_count, count, fixed_line_len);
         rows.reverse();
         rows
     }
@@ -280,30 +270,7 @@ impl Viewport {
         after: ScreenRow,
         n: usize,
     ) -> Vec<ScreenRow> {
-        let mut rows = Vec::with_capacity(n);
-        // Remaining wrap rows of the current line.
-        let line_rows = screen_rows_for_line(doc, width, after.line_index).unwrap_or_default();
-        for r in line_rows.into_iter().skip(after.wrap_index + 1) {
-            rows.push(r);
-            if rows.len() >= n {
-                return rows;
-            }
-        }
-        // Continue with subsequent lines.
-        let mut line_index = after.line_index + 1;
-        while rows.len() < n {
-            let Some(line_rows) = screen_rows_for_line(doc, width, line_index) else {
-                break;
-            };
-            for r in line_rows {
-                rows.push(r);
-                if rows.len() >= n {
-                    return rows;
-                }
-            }
-            line_index += 1;
-        }
-        rows
+        Self::build_rows_forward(doc, width, after.line_index, after.wrap_index + 1, n)
     }
 
     /// Advance backward from `before` by `n` screen rows.
@@ -319,10 +286,6 @@ impl Viewport {
         // Remaining wrap rows of the current line (before the current wrap).
         let line_rows = screen_rows_for_line(doc, width, before.line_index).unwrap_or_default();
         for r in line_rows.into_iter().take(before.wrap_index).rev() {
-            if r.line_index < fixed_line_len {
-                rows.reverse();
-                return rows;
-            }
             rows.push(r);
             if rows.len() >= n {
                 rows.reverse();
@@ -330,26 +293,34 @@ impl Viewport {
             }
         }
         // Continue with preceding lines.
-        let mut line_index = before.line_index;
-        while rows.len() < n && line_index > fixed_line_len {
+        Self::collect_rows_backward(doc, width, &mut rows, before.line_index, n, fixed_line_len);
+        rows.reverse();
+        rows
+    }
+
+    /// Collect screen rows going backward from the line before `end_line` down to `min_line`.
+    /// Rows are appended to `rows` in reverse order; the caller must reverse when done.
+    fn collect_rows_backward(
+        doc: &mut Document,
+        width: usize,
+        rows: &mut Vec<ScreenRow>,
+        end_line: usize,
+        count: usize,
+        min_line: usize,
+    ) {
+        let mut line_index = end_line;
+        while rows.len() < count && line_index > min_line {
             line_index -= 1;
             let Some(line_rows) = screen_rows_for_line(doc, width, line_index) else {
                 break;
             };
             for r in line_rows.into_iter().rev() {
-                if r.line_index < fixed_line_len {
-                    rows.reverse();
-                    return rows;
-                }
                 rows.push(r);
-                if rows.len() >= n {
-                    rows.reverse();
-                    return rows;
+                if rows.len() >= count {
+                    return;
                 }
             }
         }
-        rows.reverse();
-        rows
     }
 }
 
