@@ -154,15 +154,17 @@ impl Line {
         let mut col = 0;
         let mut i_plain_byte = 0;
         for ch in self.plain.chars() {
-            if i_plain_byte >= plain_offset {
-                break;
-            }
             let ch_width = ch.width().unwrap_or(0);
+            // Check if this character starts a new row (same logic as wrap_end_positions).
             if col + ch_width > width && col > 0 {
                 row += 1;
                 col = ch_width;
             } else {
                 col += ch_width;
+            }
+            // After the wrap check, `row` reflects which row this character belongs to.
+            if i_plain_byte >= plain_offset {
+                return row;
             }
             i_plain_byte += ch.len_utf8();
         }
