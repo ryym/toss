@@ -2,7 +2,9 @@ use std::io;
 use std::time::Duration;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use regex::Regex;
 
+use crate::document::Document;
 use crate::line_editor::LineEditor;
 use crate::page::Page;
 use crate::render;
@@ -416,48 +418,85 @@ impl<S: Screen> App<S> {
 
         let old_current_line = search.current.map(|c| c.line);
 
-        // Try to move to the next match within the same line first.
-        if let Some(current) = search.current
-            && let Some(next_mi) = search::find_next_match_in_line(
+        // If the current cursor is outside the viewport, re-anchor it
+        // to the first visible match instead of jumping from the old position.
+        let needs_reanchor = search
+            .current
+            .is_some_and(|c| !self.page.viewport.contains_line(c.line));
+
+        if needs_reanchor {
+            let reanchored = find_first_match_in_viewport(
                 &mut self.page.doc,
                 &search.query,
-                current,
-                direction,
-            )
-        {
-            log::debug!("Next match on same line: index={next_mi}");
-            if let Some(ref mut search) = self.search {
-                search.current = Some(MatchPosition {
-                    line: current.line,
-                    match_index: next_mi,
-                });
+                self.page.viewport.rows(),
+            );
+            log::debug!("Cursor outside viewport, re-anchor: {reanchored:?}");
+
+            if let Some(pos) = reanchored {
+                let mut dirty = Vec::new();
+                if let Some(old_line) = old_current_line {
+                    dirty.push(old_line);
+                }
+                dirty.push(pos.line);
+                self.redraw = RedrawState::SearchHighlight {
+                    old_match_lines: dirty,
+                };
+                if let Some(ref mut search) = self.search {
+                    search.current = Some(pos);
+                }
+                return;
             }
-            // Same line, just current match index changed — delta redraw.
-            self.redraw = RedrawState::SearchHighlight {
-                old_match_lines: vec![current.line],
-            };
-            return;
+            // No matches in viewport; fall through to search from viewport top.
         }
 
-        // No more matches on the current line; search the next line.
-        let from = match search.current {
-            Some(pos) => match direction {
-                SearchDirection::Forward => {
-                    if pos.line + 1 < self.page.doc.line_count() {
-                        pos.line + 1
-                    } else {
-                        0
-                    }
+        if !needs_reanchor {
+            // Try to move to the next match within the same line first.
+            if let Some(current) = search.current
+                && let Some(next_mi) = search::find_next_match_in_line(
+                    &mut self.page.doc,
+                    &search.query,
+                    current,
+                    direction,
+                )
+            {
+                log::debug!("Next match on same line: index={next_mi}");
+                if let Some(ref mut search) = self.search {
+                    search.current = Some(MatchPosition {
+                        line: current.line,
+                        match_index: next_mi,
+                    });
                 }
-                SearchDirection::Backward => {
-                    if pos.line > 0 {
-                        pos.line - 1
-                    } else {
-                        self.page.doc.line_count().saturating_sub(1)
+                // Same line, just current match index changed — delta redraw.
+                self.redraw = RedrawState::SearchHighlight {
+                    old_match_lines: vec![current.line],
+                };
+                return;
+            }
+        }
+
+        // Search the next line from the appropriate starting point.
+        let from = if needs_reanchor {
+            self.page.viewport.top_line_index()
+        } else {
+            match search.current {
+                Some(pos) => match direction {
+                    SearchDirection::Forward => {
+                        if pos.line + 1 < self.page.doc.line_count() {
+                            pos.line + 1
+                        } else {
+                            0
+                        }
                     }
-                }
-            },
-            None => self.page.viewport.top_line_index(),
+                    SearchDirection::Backward => {
+                        if pos.line > 0 {
+                            pos.line - 1
+                        } else {
+                            self.page.doc.line_count().saturating_sub(1)
+                        }
+                    }
+                },
+                None => self.page.viewport.top_line_index(),
+            }
         };
 
         let matched = search::find_next_match(&mut self.page.doc, &search.query, from, direction);
@@ -600,6 +639,26 @@ fn active_search<'a>(
         AppMode::Search { preview, .. } => preview.as_ref(),
         _ => committed.as_ref(),
     }
+}
+
+/// Find the first match among lines visible in the viewport.
+fn find_first_match_in_viewport(
+    doc: &mut Document,
+    query: &Regex,
+    rows: &[ScreenRow],
+) -> Option<MatchPosition> {
+    let mut last_line = None;
+    for row in rows {
+        if last_line == Some(row.line_index) {
+            continue;
+        }
+        last_line = Some(row.line_index);
+        if let Some(pos) = search::first_match(doc, query, row.line_index, SearchDirection::Forward)
+        {
+            return Some(pos);
+        }
+    }
+    None
 }
 
 /// Detect overlap between old and new viewport rows after a jump.

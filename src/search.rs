@@ -115,7 +115,7 @@ pub fn find_next_match_in_line(
 }
 
 /// Return the first match position on a line (first for forward, last for backward).
-fn first_match(
+pub(crate) fn first_match(
     doc: &mut Document,
     query: &Regex,
     line_index: usize,
