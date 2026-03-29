@@ -124,8 +124,7 @@ pub fn draw_full_page<S: Screen>(
         }
 
         // Draw viewport rows below the header, skipping overlaid rows.
-        let rows = page.viewport.rows();
-        let visible_rows = &rows[overlay.min(rows.len())..];
+        let visible_rows = page.viewport.visible_rows(overlay);
         draw_rows_grouped(
             screen,
             &mut page.doc,
@@ -170,8 +169,7 @@ pub fn apply_jump_scroll<S: Screen>(
         if !highlight_dirty_lines.is_empty() {
             let overlay = page.section_overlay();
             let header_height = page.resolve_header().len();
-            let rows = page.viewport.rows();
-            let visible_rows = &rows[overlay.min(rows.len())..];
+            let visible_rows = page.viewport.visible_rows(overlay);
 
             let (dirty_from, dirty_to) = scroll_dirty_range(visible_rows, scroll_rows, direction);
             let overlap_range = match direction {
@@ -226,8 +224,7 @@ pub fn draw_search_highlight_update<S: Screen>(
         }
 
         // Redraw viewport rows that need highlight updates.
-        let rows = page.viewport.rows();
-        let visible_rows = &rows[overlay.min(rows.len())..];
+        let visible_rows = page.viewport.visible_rows(overlay);
         let dirty_rows = filter_dirty_rows(visible_rows, &mut page.doc, search, old_match_lines);
         if !dirty_rows.is_empty() {
             draw_dirty_rows_at_positions(
@@ -403,8 +400,7 @@ fn apply_scroll_inner<S: Screen>(
     // We redraw the header and status line after scrolling.
     screen.scroll_terminal(plan)?;
 
-    let rows = page.viewport.rows();
-    let visible_rows = &rows[overlay.min(rows.len())..];
+    let visible_rows = page.viewport.visible_rows(overlay);
     let n_scroll = plan.terminal_scroll.get();
 
     let (draw_from, draw_to) = scroll_dirty_range(visible_rows, n_scroll, plan.direction);

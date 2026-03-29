@@ -105,6 +105,11 @@ impl Viewport {
         &self.rows
     }
 
+    /// Screen rows visible to the user, excluding rows hidden by the overlay.
+    pub fn visible_rows(&self, overlay: usize) -> &[ScreenRow] {
+        &self.rows[overlay.min(self.rows.len())..]
+    }
+
     /// Line index of the first visible row, or 0 if no rows exist.
     pub fn top_line_index(&self) -> usize {
         self.rows.first().map(|r| r.line_index).unwrap_or(0)

@@ -420,8 +420,7 @@ impl<S: Screen> App<S> {
 
         // Compute visible rows, excluding any rows hidden by the section header overlay.
         let overlay = self.page.section_overlay();
-        let all_rows = self.page.viewport.rows();
-        let visible_rows = &all_rows[overlay.min(all_rows.len())..];
+        let visible_rows = self.page.viewport.visible_rows(overlay);
         let width = self.page.viewport.width();
 
         // If the current cursor is outside the visible area, re-anchor it
