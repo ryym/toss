@@ -7,6 +7,10 @@ use crate::document::Document;
 pub struct ScreenRow {
     pub line_index: usize,
     pub wrap_index: usize,
+    /// Start byte offset in the raw text for this wrap row (inclusive).
+    pub raw_start: usize,
+    /// End byte offset in the raw text for this wrap row (exclusive).
+    pub raw_end: usize,
 }
 
 /// Direction of scrolling.
@@ -25,39 +29,21 @@ pub struct ScrollPlan {
     pub direction: Direction,
 }
 
-/// Move one row forward in the document. Returns None at the end.
-fn next_row(doc: &mut Document, width: usize, row: ScreenRow) -> Option<ScreenRow> {
-    let line = doc.line(row.line_index)?;
-    if row.wrap_index + 1 < line.row_count(width) {
-        Some(ScreenRow {
-            line_index: row.line_index,
-            wrap_index: row.wrap_index + 1,
+/// Build all ScreenRows for a single line from its wrap ranges.
+fn screen_rows_for_line(doc: &mut Document, width: usize, line_index: usize) -> Vec<ScreenRow> {
+    let Some(line) = doc.line(line_index) else {
+        return vec![];
+    };
+    line.wrap_ranges(width)
+        .into_iter()
+        .enumerate()
+        .map(|(wrap_index, range)| ScreenRow {
+            line_index,
+            wrap_index,
+            raw_start: range.start,
+            raw_end: range.end,
         })
-    } else {
-        doc.line(row.line_index + 1)?;
-        Some(ScreenRow {
-            line_index: row.line_index + 1,
-            wrap_index: 0,
-        })
-    }
-}
-
-/// Move one row backward in the document. Returns None at the beginning.
-fn prev_row(doc: &mut Document, width: usize, row: ScreenRow) -> Option<ScreenRow> {
-    if row.wrap_index > 0 {
-        Some(ScreenRow {
-            line_index: row.line_index,
-            wrap_index: row.wrap_index - 1,
-        })
-    } else if row.line_index > 0 {
-        let prev_line = doc.line(row.line_index - 1)?;
-        Some(ScreenRow {
-            line_index: row.line_index - 1,
-            wrap_index: prev_line.row_count(width) - 1,
-        })
-    } else {
-        None
-    }
+        .collect()
 }
 
 /// Viewport of the content area (excludes header, status line, etc.).
@@ -218,6 +204,8 @@ impl Viewport {
         let top = self.rows.first().copied().unwrap_or(ScreenRow {
             line_index: self.fixed_line_len,
             wrap_index: 0,
+            raw_start: 0,
+            raw_end: 0,
         });
         let top_line = top.line_index.max(self.fixed_line_len);
         self.width = width;
@@ -236,18 +224,22 @@ impl Viewport {
         if count == 0 || doc.line(start_line).is_none() {
             return vec![];
         }
-        let mut current = ScreenRow {
-            line_index: start_line,
-            wrap_index: start_wrap,
-        };
         let mut rows = Vec::with_capacity(count);
-        rows.push(current);
+        let mut line_index = start_line;
+        let mut skip_wraps = start_wrap;
         while rows.len() < count {
-            let Some(next) = next_row(doc, width, current) else {
+            let line_rows = screen_rows_for_line(doc, width, line_index);
+            if line_rows.is_empty() {
                 break;
-            };
-            rows.push(next);
-            current = next;
+            }
+            for r in line_rows.into_iter().skip(skip_wraps) {
+                rows.push(r);
+                if rows.len() >= count {
+                    break;
+                }
+            }
+            skip_wraps = 0;
+            line_index += 1;
         }
         rows
     }
@@ -263,22 +255,17 @@ impl Viewport {
         if line_count == 0 || line_count <= fixed_line_len {
             return vec![];
         }
-        let last_line = doc.line(line_count - 1).unwrap();
-        let mut current = ScreenRow {
-            line_index: line_count - 1,
-            wrap_index: last_line.row_count(width) - 1,
-        };
         let mut rows = Vec::with_capacity(count);
-        rows.push(current);
-        while rows.len() < count {
-            let Some(prev) = prev_row(doc, width, current) else {
-                break;
-            };
-            if prev.line_index < fixed_line_len {
-                break;
+        let mut line_index = line_count;
+        while rows.len() < count && line_index > fixed_line_len {
+            line_index -= 1;
+            let line_rows = screen_rows_for_line(doc, width, line_index);
+            for r in line_rows.into_iter().rev() {
+                rows.push(r);
+                if rows.len() >= count {
+                    break;
+                }
             }
-            rows.push(prev);
-            current = prev;
         }
         rows.reverse();
         rows
@@ -292,13 +279,28 @@ impl Viewport {
         n: usize,
     ) -> Vec<ScreenRow> {
         let mut rows = Vec::with_capacity(n);
-        let mut current = after;
-        for _ in 0..n {
-            let Some(next) = next_row(doc, width, current) else {
+        // Remaining wrap rows of the current line.
+        let line_rows = screen_rows_for_line(doc, width, after.line_index);
+        for r in line_rows.into_iter().skip(after.wrap_index + 1) {
+            rows.push(r);
+            if rows.len() >= n {
+                return rows;
+            }
+        }
+        // Continue with subsequent lines.
+        let mut line_index = after.line_index + 1;
+        while rows.len() < n {
+            let line_rows = screen_rows_for_line(doc, width, line_index);
+            if line_rows.is_empty() {
                 break;
-            };
-            rows.push(next);
-            current = next;
+            }
+            for r in line_rows {
+                rows.push(r);
+                if rows.len() >= n {
+                    return rows;
+                }
+            }
+            line_index += 1;
         }
         rows
     }
@@ -313,16 +315,35 @@ impl Viewport {
         fixed_line_len: usize,
     ) -> Vec<ScreenRow> {
         let mut rows = Vec::with_capacity(n);
-        let mut current = before;
-        for _ in 0..n {
-            let Some(prev) = prev_row(doc, width, current) else {
-                break;
-            };
-            if prev.line_index < fixed_line_len {
-                break;
+        // Remaining wrap rows of the current line (before the current wrap).
+        let line_rows = screen_rows_for_line(doc, width, before.line_index);
+        for r in line_rows.into_iter().take(before.wrap_index).rev() {
+            if r.line_index < fixed_line_len {
+                rows.reverse();
+                return rows;
             }
-            rows.push(prev);
-            current = prev;
+            rows.push(r);
+            if rows.len() >= n {
+                rows.reverse();
+                return rows;
+            }
+        }
+        // Continue with preceding lines.
+        let mut line_index = before.line_index;
+        while rows.len() < n && line_index > fixed_line_len {
+            line_index -= 1;
+            let line_rows = screen_rows_for_line(doc, width, line_index);
+            for r in line_rows.into_iter().rev() {
+                if r.line_index < fixed_line_len {
+                    rows.reverse();
+                    return rows;
+                }
+                rows.push(r);
+                if rows.len() >= n {
+                    rows.reverse();
+                    return rows;
+                }
+            }
         }
         rows.reverse();
         rows
@@ -338,27 +359,16 @@ mod tests {
         Document::from_string(lines.join("\n"))
     }
 
+    /// Extract (line_index, wrap_index) pairs for concise test assertions.
+    fn row_ids(rows: &[ScreenRow]) -> Vec<(usize, usize)> {
+        rows.iter().map(|r| (r.line_index, r.wrap_index)).collect()
+    }
+
     #[test]
     fn initial_state_simple() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc", "ddd", "eee"]);
         let state = Viewport::new(&mut doc, 80, 3, 0);
-        assert_eq!(
-            state.rows(),
-            &[
-                ScreenRow {
-                    line_index: 0,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 1,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 2,
-                    wrap_index: 0
-                },
-            ]
-        );
+        assert_eq!(row_ids(state.rows()), [(0, 0), (1, 0), (2, 0)]);
     }
 
     #[test]
@@ -366,23 +376,7 @@ mod tests {
         // "abcdefgh" wraps to 2 rows at width 5
         let mut doc = make_doc(&["abcdefgh", "xy"]);
         let state = Viewport::new(&mut doc, 5, 4, 0);
-        assert_eq!(
-            state.rows(),
-            &[
-                ScreenRow {
-                    line_index: 0,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 0,
-                    wrap_index: 1
-                },
-                ScreenRow {
-                    line_index: 1,
-                    wrap_index: 0
-                },
-            ]
-        );
+        assert_eq!(row_ids(state.rows()), [(0, 0), (0, 1), (1, 0)]);
     }
 
     #[test]
@@ -392,23 +386,7 @@ mod tests {
         let plan = state.scroll_down(1, &mut doc).unwrap();
         assert_eq!(plan.terminal_scroll.get(), 1);
         assert_eq!(plan.direction, Direction::Down);
-        assert_eq!(
-            state.rows(),
-            &[
-                ScreenRow {
-                    line_index: 1,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 2,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 3,
-                    wrap_index: 0
-                },
-            ]
-        );
+        assert_eq!(row_ids(state.rows()), [(1, 0), (2, 0), (3, 0)]);
     }
 
     #[test]
@@ -416,7 +394,6 @@ mod tests {
         let mut doc = make_doc(&["aaa", "bbb", "ccc"]);
         let mut state = Viewport::new(&mut doc, 80, 3, 0);
         assert!(state.scroll_down(1, &mut doc).is_none());
-        // State unchanged
         assert_eq!(state.rows()[0].line_index, 0);
     }
 
@@ -425,35 +402,11 @@ mod tests {
         // Line "abcdefgh" wraps to 2 rows at width 5
         let mut doc = make_doc(&["short", "abcdefgh", "end"]);
         let mut state = Viewport::new(&mut doc, 5, 3, 0);
-        // Initial: [short/0, abcde/0, fgh/1]
-        assert_eq!(
-            state.rows()[0],
-            ScreenRow {
-                line_index: 0,
-                wrap_index: 0
-            }
-        );
+        assert_eq!(state.rows()[0].line_index, 0);
 
         let plan = state.scroll_down(1, &mut doc).unwrap();
         assert_eq!(plan.terminal_scroll.get(), 1);
-        // After: [abcde/0, fgh/1, end/0]
-        assert_eq!(
-            state.rows(),
-            &[
-                ScreenRow {
-                    line_index: 1,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 1,
-                    wrap_index: 1
-                },
-                ScreenRow {
-                    line_index: 2,
-                    wrap_index: 0
-                },
-            ]
-        );
+        assert_eq!(row_ids(state.rows()), [(1, 0), (1, 1), (2, 0)]);
     }
 
     #[test]
@@ -461,28 +414,11 @@ mod tests {
         let mut doc = make_doc(&["aaa", "bbb", "ccc", "ddd"]);
         let mut state = Viewport::new(&mut doc, 80, 3, 0);
         state.scroll_down(1, &mut doc);
-        // Now: [bbb, ccc, ddd]
 
         let plan = state.scroll_up(1, &mut doc).unwrap();
         assert_eq!(plan.terminal_scroll.get(), 1);
         assert_eq!(plan.direction, Direction::Up);
-        assert_eq!(
-            state.rows(),
-            &[
-                ScreenRow {
-                    line_index: 0,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 1,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 2,
-                    wrap_index: 0
-                },
-            ]
-        );
+        assert_eq!(row_ids(state.rows()), [(0, 0), (1, 0), (2, 0)]);
     }
 
     #[test]
@@ -496,26 +432,11 @@ mod tests {
     fn scroll_up_with_wrap() {
         let mut doc = make_doc(&["abcdefgh", "short"]);
         let mut state = Viewport::new(&mut doc, 5, 2, 0);
-        // Initial: [abcde/0, fgh/1]
         state.scroll_down(1, &mut doc);
-        // Now: [fgh/1, short/0]
 
         let plan = state.scroll_up(1, &mut doc).unwrap();
         assert_eq!(plan.terminal_scroll.get(), 1);
-        // Back to: [abcde/0, fgh/1]
-        assert_eq!(
-            state.rows(),
-            &[
-                ScreenRow {
-                    line_index: 0,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 0,
-                    wrap_index: 1
-                },
-            ]
-        );
+        assert_eq!(row_ids(state.rows()), [(0, 0), (0, 1)]);
     }
 
     #[test]
@@ -524,49 +445,16 @@ mod tests {
         let mut state = Viewport::new(&mut doc, 80, 3, 0);
         let plan = state.scroll_down(3, &mut doc).unwrap();
         assert_eq!(plan.terminal_scroll.get(), 3);
-        assert_eq!(
-            state.rows(),
-            &[
-                ScreenRow {
-                    line_index: 3,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 4,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 5,
-                    wrap_index: 0
-                },
-            ]
-        );
+        assert_eq!(row_ids(state.rows()), [(3, 0), (4, 0), (5, 0)]);
     }
 
     #[test]
     fn scroll_down_clamps_at_end() {
         let mut doc = make_doc(&["a", "b", "c", "d"]);
         let mut state = Viewport::new(&mut doc, 80, 3, 0);
-        // Try to scroll down by 10, but only 1 row available
         let plan = state.scroll_down(10, &mut doc).unwrap();
         assert_eq!(plan.terminal_scroll.get(), 1);
-        assert_eq!(
-            state.rows(),
-            &[
-                ScreenRow {
-                    line_index: 1,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 2,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 3,
-                    wrap_index: 0
-                },
-            ]
-        );
+        assert_eq!(row_ids(state.rows()), [(1, 0), (2, 0), (3, 0)]);
     }
 
     #[test]
@@ -576,23 +464,7 @@ mod tests {
         let changed = state.jump_to(&mut doc, 2);
 
         assert!(changed);
-        assert_eq!(
-            state.rows(),
-            &[
-                ScreenRow {
-                    line_index: 2,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 3,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 4,
-                    wrap_index: 0
-                },
-            ]
-        );
+        assert_eq!(row_ids(state.rows()), [(2, 0), (3, 0), (4, 0)]);
     }
 
     #[test]
@@ -617,23 +489,7 @@ mod tests {
         let changed = state.jump_to_end(&mut doc);
 
         assert!(changed);
-        assert_eq!(
-            state.rows(),
-            &[
-                ScreenRow {
-                    line_index: 2,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 3,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 4,
-                    wrap_index: 0
-                },
-            ]
-        );
+        assert_eq!(row_ids(state.rows()), [(2, 0), (3, 0), (4, 0)]);
     }
 
     #[test]
@@ -644,23 +500,7 @@ mod tests {
         let changed = state.jump_to_end(&mut doc);
 
         assert!(changed);
-        assert_eq!(
-            state.rows(),
-            &[
-                ScreenRow {
-                    line_index: 1,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 2,
-                    wrap_index: 0
-                },
-                ScreenRow {
-                    line_index: 2,
-                    wrap_index: 1
-                },
-            ]
-        );
+        assert_eq!(row_ids(state.rows()), [(1, 0), (2, 0), (2, 1)]);
     }
 
     #[test]
@@ -668,7 +508,21 @@ mod tests {
         let mut doc = make_doc(&["a", "b"]);
         let mut state = Viewport::new(&mut doc, 80, 5, 0);
         let changed = state.jump_to_end(&mut doc);
-        // Already showing everything, no change
         assert!(!changed);
+    }
+
+    #[test]
+    fn raw_range_stored_in_rows() {
+        let mut doc = make_doc(&["abcdefgh", "xy"]);
+        let state = Viewport::new(&mut doc, 5, 4, 0);
+        let rows = state.rows();
+        // "abcdefgh" wraps at width 5: "abcde" (0..5), "fgh" (5..8)
+        assert_eq!(rows[0].raw_start, 0);
+        assert_eq!(rows[0].raw_end, 5);
+        assert_eq!(rows[1].raw_start, 5);
+        assert_eq!(rows[1].raw_end, 8);
+        // "xy": 0..2
+        assert_eq!(rows[2].raw_start, 0);
+        assert_eq!(rows[2].raw_end, 2);
     }
 }

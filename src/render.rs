@@ -16,7 +16,6 @@ fn draw_rows_grouped<S: Screen>(
     screen: &mut S,
     doc: &mut Document,
     rows: &[ScreenRow],
-    width: usize,
     search: Option<&SearchState>,
     screen_y: usize,
 ) -> io::Result<()> {
@@ -33,9 +32,7 @@ fn draw_rows_grouped<S: Screen>(
         }
         // Write the combined text for this group as one continuous piece
         if let Some(line) = doc.line(line_idx) {
-            let first_wrap = rows[group_start].wrap_index;
-            let last_wrap = rows[i - 1].wrap_index;
-            let raw_range = line.wrap_rows_range(width, first_wrap, last_wrap + 1);
+            let raw_range = rows[group_start].raw_start..rows[i - 1].raw_end;
 
             let matches = search.map(|sh| line.find_matches(&sh.query));
             match (search, matches) {
@@ -86,12 +83,11 @@ pub fn draw_status_line<S: Screen>(screen: &mut S, page: &mut Page) -> io::Resul
 fn redraw_header<S: Screen>(
     screen: &mut S,
     page: &mut Page,
-    width: usize,
     search: Option<&SearchState>,
 ) -> io::Result<()> {
     let header = page.resolve_header();
     if header.height() > 0 {
-        draw_rows_grouped(screen, &mut page.doc, header.rows(), width, search, 0)?;
+        draw_rows_grouped(screen, &mut page.doc, header.rows(), search, 0)?;
     }
     Ok(())
 }
@@ -111,25 +107,17 @@ pub fn draw_full_page<S: Screen>(
     search: Option<&SearchState>,
 ) -> io::Result<()> {
     with_sync(screen, |screen| {
-        let width = page.viewport.width();
         let header = page.resolve_header_synced();
         let header_height = header.height();
 
         // Draw header rows at the top of the screen.
         if header_height > 0 {
-            draw_rows_grouped(screen, &mut page.doc, header.rows(), width, search, 0)?;
+            draw_rows_grouped(screen, &mut page.doc, header.rows(), search, 0)?;
         }
 
         // Draw viewport rows below the header, skipping overlaid rows.
         let visible_rows = page.viewport.visible_rows();
-        draw_rows_grouped(
-            screen,
-            &mut page.doc,
-            visible_rows,
-            width,
-            search,
-            header_height,
-        )?;
+        draw_rows_grouped(screen, &mut page.doc, visible_rows, search, header_height)?;
 
         // Clear any rows below content that may have stale content.
         for y in visible_rows.len()..page.viewport.visible_height() {
@@ -157,7 +145,6 @@ pub fn apply_jump_scroll<S: Screen>(
         direction,
     };
     with_sync(screen, |screen| {
-        let width = page.viewport.width();
         apply_scroll_inner(screen, &plan, page, search)?;
 
         // In the overlap area (rows not scrolled in), redraw any rows whose
@@ -182,7 +169,6 @@ pub fn apply_jump_scroll<S: Screen>(
                     &mut page.doc,
                     visible_rows,
                     &dirty_rows,
-                    width,
                     search,
                     header_height,
                 )?;
@@ -204,7 +190,6 @@ pub fn draw_search_highlight_update<S: Screen>(
     old_match_lines: &[usize],
 ) -> io::Result<()> {
     with_sync(screen, |screen| {
-        let width = page.viewport.width();
         let header = page.resolve_header();
         let header_height = header.height();
 
@@ -213,7 +198,7 @@ pub fn draw_search_highlight_update<S: Screen>(
             let dirty_header =
                 filter_dirty_rows(header.rows(), &mut page.doc, search, old_match_lines);
             if !dirty_header.is_empty() {
-                draw_rows_grouped(screen, &mut page.doc, &dirty_header, width, search, 0)?;
+                draw_rows_grouped(screen, &mut page.doc, &dirty_header, search, 0)?;
             }
         }
 
@@ -226,7 +211,6 @@ pub fn draw_search_highlight_update<S: Screen>(
                 &mut page.doc,
                 visible_rows,
                 &dirty_rows,
-                width,
                 search,
                 header_height,
             )?;
@@ -314,7 +298,6 @@ fn draw_dirty_rows_at_positions<S: Screen>(
     doc: &mut Document,
     visible_rows: &[ScreenRow],
     dirty_rows: &[ScreenRow],
-    width: usize,
     search: Option<&SearchState>,
     header_height: usize,
 ) -> io::Result<()> {
@@ -338,14 +321,7 @@ fn draw_dirty_rows_at_positions<S: Screen>(
             i += 1;
         }
         let group = &visible_rows[group_start..i];
-        draw_rows_grouped(
-            screen,
-            doc,
-            group,
-            width,
-            search,
-            header_height + group_start,
-        )?;
+        draw_rows_grouped(screen, doc, group, search, header_height + group_start)?;
     }
     Ok(())
 }
@@ -377,12 +353,10 @@ fn apply_scroll_inner<S: Screen>(
     page: &mut Page,
     search: Option<&SearchState>,
 ) -> io::Result<()> {
-    let width = page.viewport.width();
-
     // When overlay covers the entire viewport, there are no content rows to scroll.
     // Just redraw the header and status line.
     if page.viewport.visible_height() == 0 {
-        redraw_header(screen, page, width, search)?;
+        redraw_header(screen, page, search)?;
         return draw_status_line_inner(screen, page);
     }
 
@@ -401,13 +375,12 @@ fn apply_scroll_inner<S: Screen>(
         screen,
         &mut page.doc,
         &visible_rows[draw_from..draw_to],
-        width,
         search,
         header_height + draw_from,
     )?;
 
     // Redraw header (scrolled away by terminal scroll).
-    redraw_header(screen, page, width, search)?;
+    redraw_header(screen, page, search)?;
 
     draw_status_line_inner(screen, page)
 }

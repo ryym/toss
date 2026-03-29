@@ -415,22 +415,17 @@ impl<S: Screen> App<S> {
 
         // Compute visible rows, excluding any rows hidden by the section header overlay.
         let visible_rows = self.page.viewport.visible_rows();
-        let width = self.page.viewport.width();
 
         // If the current cursor is outside the visible area, re-anchor it
         // to the first visible match instead of jumping from the old position.
         let needs_reanchor = match search.current {
-            Some(c) => !is_match_visible(&mut self.page.doc, &search.query, c, visible_rows, width),
+            Some(c) => !is_match_visible(&mut self.page.doc, &search.query, c, visible_rows),
             None => false,
         };
 
         if needs_reanchor {
-            let reanchored = find_first_match_in_viewport(
-                &mut self.page.doc,
-                &search.query,
-                visible_rows,
-                width,
-            );
+            let reanchored =
+                find_first_match_in_viewport(&mut self.page.doc, &search.query, visible_rows);
             log::debug!("Cursor outside viewport, re-anchor: {reanchored:?}");
 
             if let Some(pos) = reanchored {
@@ -652,7 +647,6 @@ fn is_match_visible(
     query: &Regex,
     pos: MatchPosition,
     visible_rows: &[ScreenRow],
-    width: usize,
 ) -> bool {
     let Some(line) = doc.line(pos.line) else {
         return false;
@@ -661,10 +655,10 @@ fn is_match_visible(
     let Some(&(start, _)) = matches.get(pos.match_index) else {
         return false;
     };
-    let wrap_index = line.wrap_row_for_plain_offset(width, start);
+    let raw_offset = line.plain_to_raw()[start];
     visible_rows
         .iter()
-        .any(|r| r.line_index == pos.line && r.wrap_index == wrap_index)
+        .any(|r| r.line_index == pos.line && r.raw_start <= raw_offset && raw_offset < r.raw_end)
 }
 
 /// Find the first match that falls on a visible wrap row in the viewport.
@@ -672,13 +666,13 @@ fn find_first_match_in_viewport(
     doc: &mut Document,
     query: &Regex,
     visible_rows: &[ScreenRow],
-    width: usize,
 ) -> Option<MatchPosition> {
     for row in visible_rows {
         let line = doc.line(row.line_index)?;
         let matches = line.find_matches(query);
         for (mi, &(start, _)) in matches.iter().enumerate() {
-            if line.wrap_row_for_plain_offset(width, start) == row.wrap_index {
+            let raw_offset = line.plain_to_raw()[start];
+            if row.raw_start <= raw_offset && raw_offset < row.raw_end {
                 return Some(MatchPosition {
                     line: row.line_index,
                     match_index: mi,

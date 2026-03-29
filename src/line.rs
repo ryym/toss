@@ -137,38 +137,16 @@ impl Line {
         self.wrap_end_positions(width).len()
     }
 
-    /// Get the byte range in raw text spanning multiple consecutive wrapped rows
-    /// from `from` to `to` (exclusive).
-    pub fn wrap_rows_range(&self, width: usize, from: usize, to: usize) -> Range<usize> {
+    /// Compute the raw byte ranges for each wrapped row at the given width.
+    pub fn wrap_ranges(&self, width: usize) -> Vec<Range<usize>> {
         let ends = self.wrap_end_positions(width);
-        let start = if from == 0 { 0 } else { ends[from - 1] };
-        start..ends[to - 1]
-    }
-
-    /// Determine which wrap row a plain-text byte offset falls on.
-    pub fn wrap_row_for_plain_offset(&self, width: usize, plain_offset: usize) -> usize {
-        if width == 0 {
-            return 0;
+        let mut ranges = Vec::with_capacity(ends.len());
+        let mut start = 0;
+        for end in ends {
+            ranges.push(start..end);
+            start = end;
         }
-        let mut row = 0;
-        let mut col = 0;
-        let mut i_plain_byte = 0;
-        for ch in self.plain.chars() {
-            let ch_width = ch.width().unwrap_or(0);
-            // Check if this character starts a new row (same logic as wrap_end_positions).
-            if col + ch_width > width && col > 0 {
-                row += 1;
-                col = ch_width;
-            } else {
-                col += ch_width;
-            }
-            // After the wrap check, `row` reflects which row this character belongs to.
-            if i_plain_byte >= plain_offset {
-                return row;
-            }
-            i_plain_byte += ch.len_utf8();
-        }
-        row
+        ranges
     }
 
     /// Check if the plain text contains any match for the given regex.
@@ -191,8 +169,8 @@ mod tests {
     use super::*;
 
     fn wrap_row_text(line: &Line, width: usize, wrap_index: usize) -> &str {
-        let range = line.wrap_rows_range(width, wrap_index, wrap_index + 1);
-        &line.raw[range]
+        let ranges = line.wrap_ranges(width);
+        &line.raw[ranges[wrap_index].clone()]
     }
 
     #[test]
@@ -225,9 +203,10 @@ mod tests {
         assert_eq!(wrap_row_text(&line, 5, 1), "fghij");
         assert_eq!(wrap_row_text(&line, 5, 2), "klm");
         // Multi-row range covers consecutive rows
-        assert_eq!(&line.raw[line.wrap_rows_range(5, 0, 2)], "abcdefghij");
-        assert_eq!(&line.raw[line.wrap_rows_range(5, 1, 3)], "fghijklm");
-        assert_eq!(&line.raw[line.wrap_rows_range(5, 0, 3)], "abcdefghijklm");
+        let ranges = line.wrap_ranges(5);
+        assert_eq!(&line.raw[ranges[0].start..ranges[1].end], "abcdefghij");
+        assert_eq!(&line.raw[ranges[1].start..ranges[2].end], "fghijklm");
+        assert_eq!(&line.raw[ranges[0].start..ranges[2].end], "abcdefghijklm");
     }
 
     #[test]
@@ -296,8 +275,9 @@ mod tests {
         assert_eq!(line.row_count(5), 2);
         assert_eq!(wrap_row_text(&line, 5, 0), "\x1b[1mHello\x1b[0m");
         assert_eq!(wrap_row_text(&line, 5, 1), "World");
+        let ranges = line.wrap_ranges(5);
         assert_eq!(
-            &line.raw[line.wrap_rows_range(5, 0, 2)],
+            &line.raw[ranges[0].start..ranges[1].end],
             "\x1b[1mHello\x1b[0mWorld"
         );
     }
