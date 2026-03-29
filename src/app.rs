@@ -418,17 +418,27 @@ impl<S: Screen> App<S> {
 
         let old_current_line = search.current.map(|c| c.line);
 
-        // If the current cursor is outside the viewport, re-anchor it
+        // Compute visible rows, excluding any rows hidden by the section header overlay.
+        let overlay = self.page.section_overlay();
+        let all_rows = self.page.viewport.rows();
+        let visible_rows: Vec<ScreenRow> = all_rows[overlay.min(all_rows.len())..].to_vec();
+        let width = self.page.viewport.width();
+
+        // If the current cursor is outside the visible area, re-anchor it
         // to the first visible match instead of jumping from the old position.
-        let needs_reanchor = search
-            .current
-            .is_some_and(|c| !self.page.viewport.contains_line(c.line));
+        let needs_reanchor = match search.current {
+            Some(c) => {
+                !is_match_visible(&mut self.page.doc, &search.query, c, &visible_rows, width)
+            }
+            None => false,
+        };
 
         if needs_reanchor {
             let reanchored = find_first_match_in_viewport(
                 &mut self.page.doc,
                 &search.query,
-                self.page.viewport.rows(),
+                &visible_rows,
+                width,
             );
             log::debug!("Cursor outside viewport, re-anchor: {reanchored:?}");
 
@@ -476,7 +486,11 @@ impl<S: Screen> App<S> {
 
         // Search the next line from the appropriate starting point.
         let from = if needs_reanchor {
-            self.page.viewport.top_line_index()
+            // Use the first visible row's line (after overlay), not top_line_index().
+            visible_rows
+                .first()
+                .map(|r| r.line_index)
+                .unwrap_or_else(|| self.page.viewport.top_line_index())
         } else {
             match search.current {
                 Some(pos) => match direction {
@@ -641,21 +655,44 @@ fn active_search<'a>(
     }
 }
 
-/// Find the first match among lines visible in the viewport.
+/// Check if a match is on a wrap row that is actually visible on screen.
+fn is_match_visible(
+    doc: &mut Document,
+    query: &Regex,
+    pos: MatchPosition,
+    visible_rows: &[ScreenRow],
+    width: usize,
+) -> bool {
+    let Some(line) = doc.line(pos.line) else {
+        return false;
+    };
+    let matches = line.find_matches(query);
+    let Some(&(start, _)) = matches.get(pos.match_index) else {
+        return false;
+    };
+    let wrap_index = line.wrap_row_for_plain_offset(width, start);
+    visible_rows
+        .iter()
+        .any(|r| r.line_index == pos.line && r.wrap_index == wrap_index)
+}
+
+/// Find the first match that falls on a visible wrap row in the viewport.
 fn find_first_match_in_viewport(
     doc: &mut Document,
     query: &Regex,
-    rows: &[ScreenRow],
+    visible_rows: &[ScreenRow],
+    width: usize,
 ) -> Option<MatchPosition> {
-    let mut last_line = None;
-    for row in rows {
-        if last_line == Some(row.line_index) {
-            continue;
-        }
-        last_line = Some(row.line_index);
-        if let Some(pos) = search::first_match(doc, query, row.line_index, SearchDirection::Forward)
-        {
-            return Some(pos);
+    for row in visible_rows {
+        let line = doc.line(row.line_index)?;
+        let matches = line.find_matches(query);
+        for (mi, &(start, _)) in matches.iter().enumerate() {
+            if line.wrap_row_for_plain_offset(width, start) == row.wrap_index {
+                return Some(MatchPosition {
+                    line: row.line_index,
+                    match_index: mi,
+                });
+            }
         }
     }
     None
