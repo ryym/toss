@@ -8,21 +8,28 @@ fn enter() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
 }
 
+fn section_opts(pattern: &str, header_lines: usize) -> Option<SectionOptions> {
+    Some(SectionOptions {
+        pattern: regex::Regex::new(pattern).unwrap(),
+        header_lines,
+    })
+}
+
 // When the cursor is outside the viewport and visible matches exist,
 // pressing n re-anchors the cursor to the first visible match without scrolling.
 // The second n then jumps forward from the re-anchored position.
 #[test]
 fn reanchor_to_first_visible_match() {
     let content = "\
-foo 1
+A 1
 line 2
 line 3
 line 4
 line 5
 line 6
-foo 7
+A 7
 line 8
-foo 9
+A 9
 line 10
 ";
     let screen = run_test_screen(TestCase {
@@ -31,24 +38,58 @@ line 10
         content,
         events: vec![
             key('/'),
-            key('f'),
-            key('o'),
-            key('o'),
+            key('A'),
             enter(),
-            key('G'), // Jump to end — cursor ("foo 1") goes off-screen.
-            key('n'), // Re-anchors to "foo 9" (first visible match). No scroll.
-            key('n'), // Jumps from "foo 9" forward, wrapping to "foo 1".
+            key('G'), // Jump to end — cursor ("A 1") goes off-screen.
+            key('n'), // Re-anchors to "A 9" (first visible match). No scroll.
+            key('n'), // Jumps from "A 9" forward, wrapping to "A 1".
         ],
         ..Default::default()
     });
-    // Final state: jumped to "foo 1" — proves the second n started from "foo 9".
     let want = "\
-{reverse}foo{/reverse} 1
+A 1
 line 2
 line 3
 :
+-----
+[EVENT]:char:/
+A 1
+line 2
+line 3
+/█
+-----
+[EVENT]:char:A
+{reverse}A{/reverse} 1
+line 2
+line 3
+/A█
+-----
+[EVENT]:enter
+{reverse}A{/reverse} 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:G
+line 8
+{dim}{reverse}A{/reverse}{/dim} 9
+line 10
+:
+-----
+[EVENT]:char:n
+line 8
+{reverse}A{/reverse} 9
+line 10
+:
+-----
+[EVENT]:char:n
+{reverse}A{/reverse} 1
+line 2
+line 3
+:
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // When the cursor is outside the viewport and no matches are visible,
@@ -56,14 +97,14 @@ line 3
 #[test]
 fn reanchor_searches_from_viewport_top() {
     let content = "\
-foo 1
+A 1
 line 2
 line 3
 line 4
 line 5
 line 6
 line 7
-foo 8
+A 8
 ";
     let screen = run_test_screen(TestCase {
         screen_width: 20,
@@ -71,25 +112,66 @@ foo 8
         content,
         events: vec![
             key('/'),
-            key('f'),
-            key('o'),
-            key('o'),
+            key('A'),
             enter(),
-            // Scroll down so cursor ("foo 1") is off-screen and no matches visible.
+            // Scroll down so cursor ("A 1") is off-screen and no matches visible.
             key('j'),
             key('j'),
             key('j'),
-            key('n'), // Searches forward from viewport top, finds "foo 8".
+            key('n'), // Searches forward from viewport top, finds "A 8".
         ],
         ..Default::default()
     });
     let want = "\
+A 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:/
+A 1
+line 2
+line 3
+/█
+-----
+[EVENT]:char:A
+{reverse}A{/reverse} 1
+line 2
+line 3
+/A█
+-----
+[EVENT]:enter
+{reverse}A{/reverse} 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:j
+line 2
+line 3
+line 4
+:
+-----
+[EVENT]:char:j
+line 3
+line 4
+line 5
+:
+-----
+[EVENT]:char:j
+line 4
+line 5
+line 6
+:
+-----
+[EVENT]:char:n
 line 6
 line 7
-{reverse}foo{/reverse} 8
+{reverse}A{/reverse} 8
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // When the cursor is still within the viewport, n jumps normally.
@@ -97,11 +179,11 @@ line 7
 fn no_reanchor_when_cursor_visible() {
     let content = "\
 line 1
-foo 2
+A 2
 line 3
-foo 4
+A 4
 line 5
-foo 6
+line 6
 ";
     let screen = run_test_screen(TestCase {
         screen_width: 20,
@@ -109,22 +191,51 @@ foo 6
         content,
         events: vec![
             key('/'),
-            key('f'),
-            key('o'),
-            key('o'),
+            key('A'),
             enter(),
-            key('j'), // Scroll down 1. Cursor ("foo 2") is still visible.
-            key('n'), // Cursor visible, so normal jump to "foo 4".
+            key('k'), // Scroll up 1. Cursor ("A 2") is still visible.
+            key('n'), // Cursor visible, so normal jump to "A 4".
         ],
         ..Default::default()
     });
     let want = "\
+line 1
+A 2
 line 3
-{reverse}foo{/reverse} 4
-line 5
 :
+-----
+[EVENT]:char:/
+line 1
+A 2
+line 3
+/█
+-----
+[EVENT]:char:A
+{reverse}A{/reverse} 2
+line 3
+{dim}{reverse}A{/reverse}{/dim} 4
+/A█
+-----
+[EVENT]:enter
+{reverse}A{/reverse} 2
+line 3
+{dim}{reverse}A{/reverse}{/dim} 4
+:
+-----
+[EVENT]:char:k
+line 1
+{reverse}A{/reverse} 2
+line 3
+:
+-----
+[EVENT]:char:n
+{reverse}A{/reverse} 4
+line 5
+line 6
+:
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Reverse search (N) also re-anchors when cursor is off-screen.
@@ -134,11 +245,11 @@ fn reanchor_reverse_direction() {
 line 1
 line 2
 line 3
-foo 4
+A 4
 line 5
-foo 6
+A 6
 line 7
-foo 8
+A 8
 ";
     let screen = run_test_screen(TestCase {
         screen_width: 20,
@@ -146,94 +257,59 @@ foo 8
         content,
         events: vec![
             key('/'),
-            key('f'),
-            key('o'),
-            key('o'),
+            key('A'),
             enter(),
-            key('G'), // Jump to end — cursor ("foo 4") goes off-screen.
+            key('G'), // Jump to end — cursor ("A 4") goes off-screen.
             key('N'), // Re-anchors to first visible match.
             key('N'), // Jumps backward from the re-anchored position.
         ],
         ..Default::default()
     });
-    // Re-anchored to "foo 6" (first visible), then N backward to "foo 4".
+    // Re-anchored to "A 6" (first visible), then N backward to "A 4".
     let want = "\
-{reverse}foo{/reverse} 4
-line 5
-{dim}{reverse}foo{/reverse}{/dim} 6
-:
-";
-    assert_eq!(screen.last_snapshot(), want);
-}
-
-// Verify the intermediate re-anchor state: after G + n, the cursor moves
-// to the first visible match WITHOUT scrolling (only highlight changes).
-#[test]
-fn reanchor_does_not_scroll() {
-    let content = "\
-foo 1
+line 1
 line 2
 line 3
-line 4
-foo 5
-line 6
-foo 7
+:
+-----
+[EVENT]:char:/
+line 1
+line 2
+line 3
+/█
+-----
+[EVENT]:char:A
+{reverse}A{/reverse} 4
+line 5
+{dim}{reverse}A{/reverse}{/dim} 6
+/A█
+-----
+[EVENT]:enter
+{reverse}A{/reverse} 4
+line 5
+{dim}{reverse}A{/reverse}{/dim} 6
+:
+-----
+[EVENT]:char:G
+{dim}{reverse}A{/reverse}{/dim} 6
+line 7
+{dim}{reverse}A{/reverse}{/dim} 8
+:
+-----
+[EVENT]:char:N
+{reverse}A{/reverse} 6
+line 7
+{dim}{reverse}A{/reverse}{/dim} 8
+:
+-----
+[EVENT]:char:N
+{reverse}A{/reverse} 4
+line 5
+{dim}{reverse}A{/reverse}{/dim} 6
+:
+-----
 ";
-    let out = run_test_screen(TestCase {
-        screen_width: 20,
-        screen_height: 4,
-        content,
-        events: vec![
-            key('/'),
-            key('f'),
-            key('o'),
-            key('o'),
-            enter(),
-            key('G'),
-            key('n'),
-        ],
-        ..Default::default()
-    })
-    .out();
-
-    // Extract just the last two snapshots (after G and after n).
-    let snapshots: Vec<&str> = out.split("-----\n").collect();
-    let len = snapshots.len();
-
-    // After G: viewport at end, matches dimmed (not current).
-    let after_g = snapshots[len - 3]
-        .trim_start_matches(|c: char| c != '\n')
-        .trim_start();
-    assert_eq!(
-        after_g,
-        "\
-{dim}{reverse}foo{/reverse}{/dim} 5
-line 6
-{dim}{reverse}foo{/reverse}{/dim} 7
-:
-"
-    );
-
-    // After n: same viewport, but "foo 5" is now current (re-anchored).
-    let after_n = snapshots[len - 2]
-        .trim_start_matches(|c: char| c != '\n')
-        .trim_start();
-    assert_eq!(
-        after_n,
-        "\
-{reverse}foo{/reverse} 5
-line 6
-{dim}{reverse}foo{/reverse}{/dim} 7
-:
-"
-    );
-}
-
-fn section_opts(pattern: &str, header_lines: usize) -> Option<SectionOptions> {
-    Some(SectionOptions {
-        pattern: regex::Regex::new(pattern).unwrap(),
-        header_lines,
-    })
+    assert_eq!(screen.out(), want);
 }
 
 // When a section header overlay hides a match, re-anchor should skip it
@@ -244,13 +320,13 @@ fn reanchor_skips_match_hidden_by_section_header() {
     // After scrolling, the overlay hides the first viewport row.
     let content = "\
 # Sec
-foo 1
+A 1
 line 2
 line 3
 line 4
-foo 5
+A 5
 line 6
-foo 7
+A 7
 line 8
 ";
     let screen = run_test_screen(TestCase {
@@ -263,30 +339,71 @@ line 8
         },
         events: vec![
             key('/'),
-            key('f'),
-            key('o'),
-            key('o'),
+            key('A'),
             enter(),
-            // Jump to end — cursor ("foo 1") goes off-screen.
+            // Jump to end — cursor ("A 1") goes off-screen.
             // The sticky header "# Sec" overlays the first viewport row.
             key('G'),
-            // n: re-anchor. "foo 5" is in the viewport rows but hidden by overlay.
-            // Should re-anchor to "foo 7" (first actually visible match).
+            // n: re-anchor. "A 5" is in the viewport rows but hidden by overlay.
+            // Should re-anchor to "A 7" (first actually visible match).
             key('n'),
-            // n: jump from "foo 7" forward, wrapping to "foo 1".
+            // n: jump from "A 7" forward, wrapping to "A 1".
             key('n'),
         ],
         ..Default::default()
     });
-    // Final state shows "foo 1" — proves re-anchor landed on "foo 7", not "foo 5".
+    // Final state shows "A 1" — proves re-anchor landed on "A 7", not "A 5".
     let want = "\
 # Sec
-{reverse}foo{/reverse} 1
+A 1
 line 2
 line 3
 :
+-----
+[EVENT]:char:/
+# Sec
+A 1
+line 2
+line 3
+/█
+-----
+[EVENT]:char:A
+# Sec
+{reverse}A{/reverse} 1
+line 2
+line 3
+/A█
+-----
+[EVENT]:enter
+# Sec
+{reverse}A{/reverse} 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:G
+# Sec
+line 6
+{dim}{reverse}A{/reverse}{/dim} 7
+line 8
+:
+-----
+[EVENT]:char:n
+# Sec
+line 6
+{reverse}A{/reverse} 7
+line 8
+:
+-----
+[EVENT]:char:n
+# Sec
+{reverse}A{/reverse} 1
+line 2
+line 3
+:
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // When a long line wraps and only the later wrap rows are visible,
@@ -303,9 +420,9 @@ fn reanchor_with_wrapped_line() {
     let content = "\
 short
 foo12foo34end
-last foo
+last-foo
 ";
-    let out = run_test_screen(TestCase {
+    let screen = run_test_screen(TestCase {
         screen_width: 5,
         screen_height: 4,
         content,
@@ -325,22 +442,61 @@ last foo
             key('n'),
         ],
         ..Default::default()
-    })
-    .out();
-
-    let snapshots: Vec<&str> = out.split("-----\n").collect();
-    let len = snapshots.len();
-    let after_n = snapshots[len - 2]
-        .trim_start_matches(|c: char| c != '\n')
-        .trim_start();
-    // The viewport still shows [end, "last ", "foo"] without scrolling.
-    // "foo" from "last foo" is highlighted as the current match.
-    // The wrap continuation marker ">" appears inside the highlight span.
+    });
     let want = "\
+short
+foo12>
+foo34
+:
+-----
+[EVENT]:char:/
+short
+foo12>
+foo34
+/█
+-----
+[EVENT]:char:f
+{reverse}f{/reverse}oo12{dim}{reverse}>
+f{/reverse}{/dim}oo34>
 end
-last {reverse}>
+/f█
+-----
+[EVENT]:char:o
+{reverse}fo{/reverse}o12{dim}{reverse}>
+fo{/reverse}{/dim}o34>
+end
+/fo█
+-----
+[EVENT]:char:o
+{reverse}foo{/reverse}12{dim}{reverse}>
+foo{/reverse}{/dim}34>
+end
+/foo█
+-----
+[EVENT]:enter
+{reverse}foo{/reverse}12{dim}{reverse}>
+foo{/reverse}{/dim}34>
+end
+:
+-----
+[EVENT]:char:j
+foo{/reverse}{/dim}34>
+end
+last-
+:
+-----
+[EVENT]:char:j
+end
+last-{dim}{reverse}>
+foo{/reverse}{/dim}
+:
+-----
+[EVENT]:char:n
+end
+last-{reverse}>
 foo{/reverse}
 :
+-----
 ";
-    assert_eq!(after_n, want);
+    assert_eq!(screen.out(), want);
 }
