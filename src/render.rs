@@ -90,17 +90,16 @@ fn redraw_header<S: Screen>(
     width: usize,
     search: Option<&SearchState>,
 ) -> io::Result<()> {
-    let header_rows = page.resolve_header();
-    if !header_rows.is_empty() {
-        draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
+    let header = page.resolve_header();
+    if header.height() > 0 {
+        draw_rows_grouped(screen, &mut page.doc, header.rows(), width, search, 0)?;
     }
     Ok(())
 }
 
 fn draw_status_line_inner<S: Screen>(screen: &mut S, page: &mut Page) -> io::Result<()> {
-    let header_height = page.resolve_header().len();
-    let overlay = page.viewport.overlay_len();
-    let status_y = (header_height + page.viewport.rows().len() - overlay) as u16;
+    let header = page.resolve_header();
+    let status_y = (header.fixed_height() + page.viewport.rows().len()) as u16;
     screen.clear_row(status_y)?;
     screen.write_at(status_y, page.status.render())?;
     Ok(())
@@ -114,12 +113,12 @@ pub fn draw_full_page<S: Screen>(
 ) -> io::Result<()> {
     with_sync(screen, |screen| {
         let width = page.viewport.width();
-        let header_rows = page.resolve_header_synced();
-        let header_height = header_rows.len();
+        let header = page.resolve_header_synced();
+        let header_height = header.height();
 
         // Draw header rows at the top of the screen.
         if header_height > 0 {
-            draw_rows_grouped(screen, &mut page.doc, &header_rows, width, search, 0)?;
+            draw_rows_grouped(screen, &mut page.doc, header.rows(), width, search, 0)?;
         }
 
         // Draw viewport rows below the header, skipping overlaid rows.
@@ -165,7 +164,7 @@ pub fn apply_jump_scroll<S: Screen>(
         // In the overlap area (rows not scrolled in), redraw any rows whose
         // highlight state changed (e.g., old/new current match line for n/N).
         if !highlight_dirty_lines.is_empty() {
-            let header_height = page.resolve_header().len();
+            let header_height = page.resolve_header().height();
             let visible_rows = page.viewport.visible_rows();
 
             let (dirty_from, dirty_to) = scroll_dirty_range(visible_rows, scroll_rows, direction);
@@ -207,13 +206,13 @@ pub fn draw_search_highlight_update<S: Screen>(
 ) -> io::Result<()> {
     with_sync(screen, |screen| {
         let width = page.viewport.width();
-        let header_rows = page.resolve_header();
-        let header_height = header_rows.len();
+        let header = page.resolve_header();
+        let header_height = header.height();
 
         // Redraw header rows that need highlight updates.
         if header_height > 0 {
             let dirty_header =
-                filter_dirty_rows(&header_rows, &mut page.doc, search, old_match_lines);
+                filter_dirty_rows(header.rows(), &mut page.doc, search, old_match_lines);
             if !dirty_header.is_empty() {
                 draw_rows_grouped(screen, &mut page.doc, &dirty_header, width, search, 0)?;
             }
@@ -388,7 +387,7 @@ fn apply_scroll_inner<S: Screen>(
         return draw_status_line_inner(screen, page);
     }
 
-    let header_height = page.resolve_header().len();
+    let header_height = page.resolve_header().height();
 
     // Terminal scroll shifts the entire screen (including header and status line).
     // We redraw the header and status line after scrolling.

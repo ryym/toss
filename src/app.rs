@@ -509,7 +509,7 @@ impl<S: Screen> App<S> {
         log::debug!("Next match from line {from}: {matched:?}");
         if let Some(ref pos) = matched {
             let old_rows = self.page.viewport.rows().to_vec();
-            let old_header_height = self.page.resolve_header().len();
+            let old_header_height = self.page.resolve_header().height();
 
             let scrolled = self.page.jump_to_visible(pos.line);
 
@@ -520,7 +520,7 @@ impl<S: Screen> App<S> {
             dirty.push(pos.line);
 
             if scrolled {
-                let new_header_height = self.page.resolve_header().len();
+                let new_header_height = self.page.resolve_header().height();
                 if old_header_height == new_header_height {
                     if let Some((n, dir)) =
                         compute_scroll_overlap(&old_rows, self.page.viewport.rows())
@@ -568,9 +568,9 @@ impl<S: Screen> App<S> {
             }
         }
         // Also include header rows.
-        let header_rows = self.page.resolve_header();
+        let header = self.page.resolve_header();
         let mut last_line = None;
-        for row in &header_rows {
+        for row in header.rows() {
             if last_line == Some(row.line_index) {
                 continue;
             }
@@ -616,10 +616,10 @@ impl<S: Screen> App<S> {
 
     /// Apply a scroll and handle section header changes.
     fn apply_scroll(&mut self, rows: isize) -> io::Result<()> {
-        let old_header_height = self.page.resolve_header().len();
+        let old_header_height = self.page.resolve_header().height();
 
         if let Some(plan) = self.page.plan_scroll(rows) {
-            let new_header_height = self.page.resolve_header().len();
+            let new_header_height = self.page.resolve_header().height();
 
             if old_header_height != new_header_height {
                 // Header height changed (section change, push-up, or overlay change):

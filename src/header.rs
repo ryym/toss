@@ -2,6 +2,7 @@ use regex::Regex;
 
 use crate::document::Document;
 use crate::options::SectionOptions;
+use crate::page::HeaderLayout;
 use crate::viewport::ScreenRow;
 
 /// Manages sticky header lines pinned at the top of the screen.
@@ -56,13 +57,13 @@ impl Header {
         viewport_top: usize,
         viewport_top_wrap: usize,
         sync_section: bool,
-    ) -> (Vec<ScreenRow>, usize) {
+    ) -> HeaderLayout {
         if sync_section && let Some(ref mut index) = self.section_index {
             index.find_section(doc, viewport_top);
         }
 
         let mut rows = self.resolve_fixed(doc, width);
-        let fixed_row_count = rows.len();
+        let fixed_height = rows.len();
 
         if let Some(ref index) = self.section_index
             && let Some(section_start) = index.current_section()
@@ -100,8 +101,7 @@ impl Header {
             rows.extend_from_slice(&block_rows[skip..]);
         }
 
-        let overlay_len = rows.len() - fixed_row_count;
-        (rows, overlay_len)
+        HeaderLayout { rows, fixed_height }
     }
 
     /// Returns the height of the fixed header portion only (for initial layout).
