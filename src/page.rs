@@ -135,25 +135,6 @@ impl Page {
         self.viewport.set_overlay_len(overlay_len);
         rows
     }
-
-    /// Synchronize the section cache and adjust viewport if header height changed.
-    /// Call this before a full redraw to ensure the viewport is correctly sized.
-    /// May need multiple iterations if resizing changes the viewport top, which
-    /// in turn changes which section is sticky.
-    pub fn sync_section_for_redraw(&mut self, screen_height: usize) {
-        loop {
-            let header_height = self.resolve_header_synced().len();
-            let overlay_len = self.viewport.overlay_len();
-            let content_height = screen_height
-                .saturating_sub(1)
-                .saturating_sub(header_height - overlay_len);
-            if content_height == self.viewport.height() {
-                break;
-            }
-            self.viewport
-                .resize(&mut self.doc, self.viewport.width(), content_height);
-        }
-    }
 }
 
 #[cfg(test)]

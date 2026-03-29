@@ -114,7 +114,7 @@ pub fn draw_full_page<S: Screen>(
 ) -> io::Result<()> {
     with_sync(screen, |screen| {
         let width = page.viewport.width();
-        let header_rows = page.resolve_header();
+        let header_rows = page.resolve_header_synced();
         let header_height = header_rows.len();
 
         // Draw header rows at the top of the screen.
