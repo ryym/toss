@@ -30,20 +30,23 @@ pub struct ScrollPlan {
 }
 
 /// Build all ScreenRows for a single line from its wrap ranges.
-fn screen_rows_for_line(doc: &mut Document, width: usize, line_index: usize) -> Vec<ScreenRow> {
-    let Some(line) = doc.line(line_index) else {
-        return vec![];
-    };
-    line.wrap(width)
-        .into_iter()
-        .enumerate()
-        .map(|(wrap_index, range)| ScreenRow {
-            line_index,
-            wrap_index,
-            raw_start: range.start,
-            raw_end: range.end,
-        })
-        .collect()
+fn screen_rows_for_line(
+    doc: &mut Document,
+    width: usize,
+    line_index: usize,
+) -> Option<Vec<ScreenRow>> {
+    doc.line(line_index).map(|line| {
+        line.wrap(width)
+            .into_iter()
+            .enumerate()
+            .map(|(wrap_index, range)| ScreenRow {
+                line_index,
+                wrap_index,
+                raw_start: range.start,
+                raw_end: range.end,
+            })
+            .collect()
+    })
 }
 
 /// Viewport of the content area (excludes header, status line, etc.).
@@ -228,10 +231,9 @@ impl Viewport {
         let mut line_index = start_line;
         let mut skip_wraps = start_wrap;
         while rows.len() < count {
-            let line_rows = screen_rows_for_line(doc, width, line_index);
-            if line_rows.is_empty() {
+            let Some(line_rows) = screen_rows_for_line(doc, width, line_index) else {
                 break;
-            }
+            };
             for r in line_rows.into_iter().skip(skip_wraps) {
                 rows.push(r);
                 if rows.len() >= count {
@@ -259,7 +261,7 @@ impl Viewport {
         let mut line_index = line_count;
         while rows.len() < count && line_index > fixed_line_len {
             line_index -= 1;
-            let line_rows = screen_rows_for_line(doc, width, line_index);
+            let line_rows = screen_rows_for_line(doc, width, line_index).unwrap_or_default();
             for r in line_rows.into_iter().rev() {
                 rows.push(r);
                 if rows.len() >= count {
@@ -280,7 +282,7 @@ impl Viewport {
     ) -> Vec<ScreenRow> {
         let mut rows = Vec::with_capacity(n);
         // Remaining wrap rows of the current line.
-        let line_rows = screen_rows_for_line(doc, width, after.line_index);
+        let line_rows = screen_rows_for_line(doc, width, after.line_index).unwrap_or_default();
         for r in line_rows.into_iter().skip(after.wrap_index + 1) {
             rows.push(r);
             if rows.len() >= n {
@@ -290,10 +292,9 @@ impl Viewport {
         // Continue with subsequent lines.
         let mut line_index = after.line_index + 1;
         while rows.len() < n {
-            let line_rows = screen_rows_for_line(doc, width, line_index);
-            if line_rows.is_empty() {
+            let Some(line_rows) = screen_rows_for_line(doc, width, line_index) else {
                 break;
-            }
+            };
             for r in line_rows {
                 rows.push(r);
                 if rows.len() >= n {
@@ -316,7 +317,7 @@ impl Viewport {
     ) -> Vec<ScreenRow> {
         let mut rows = Vec::with_capacity(n);
         // Remaining wrap rows of the current line (before the current wrap).
-        let line_rows = screen_rows_for_line(doc, width, before.line_index);
+        let line_rows = screen_rows_for_line(doc, width, before.line_index).unwrap_or_default();
         for r in line_rows.into_iter().take(before.wrap_index).rev() {
             if r.line_index < fixed_line_len {
                 rows.reverse();
@@ -332,7 +333,9 @@ impl Viewport {
         let mut line_index = before.line_index;
         while rows.len() < n && line_index > fixed_line_len {
             line_index -= 1;
-            let line_rows = screen_rows_for_line(doc, width, line_index);
+            let Some(line_rows) = screen_rows_for_line(doc, width, line_index) else {
+                break;
+            };
             for r in line_rows.into_iter().rev() {
                 if r.line_index < fixed_line_len {
                     rows.reverse();
