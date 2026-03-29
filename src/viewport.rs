@@ -76,7 +76,7 @@ pub struct Viewport {
     /// For multi-line section headers (N>=2), the section header overlays
     /// viewport rows instead of resizing the viewport. For single-line
     /// headers (N=1), this is always 0 (resize model is used).
-    overlay_len: usize,
+    overlay_height: usize,
 }
 
 impl Viewport {
@@ -92,7 +92,7 @@ impl Viewport {
             width,
             height,
             fixed_line_len,
-            overlay_len: 0,
+            overlay_height: 0,
         }
     }
 
@@ -108,7 +108,7 @@ impl Viewport {
 
     /// Height of the content area visible to the user (excluding overlay).
     pub fn visible_height(&self) -> usize {
-        self.height.saturating_sub(self.overlay_len)
+        self.height.saturating_sub(self.overlay_height)
     }
 
     /// Current screen rows.
@@ -117,18 +117,18 @@ impl Viewport {
     }
 
     /// Number of screen rows overlaid by the section header.
-    pub fn overlay_len(&self) -> usize {
-        self.overlay_len
+    pub fn overlay_height(&self) -> usize {
+        self.overlay_height
     }
 
     /// Set the number of screen rows overlaid by the section header.
-    pub fn set_overlay_len(&mut self, len: usize) {
-        self.overlay_len = len;
+    pub fn set_overlay_height(&mut self, height: usize) {
+        self.overlay_height = height;
     }
 
     /// Screen rows visible to the user, excluding rows hidden by the overlay.
     pub fn visible_rows(&self) -> &[ScreenRow] {
-        &self.rows[self.overlay_len.min(self.rows.len())..]
+        &self.rows[self.overlay_height.min(self.rows.len())..]
     }
 
     /// Line index of the first visible row, or 0 if no rows exist.

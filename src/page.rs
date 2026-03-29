@@ -114,7 +114,7 @@ impl Page {
         let mut changed = self.viewport.jump_to(&mut self.doc, line);
         loop {
             self.resolve_header_synced();
-            let overlay = self.viewport.overlay_len();
+            let overlay = self.viewport.overlay_height();
             let target_row = self
                 .viewport
                 .rows()
@@ -155,7 +155,7 @@ impl Page {
             self.viewport.top_wrap_index(),
             sync_section,
         );
-        self.viewport.set_overlay_len(header.overlay_height());
+        self.viewport.set_overlay_height(header.overlay_height());
         header
     }
 }
