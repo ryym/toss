@@ -50,20 +50,17 @@ impl Page {
     /// Resize the viewport to fit the new terminal dimensions, accounting for
     /// the header and status line.
     pub fn resize(&mut self, width: usize, height: usize) {
-        let header_height = self
-            .header
-            .resolve(
-                &mut self.doc,
-                width,
-                self.viewport.top_line_index(),
-                self.viewport.top_wrap_index(),
-                true,
-            )
-            .len();
-        let overlay = self.header.section_overlay();
+        let (header_rows, overlay_len) = self.header.resolve(
+            &mut self.doc,
+            width,
+            self.viewport.top_line_index(),
+            self.viewport.top_wrap_index(),
+            true,
+        );
+        self.viewport.set_overlay_len(overlay_len);
         let content_height = height
             .saturating_sub(1)
-            .saturating_sub(header_height - overlay);
+            .saturating_sub(header_rows.len() - overlay_len);
         self.viewport.resize(&mut self.doc, width, content_height);
     }
 
@@ -92,7 +89,7 @@ impl Page {
         let mut changed = self.viewport.jump_to(&mut self.doc, line);
         loop {
             self.resolve_header_synced();
-            let overlay = self.header.section_overlay();
+            let overlay = self.viewport.overlay_len();
             let target_row = self
                 .viewport
                 .rows()
@@ -111,29 +108,32 @@ impl Page {
         changed
     }
 
-    /// Number of viewport rows overlaid by the section header.
-    pub fn section_overlay(&self) -> usize {
-        self.header.section_overlay()
-    }
-
     /// Resolve the header rows for the current viewport width.
     /// Uses `sync_section=false` (assumes cache is already up to date from scroll).
+    /// Updates the viewport overlay.
     pub fn resolve_header(&mut self) -> Vec<ScreenRow> {
         let width = self.viewport.width();
         let top = self.viewport.top_line_index();
         let top_wrap = self.viewport.top_wrap_index();
-        self.header
-            .resolve(&mut self.doc, width, top, top_wrap, false)
+        let (rows, overlay_len) = self
+            .header
+            .resolve(&mut self.doc, width, top, top_wrap, false);
+        self.viewport.set_overlay_len(overlay_len);
+        rows
     }
 
     /// Resolve the header rows, synchronizing the section index cache.
     /// Used on full redraws where the cache may be stale.
+    /// Updates the viewport overlay.
     pub fn resolve_header_synced(&mut self) -> Vec<ScreenRow> {
         let width = self.viewport.width();
         let top = self.viewport.top_line_index();
         let top_wrap = self.viewport.top_wrap_index();
-        self.header
-            .resolve(&mut self.doc, width, top, top_wrap, true)
+        let (rows, overlay_len) = self
+            .header
+            .resolve(&mut self.doc, width, top, top_wrap, true);
+        self.viewport.set_overlay_len(overlay_len);
+        rows
     }
 
     /// Synchronize the section cache and adjust viewport if header height changed.
@@ -143,10 +143,10 @@ impl Page {
     pub fn sync_section_for_redraw(&mut self, screen_height: usize) {
         loop {
             let header_height = self.resolve_header_synced().len();
-            let overlay = self.header.section_overlay();
+            let overlay_len = self.viewport.overlay_len();
             let content_height = screen_height
                 .saturating_sub(1)
-                .saturating_sub(header_height - overlay);
+                .saturating_sub(header_height - overlay_len);
             if content_height == self.viewport.height() {
                 break;
             }

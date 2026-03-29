@@ -419,8 +419,7 @@ impl<S: Screen> App<S> {
         let old_current_line = search.current.map(|c| c.line);
 
         // Compute visible rows, excluding any rows hidden by the section header overlay.
-        let overlay = self.page.section_overlay();
-        let visible_rows = self.page.viewport.visible_rows(overlay);
+        let visible_rows = self.page.viewport.visible_rows();
         let width = self.page.viewport.width();
 
         // If the current cursor is outside the visible area, re-anchor it

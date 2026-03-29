@@ -10,11 +10,6 @@ pub struct Header {
     fixed_lines: usize,
     /// Section index for dynamic sticky headers.
     section_index: Option<SectionIndex>,
-    /// Cached: number of viewport screen rows overlaid by the section header.
-    /// For multi-line section headers (N>=2), the section header overlays
-    /// viewport rows instead of resizing the viewport. For single-line
-    /// headers (N=1), this is always 0 (resize model is used).
-    cached_overlay: usize,
 }
 
 impl Header {
@@ -26,20 +21,12 @@ impl Header {
         Self {
             fixed_lines,
             section_index,
-            cached_overlay: 0,
         }
     }
 
     /// The number of fixed header lines.
     pub fn fixed_line_len(&self) -> usize {
         self.fixed_lines
-    }
-
-    /// Number of viewport screen rows overlaid by the section header.
-    /// For multi-line section headers (N>=2), the section header overlays
-    /// viewport rows. For single-line headers (N=1), this is 0.
-    pub fn section_overlay(&self) -> usize {
-        self.cached_overlay
     }
 
     /// Update the section index cache after a scroll operation.
@@ -69,7 +56,7 @@ impl Header {
         viewport_top: usize,
         viewport_top_wrap: usize,
         sync_section: bool,
-    ) -> Vec<ScreenRow> {
+    ) -> (Vec<ScreenRow>, usize) {
         if sync_section && let Some(ref mut index) = self.section_index {
             index.find_section(doc, viewport_top);
         }
@@ -113,9 +100,8 @@ impl Header {
             rows.extend_from_slice(&block_rows[skip..]);
         }
 
-        self.cached_overlay = rows.len() - fixed_row_count;
-
-        rows
+        let overlay_len = rows.len() - fixed_row_count;
+        (rows, overlay_len)
     }
 
     /// Returns the height of the fixed header portion only (for initial layout).
