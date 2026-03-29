@@ -6,12 +6,11 @@ use regex::Regex;
 
 use crate::document::Document;
 use crate::line_editor::LineEditor;
-use crate::page::Page;
+use crate::page::{Direction, Page, ScreenRow};
 use crate::render;
 use crate::screen::Screen;
 use crate::scroll::ScrollPhysics;
 use crate::search::{self, MatchPosition, SearchDirection, SearchState};
-use crate::viewport::{Direction, ScreenRow};
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);

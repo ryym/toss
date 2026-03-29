@@ -117,7 +117,7 @@ impl Viewport {
     }
 
     /// Set the number of screen rows overlaid by the section header.
-    pub fn set_overlay_height(&mut self, height: usize) {
+    pub(super) fn set_overlay_height(&mut self, height: usize) {
         self.overlay_height = height;
     }
 

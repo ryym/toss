@@ -1,8 +1,12 @@
+mod header;
+pub mod viewport;
+
+pub use viewport::{Direction, ScreenRow, ScrollPlan, Viewport};
+
 use crate::document::Document;
-use crate::header::Header;
 use crate::options::Options;
 use crate::status_line::StatusLine;
-use crate::viewport::{ScreenRow, ScrollPlan, Viewport};
+use header::Header;
 
 /// Resolved header layout for the current viewport position.
 pub struct HeaderLayout {

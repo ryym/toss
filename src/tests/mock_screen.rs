@@ -4,8 +4,8 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use unicode_width::UnicodeWidthChar;
 
 use crate::ansi;
+use crate::page::{Direction, ScrollPlan};
 use crate::screen::Screen;
-use crate::viewport::{Direction, ScrollPlan};
 
 #[derive(Debug, Clone)]
 struct GridRow {

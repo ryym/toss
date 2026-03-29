@@ -4,10 +4,9 @@ use std::io;
 use std::num::NonZeroUsize;
 
 use crate::document::Document;
-use crate::page::Page;
+use crate::page::{Direction, Page, ScreenRow, ScrollPlan};
 use crate::screen::Screen;
 use crate::search::SearchState;
-use crate::viewport::{Direction, ScreenRow, ScrollPlan};
 
 /// Draw screen rows, grouping consecutive rows from the same logical line
 /// and writing them as a single continuous string so the terminal treats

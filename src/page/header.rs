@@ -1,9 +1,9 @@
 use regex::Regex;
 
+use super::HeaderLayout;
+use super::viewport::ScreenRow;
 use crate::document::Document;
 use crate::options::SectionOptions;
-use crate::page::HeaderLayout;
-use crate::viewport::ScreenRow;
 
 /// Manages sticky header lines pinned at the top of the screen.
 pub struct Header {

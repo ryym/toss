@@ -8,7 +8,7 @@ use crossterm::{
     terminal::{self, BeginSynchronizedUpdate, ClearType, EndSynchronizedUpdate},
 };
 
-use crate::viewport::{Direction, ScrollPlan};
+use crate::page::{Direction, ScrollPlan};
 
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {

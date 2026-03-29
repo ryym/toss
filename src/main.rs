@@ -2,7 +2,6 @@ mod ansi;
 mod app;
 mod cli;
 mod document;
-mod header;
 mod line;
 mod line_editor;
 mod logger;
@@ -13,7 +12,6 @@ mod screen;
 mod scroll;
 mod search;
 mod status_line;
-mod viewport;
 
 #[cfg(test)]
 mod tests;
