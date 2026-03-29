@@ -99,19 +99,19 @@ impl Line {
         &self.raw
     }
 
-    /// Compute wrap positions for this line at the given screen width.
-    /// Returns byte offsets into the **raw** text where each wrapped row ends
-    /// (exclusive). The last element is always `raw.len()`.
+    /// Compute the raw byte ranges for each wrapped row at the given width.
     ///
     /// Wrapping is computed on the plain text (visible characters only) but
-    /// positions are mapped back to the raw text so that slicing produces
-    /// correct output including escape sequences.
-    fn wrap_end_positions(&self, width: usize) -> Vec<usize> {
+    /// ranges refer to the raw text so that slicing produces correct output
+    /// including escape sequences.
+    pub fn wrap(&self, width: usize) -> Vec<Range<usize>> {
         if width == 0 {
-            return vec![self.raw.len()];
+            let all = 0..self.raw.len();
+            return vec![all];
         }
 
-        let mut rows = Vec::new();
+        let mut ranges = Vec::new();
+        let mut row_start = 0;
         let mut col = 0;
         let mut i_plain_byte = 0;
 
@@ -119,34 +119,22 @@ impl Line {
             let i_raw = self.plain_to_raw[i_plain_byte];
             let ch_width = ch.width().unwrap_or(0);
             if col + ch_width > width && col > 0 {
-                // This character starts a new row; end the current row here.
-                rows.push(i_raw);
+                ranges.push(row_start..i_raw);
+                row_start = i_raw;
                 col = ch_width;
             } else {
                 col += ch_width;
             }
             i_plain_byte += ch.len_utf8();
         }
-        rows.push(self.raw.len());
+        ranges.push(row_start..self.raw.len());
 
-        rows
+        ranges
     }
 
     /// Number of screen rows this line occupies at the given width.
     pub fn row_count(&self, width: usize) -> usize {
-        self.wrap_end_positions(width).len()
-    }
-
-    /// Compute the raw byte ranges for each wrapped row at the given width.
-    pub fn wrap_ranges(&self, width: usize) -> Vec<Range<usize>> {
-        let ends = self.wrap_end_positions(width);
-        let mut ranges = Vec::with_capacity(ends.len());
-        let mut start = 0;
-        for end in ends {
-            ranges.push(start..end);
-            start = end;
-        }
-        ranges
+        self.wrap(width).len()
     }
 
     /// Check if the plain text contains any match for the given regex.
@@ -169,7 +157,7 @@ mod tests {
     use super::*;
 
     fn wrap_row_text(line: &Line, width: usize, wrap_index: usize) -> &str {
-        let ranges = line.wrap_ranges(width);
+        let ranges = line.wrap(width);
         &line.raw[ranges[wrap_index].clone()]
     }
 
@@ -203,7 +191,7 @@ mod tests {
         assert_eq!(wrap_row_text(&line, 5, 1), "fghij");
         assert_eq!(wrap_row_text(&line, 5, 2), "klm");
         // Multi-row range covers consecutive rows
-        let ranges = line.wrap_ranges(5);
+        let ranges = line.wrap(5);
         assert_eq!(&line.raw[ranges[0].start..ranges[1].end], "abcdefghij");
         assert_eq!(&line.raw[ranges[1].start..ranges[2].end], "fghijklm");
         assert_eq!(&line.raw[ranges[0].start..ranges[2].end], "abcdefghijklm");
@@ -275,7 +263,7 @@ mod tests {
         assert_eq!(line.row_count(5), 2);
         assert_eq!(wrap_row_text(&line, 5, 0), "\x1b[1mHello\x1b[0m");
         assert_eq!(wrap_row_text(&line, 5, 1), "World");
-        let ranges = line.wrap_ranges(5);
+        let ranges = line.wrap(5);
         assert_eq!(
             &line.raw[ranges[0].start..ranges[1].end],
             "\x1b[1mHello\x1b[0mWorld"

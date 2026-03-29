@@ -34,7 +34,7 @@ fn screen_rows_for_line(doc: &mut Document, width: usize, line_index: usize) -> 
     let Some(line) = doc.line(line_index) else {
         return vec![];
     };
-    line.wrap_ranges(width)
+    line.wrap(width)
         .into_iter()
         .enumerate()
         .map(|(wrap_index, range)| ScreenRow {
