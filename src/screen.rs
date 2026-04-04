@@ -1,4 +1,4 @@
-use std::io::{self, Stdout, Write};
+use std::io::{self, BufWriter, Stdout, Write};
 
 use crossterm::{
     cursor,
@@ -38,13 +38,14 @@ pub trait Screen {
 
 /// crossterm-based terminal screen.
 pub struct TermScreen {
-    stdout: Stdout,
+    stdout: BufWriter<Stdout>,
 }
 
 impl TermScreen {
     pub fn new() -> io::Result<Self> {
-        let mut stdout = io::stdout();
         terminal::enable_raw_mode()?;
+        let stdout = io::stdout();
+        let mut stdout = BufWriter::with_capacity(16384, stdout);
         execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide,)?;
         Ok(Self { stdout })
     }
