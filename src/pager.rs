@@ -36,7 +36,7 @@ impl Document {
         Document { lines }
     }
 
-    fn line(&self, i: usize) -> Option<Line> {
+    fn line(&mut self, i: usize) -> Option<Line> {
         self.lines.get(i).map(|text| Line {
             index: i,
             text: text.clone(),
@@ -108,7 +108,12 @@ impl Row {
     }
 }
 
-fn rows_from_lines(doc: &Document, width: usize, line_start: usize, line_end: usize) -> Vec<Row> {
+fn rows_from_lines(
+    doc: &mut Document,
+    width: usize,
+    line_start: usize,
+    line_end: usize,
+) -> Vec<Row> {
     let mut rows = vec![];
     for i in line_start..line_end {
         if let Some(line) = doc.line(i) {
@@ -131,10 +136,10 @@ struct Pager {
 }
 
 impl Pager {
-    fn new(doc: Document, size: &ViewportSize, options: Options) -> Self {
-        let header = GlobalHeader::new(&doc, size, options.header);
+    fn new(mut doc: Document, size: &ViewportSize, options: Options) -> Self {
+        let header = GlobalHeader::new(&mut doc, size, options.header);
         let section = Section::new(options.section, size, header.height());
-        let viewport = Viewport::new(&doc, size);
+        let viewport = Viewport::new(&mut doc, size);
         let mut pager = Pager {
             doc,
             header,
@@ -146,9 +151,10 @@ impl Pager {
     }
 
     fn resize(&mut self, size: &ViewportSize) {
-        self.header.resize(&self.doc, size);
-        self.section.resize(&self.doc, size, self.header.height());
-        self.viewport.resize(&self.doc, size);
+        self.header.resize(&mut self.doc, size);
+        self.section
+            .resize(&mut self.doc, size, self.header.height());
+        self.viewport.resize(&mut self.doc, size);
     }
 
     fn total_header_height(&self) -> usize {
@@ -157,7 +163,7 @@ impl Pager {
 
     fn jump_to(&mut self, mut line_index: usize, offset: usize) {
         // section header をセットする。
-        self.section.resolve(&self.doc, line_index);
+        self.section.resolve(&mut self.doc, line_index);
 
         // line_index がいずれかの global header 内にある場合は、 doc の先頭に移動。
         if self.header.contains(line_index) {
@@ -171,15 +177,15 @@ impl Pager {
             self.total_header_height()
         };
         self.viewport
-            .jump_to(&self.doc, line_index, offset + header_offset);
+            .jump_to(&mut self.doc, line_index, offset + header_offset);
     }
 
     fn jump_to_end(&mut self) {
         // まずドキュメント末尾を基準に viewport をセットする。
-        self.viewport.jump_to_end(&self.doc);
+        self.viewport.jump_to_end(&mut self.doc);
         // それをもとに対応する section header を被せる。
         let top_row_line_index = self.viewport.all_rows()[0].line_index;
-        self.section.resolve(&self.doc, top_row_line_index);
+        self.section.resolve(&mut self.doc, top_row_line_index);
         // overlay 内に次の section header がある場合は push-up する。
         self.push_up_section_header_if_needed();
     }
@@ -198,7 +204,7 @@ impl Pager {
 
     fn scroll_up(&mut self, n_rows: usize) {
         // viewport をスクロールする。
-        self.viewport.scroll_up(&self.doc, n_rows);
+        self.viewport.scroll_up(&mut self.doc, n_rows);
 
         // 元々 section がない場合、上方向へのスクロールで新たに section が見つかることはありえないので、何もしない。
         let section_header_start = match self.section.start_line_index() {
@@ -208,7 +214,7 @@ impl Pager {
         // 新しい viewport 先頭が今の section header より手前にあるなら、より上の section を探してセットする。
         let top_index = self.viewport.all_rows()[self.header.height()].line_index;
         if top_index < section_header_start {
-            self.section.resolve(&self.doc, top_index);
+            self.section.resolve(&mut self.doc, top_index);
         }
 
         // 1つ前の section header がまだ overlay 領域にいる場合、新しい section header の位置を調整する。
@@ -219,12 +225,12 @@ impl Pager {
         let prev_top_line = self.viewport.all_rows()[self.header.height()].line_index;
 
         // viewport をスクロールする。
-        self.viewport.scroll_down(&self.doc, n_rows);
+        self.viewport.scroll_down(&mut self.doc, n_rows);
         let top_line = self.viewport.all_rows()[self.header.height()].line_index;
 
         // 移動範囲内に新たな section header があればそれに置き換える。
         self.section
-            .resolve_if_found(&self.doc, prev_top_line..(top_line + 1));
+            .resolve_if_found(&mut self.doc, prev_top_line..(top_line + 1));
 
         // overlay 領域にその次の section があるか探し、あれば section header 領域を狭める。
         self.push_up_section_header_if_needed();
@@ -264,7 +270,7 @@ struct GlobalHeader {
 }
 
 impl GlobalHeader {
-    fn new(doc: &Document, size: &ViewportSize, n_lines: usize) -> Self {
+    fn new(doc: &mut Document, size: &ViewportSize, n_lines: usize) -> Self {
         let n_lines = n_lines.min(size.height - 1);
         let rows = Self::build_rows_static(doc, size, n_lines);
         GlobalHeader { n_lines, rows }
@@ -274,7 +280,7 @@ impl GlobalHeader {
         &self.rows
     }
 
-    fn resize(&mut self, doc: &Document, size: &ViewportSize) {
+    fn resize(&mut self, doc: &mut Document, size: &ViewportSize) {
         self.n_lines = self.n_lines.min(size.height - 1);
         self.rows = Self::build_rows_static(doc, size, self.n_lines);
     }
@@ -287,7 +293,7 @@ impl GlobalHeader {
         line_index < self.height()
     }
 
-    fn build_rows_static(doc: &Document, size: &ViewportSize, n_lines: usize) -> Vec<Row> {
+    fn build_rows_static(doc: &mut Document, size: &ViewportSize, n_lines: usize) -> Vec<Row> {
         rows_from_lines(doc, size.width, 0, n_lines)
     }
 }
@@ -365,7 +371,7 @@ impl Section {
         }
     }
 
-    fn resize(&mut self, doc: &Document, size: &ViewportSize, global_header_height: usize) {
+    fn resize(&mut self, doc: &mut Document, size: &ViewportSize, global_header_height: usize) {
         self.size = SectionSizeConfig {
             min_line_index: global_header_height,
             max_header_height: size.height - global_header_height - 1,
@@ -378,19 +384,19 @@ impl Section {
 
     // line_index に対応する直近の section header を探してセットする。
     // line_index が section header の先頭もしくは一部であるなら、その section header がセットされる。
-    fn resolve(&mut self, doc: &Document, line_index: usize) {
+    fn resolve(&mut self, doc: &mut Document, line_index: usize) {
         self.header = self.find_header(doc, self.size.min_line_index..line_index);
     }
 
     // line_index_range 内で section header を探し、見つかった場合のみそれをセットする。
     // 見つからなかった場合は今の section header が維持される。
-    fn resolve_if_found(&mut self, doc: &Document, line_index_range: Range<usize>) {
+    fn resolve_if_found(&mut self, doc: &mut Document, line_index_range: Range<usize>) {
         if let Some(header) = self.find_header(doc, line_index_range) {
             self.header = Some(header);
         }
     }
 
-    fn find_header(&self, doc: &Document, range: Range<usize>) -> Option<SectionHeaderData> {
+    fn find_header(&self, doc: &mut Document, range: Range<usize>) -> Option<SectionHeaderData> {
         let config = self.config.as_ref()?;
         if self.size.max_header_height == 0 {
             return None;
@@ -433,7 +439,7 @@ struct Viewport {
 }
 
 impl Viewport {
-    fn new(doc: &Document, size: &ViewportSize) -> Self {
+    fn new(doc: &mut Document, size: &ViewportSize) -> Self {
         let rows = build_rows_forward(doc, size.width, (0, 0), size.height);
         Viewport {
             size: ViewportSize {
@@ -453,7 +459,7 @@ impl Viewport {
         &self.rows
     }
 
-    fn resize(&mut self, doc: &Document, size: &ViewportSize) {
+    fn resize(&mut self, doc: &mut Document, size: &ViewportSize) {
         self.rows = build_rows_forward(doc, size.width, self.rows[0].to_tuple(), size.height);
         self.size = ViewportSize {
             width: size.width,
@@ -462,7 +468,7 @@ impl Viewport {
     }
 
     // 指定行数分を末尾から除去し、同じ行数分を先頭に追加する。
-    fn scroll_up(&mut self, doc: &Document, n_rows: usize) {
+    fn scroll_up(&mut self, doc: &mut Document, n_rows: usize) {
         if n_rows == 0 || self.rows.is_empty() {
             return;
         }
@@ -480,7 +486,7 @@ impl Viewport {
     }
 
     // 指定行数分を先頭から除去し、同じ行数分を末尾に追加する。
-    fn scroll_down(&mut self, doc: &Document, n_rows: usize) {
+    fn scroll_down(&mut self, doc: &mut Document, n_rows: usize) {
         if n_rows == 0 || self.rows.is_empty() {
             return;
         }
@@ -501,7 +507,7 @@ impl Viewport {
         self.rows.extend(new_rows);
     }
 
-    fn jump_to(&mut self, doc: &Document, line_index: usize, row_offset: usize) {
+    fn jump_to(&mut self, doc: &mut Document, line_index: usize, row_offset: usize) {
         let height = self.size.height;
         let rows_after_line = build_rows_forward(doc, self.size.width, (line_index, 0), height);
 
@@ -521,14 +527,14 @@ impl Viewport {
         self.rows = combined;
     }
 
-    fn jump_to_end(&mut self, doc: &Document) {
+    fn jump_to_end(&mut self, doc: &mut Document) {
         let count = self.rows.len();
         self.rows = build_rows_backward(doc, self.size.width, BuildFrom::End, count);
     }
 }
 
 fn build_rows_forward(
-    doc: &Document,
+    doc: &mut Document,
     width: usize,
     start: (usize, usize),
     count: usize,
@@ -558,7 +564,12 @@ enum BuildFrom {
     Before(Row),
 }
 
-fn build_rows_backward(doc: &Document, width: usize, from: BuildFrom, count: usize) -> Vec<Row> {
+fn build_rows_backward(
+    doc: &mut Document,
+    width: usize,
+    from: BuildFrom,
+    count: usize,
+) -> Vec<Row> {
     let (mut line_index, mut from_wrap): (isize, Option<usize>) = match from {
         BuildFrom::End => ((doc.line_count() as isize) - 1, None),
         BuildFrom::Before(row) => {
