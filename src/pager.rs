@@ -7,19 +7,11 @@
 
 use std::ops::Range;
 
+use crate::options::{Options, SectionOptions};
+
 struct ViewportSize {
     width: usize,
     height: usize,
-}
-
-struct Options {
-    header: usize,
-    section: Option<SectionOptions>,
-}
-
-struct SectionOptions {
-    pattern: regex::Regex,
-    header_lines: usize,
 }
 
 struct Document {
