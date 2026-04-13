@@ -68,7 +68,7 @@ mod tests {
     use super::*;
 
     fn make_line(text: &str) -> Line {
-        Line::new(text.to_string())
+        Line::new(0, text.to_string())
     }
 
     #[test]

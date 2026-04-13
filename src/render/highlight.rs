@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn plain_text_single_match() {
-        let line = Line::new("hello world".into());
+        let line = Line::new(0, "hello world".into());
         let positions = build_from_line(&line, &[(6, 11)]); // "world"
         let result = apply_full(&line, &positions);
         assert_eq!(result, "hello \x1b[7mworld\x1b[27m");
@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn plain_text_multiple_matches() {
-        let line = Line::new("foo bar foo".into());
+        let line = Line::new(0, "foo bar foo".into());
         let positions = build_from_line(&line, &[(0, 3), (8, 11)]); // both "foo"
         let result = apply_full(&line, &positions);
         assert_eq!(
@@ -219,7 +219,7 @@ mod tests {
         // raw:   "This is \x1b[1mCargo\x1b[0m.toml"
         // plain: "This is Cargo.toml"
         // match: "go.to" -> plain 11..16
-        let line = Line::new("This is \x1b[1mCargo\x1b[0m.toml".into());
+        let line = Line::new(0, "This is \x1b[1mCargo\x1b[0m.toml".into());
         let positions = build_from_line(&line, &[(11, 16)]);
         let result = apply_full(&line, &positions);
         // After "go", there's \x1b[0m, then ".to" starts. InnerControlEnd re-applies reverse.
@@ -231,7 +231,7 @@ mod tests {
 
     #[test]
     fn no_matches() {
-        let line = Line::new("hello world".into());
+        let line = Line::new(0, "hello world".into());
         let positions = build_from_line(&line, &[]);
         let result = apply_full(&line, &positions);
         assert_eq!(result, "hello world");
@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn match_at_beginning() {
-        let line = Line::new("hello world".into());
+        let line = Line::new(0, "hello world".into());
         let positions = build_from_line(&line, &[(0, 5)]); // "hello"
         let result = apply_full(&line, &positions);
         assert_eq!(result, "\x1b[7mhello\x1b[27m world");
@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn match_entire_line() {
-        let line = Line::new("abc".into());
+        let line = Line::new(0, "abc".into());
         let positions = build_from_line(&line, &[(0, 3)]);
         let result = apply_full(&line, &positions);
         assert_eq!(result, "\x1b[7mabc\x1b[27m");
@@ -259,7 +259,7 @@ mod tests {
         // plain: "abcdefghij"
         // match: "ef" -> plain 4..6
         // At width 5: row 0 = raw 0..5 ("abcde"), row 1 = raw 5..10 ("fghij")
-        let line = Line::new("abcdefghij".into());
+        let line = Line::new(0, "abcdefghij".into());
         let positions = build_from_line(&line, &[(4, 6)]);
 
         // Row 0: raw 0..5 -> "abcde" with "e" highlighted

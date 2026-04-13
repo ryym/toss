@@ -19,9 +19,38 @@ use unicode_width::UnicodeWidthChar;
 
 use crate::ansi;
 
+/// A single row produced by wrapping a [`Line`] at a given width.
+///
+/// When a line is too wide for the given width, it is split into multiple rows.
+/// Each `Row` represents one of those wrap segments, carrying enough information
+/// to locate the corresponding text in the original line.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Row {
+    /// Index of the source line in the document.
+    pub line_index: usize,
+    /// Zero-based position of this row among the wrap rows of its line.
+    pub wrap_index: usize,
+    /// Byte range in the line's raw text covered by this row.
+    pub raw_range: Range<usize>,
+}
+
+impl Row {
+    fn new(line_index: usize, wrap_index: usize, raw_range: Range<usize>) -> Self {
+        Self {
+            line_index,
+            wrap_index,
+            raw_range,
+        }
+    }
+}
+
 /// A single line of text from the document.
 #[derive(Debug, Clone)]
 pub struct Line {
+    /// Zero-based position of this line in the document (i.e., the line number).
+    /// This is passed through to [`Row::line_index`] when wrapping.
+    index: usize,
+
     /// Original text including ANSI escape sequences.
     raw: String,
 
@@ -53,7 +82,8 @@ pub struct Line {
 
 impl Line {
     /// Create a line from raw text, parsing out ANSI escape sequences.
-    pub fn new(raw_line: String) -> Self {
+    /// `index` is the position of this line in the document.
+    pub fn new(index: usize, raw_line: String) -> Self {
         let mut plain = String::with_capacity(raw_line.len());
         let mut plain_to_raw = Vec::new();
         let mut i_raw = 0;
@@ -72,6 +102,7 @@ impl Line {
             }
         }
         Self {
+            index,
             raw: raw_line,
             plain,
             plain_to_raw,
@@ -99,18 +130,21 @@ impl Line {
         &self.raw
     }
 
-    /// Compute the raw byte ranges for each wrapped row at the given width.
+    /// Compute the wrapped rows at the given width.
     ///
     /// Wrapping is computed on the plain text (visible characters only) but
-    /// ranges refer to the raw text so that slicing produces correct output
-    /// including escape sequences.
-    pub fn wrap(&self, width: usize) -> Vec<Range<usize>> {
+    /// raw_range in each Row refers to the raw text so that slicing produces
+    /// correct output including escape sequences.
+    pub fn wrap(&self, width: usize) -> Vec<Row> {
         if width == 0 {
-            let all = 0..self.raw.len();
-            return vec![all];
+            return vec![Row {
+                line_index: self.index,
+                wrap_index: 0,
+                raw_range: 0..self.raw.len(),
+            }];
         }
 
-        let mut ranges = Vec::new();
+        let mut rows = Vec::new();
         let mut row_start = 0;
         let mut col = 0;
         let mut i_plain_byte = 0;
@@ -119,7 +153,7 @@ impl Line {
             let i_raw = self.plain_to_raw[i_plain_byte];
             let ch_width = ch.width().unwrap_or(0);
             if col + ch_width > width && col > 0 {
-                ranges.push(row_start..i_raw);
+                rows.push(Row::new(self.index, rows.len(), row_start..i_raw));
                 row_start = i_raw;
                 col = ch_width;
             } else {
@@ -127,9 +161,9 @@ impl Line {
             }
             i_plain_byte += ch.len_utf8();
         }
-        ranges.push(row_start..self.raw.len());
+        rows.push(Row::new(self.index, rows.len(), row_start..self.raw.len()));
 
-        ranges
+        rows
     }
 
     /// Number of screen rows this line occupies at the given width.
@@ -157,27 +191,27 @@ mod tests {
     use super::*;
 
     fn wrap_row_text(line: &Line, width: usize, wrap_index: usize) -> &str {
-        let ranges = line.wrap(width);
-        &line.raw[ranges[wrap_index].clone()]
+        let rows = line.wrap(width);
+        &line.raw[rows[wrap_index].raw_range.clone()]
     }
 
     #[test]
     fn wrap_short_line() {
-        let line = Line::new("hello".into());
+        let line = Line::new(0, "hello".into());
         assert_eq!(line.row_count(80), 1);
         assert_eq!(wrap_row_text(&line, 80, 0), "hello");
     }
 
     #[test]
     fn wrap_exact_width() {
-        let line = Line::new("abcde".into());
+        let line = Line::new(0, "abcde".into());
         assert_eq!(line.row_count(5), 1);
         assert_eq!(wrap_row_text(&line, 5, 0), "abcde");
     }
 
     #[test]
     fn wrap_overflow() {
-        let line = Line::new("abcdefgh".into());
+        let line = Line::new(0, "abcdefgh".into());
         assert_eq!(line.row_count(5), 2);
         assert_eq!(wrap_row_text(&line, 5, 0), "abcde");
         assert_eq!(wrap_row_text(&line, 5, 1), "fgh");
@@ -185,22 +219,31 @@ mod tests {
 
     #[test]
     fn wrap_multiple_rows() {
-        let line = Line::new("abcdefghijklm".into());
+        let line = Line::new(0, "abcdefghijklm".into());
         assert_eq!(line.row_count(5), 3);
         assert_eq!(wrap_row_text(&line, 5, 0), "abcde");
         assert_eq!(wrap_row_text(&line, 5, 1), "fghij");
         assert_eq!(wrap_row_text(&line, 5, 2), "klm");
         // Multi-row range covers consecutive rows
-        let ranges = line.wrap(5);
-        assert_eq!(&line.raw[ranges[0].start..ranges[1].end], "abcdefghij");
-        assert_eq!(&line.raw[ranges[1].start..ranges[2].end], "fghijklm");
-        assert_eq!(&line.raw[ranges[0].start..ranges[2].end], "abcdefghijklm");
+        let rows = line.wrap(5);
+        assert_eq!(
+            &line.raw[rows[0].raw_range.start..rows[1].raw_range.end],
+            "abcdefghij"
+        );
+        assert_eq!(
+            &line.raw[rows[1].raw_range.start..rows[2].raw_range.end],
+            "fghijklm"
+        );
+        assert_eq!(
+            &line.raw[rows[0].raw_range.start..rows[2].raw_range.end],
+            "abcdefghijklm"
+        );
     }
 
     #[test]
     fn wrap_wide_chars() {
         // Each CJK char is 2 columns wide
-        let line = Line::new("あいうえお".into());
+        let line = Line::new(0, "あいうえお".into());
         // width=6: "あいう" (6 cols), "えお" (4 cols)
         assert_eq!(line.row_count(6), 2);
         assert_eq!(wrap_row_text(&line, 6, 0), "あいう");
@@ -210,7 +253,7 @@ mod tests {
     #[test]
     fn wrap_wide_char_at_boundary() {
         // width=5: "あい" (4 cols), then "う" (2 cols) won't fit -> wrap
-        let line = Line::new("あいう".into());
+        let line = Line::new(0, "あいう".into());
         assert_eq!(line.row_count(5), 2);
         assert_eq!(wrap_row_text(&line, 5, 0), "あい");
         assert_eq!(wrap_row_text(&line, 5, 1), "う");
@@ -218,7 +261,7 @@ mod tests {
 
     #[test]
     fn empty_line() {
-        let line = Line::new(String::new());
+        let line = Line::new(0, String::new());
         assert_eq!(line.row_count(80), 1);
         assert_eq!(wrap_row_text(&line, 80, 0), "");
     }
@@ -227,7 +270,7 @@ mod tests {
 
     #[test]
     fn plain_text_strips_escapes() {
-        let line = Line::new("\x1b[1mHi\x1b[0m, 😀".into());
+        let line = Line::new(0, "\x1b[1mHi\x1b[0m, 😀".into());
         assert_eq!(line.text(), "\x1b[1mHi\x1b[0m, 😀");
         // plain should have escapes stripped
         assert_eq!(line.plain, "Hi, 😀");
@@ -235,7 +278,7 @@ mod tests {
 
     #[test]
     fn plain_to_raw_mapping() {
-        let line = Line::new("\x1b[1mHi\x1b[0m, 😀".into());
+        let line = Line::new(0, "\x1b[1mHi\x1b[0m, 😀".into());
         assert_eq!(
             line.plain_to_raw,
             vec![
@@ -250,7 +293,7 @@ mod tests {
     fn wrap_with_escapes_no_wrap_needed() {
         // "\x1b[31m" = 5 bytes, "Hi" = 2 bytes, "\x1b[0m" = 4 bytes
         // Visible: "Hi" = 2 columns
-        let line = Line::new("\x1b[31mHi\x1b[0m".into());
+        let line = Line::new(0, "\x1b[31mHi\x1b[0m".into());
         assert_eq!(line.row_count(10), 1);
         assert_eq!(wrap_row_text(&line, 10, 0), "\x1b[31mHi\x1b[0m");
     }
@@ -259,13 +302,13 @@ mod tests {
     fn wrap_with_escapes_causes_wrap() {
         // Visible text: "HelloWorld" (10 chars), width=5
         // The reset sequence follows "Hello" in raw text, so it stays in row 0.
-        let line = Line::new("\x1b[1mHello\x1b[0mWorld".into());
+        let line = Line::new(0, "\x1b[1mHello\x1b[0mWorld".into());
         assert_eq!(line.row_count(5), 2);
         assert_eq!(wrap_row_text(&line, 5, 0), "\x1b[1mHello\x1b[0m");
         assert_eq!(wrap_row_text(&line, 5, 1), "World");
-        let ranges = line.wrap(5);
+        let rows = line.wrap(5);
         assert_eq!(
-            &line.raw[ranges[0].start..ranges[1].end],
+            &line.raw[rows[0].raw_range.start..rows[1].raw_range.end],
             "\x1b[1mHello\x1b[0mWorld"
         );
     }
@@ -274,7 +317,7 @@ mod tests {
     fn wrap_escape_at_wrap_boundary() {
         // Visible: "abcde12345" (10 chars), width=5
         // Escape between "abcde" and "12345" stays in row 0.
-        let line = Line::new("abcde\x1b[31m12345".into());
+        let line = Line::new(0, "abcde\x1b[31m12345".into());
         assert_eq!(line.row_count(5), 2);
         assert_eq!(wrap_row_text(&line, 5, 0), "abcde\x1b[31m");
         assert_eq!(wrap_row_text(&line, 5, 1), "12345");
@@ -284,7 +327,10 @@ mod tests {
     fn wrap_multiple_escapes() {
         // Visible: "abcdefghij" (10 chars), width=5
         // The escape preceding 'f' lands in row 0 since it's before the wrap point.
-        let line = Line::new("\x1b[1ma\x1b[2mb\x1b[3mc\x1b[4md\x1b[5me\x1b[6mfghij".into());
+        let line = Line::new(
+            0,
+            "\x1b[1ma\x1b[2mb\x1b[3mc\x1b[4md\x1b[5me\x1b[6mfghij".into(),
+        );
         assert_eq!(line.row_count(5), 2);
         assert_eq!(
             wrap_row_text(&line, 5, 0),
@@ -296,7 +342,7 @@ mod tests {
     #[test]
     fn escape_only_line() {
         // Line with only escape sequences, no visible text
-        let line = Line::new("\x1b[0m\x1b[1m".into());
+        let line = Line::new(0, "\x1b[0m\x1b[1m".into());
         assert_eq!(line.row_count(80), 1);
         assert_eq!(wrap_row_text(&line, 80, 0), "\x1b[0m\x1b[1m");
     }
@@ -304,7 +350,7 @@ mod tests {
     #[test]
     fn wrap_wide_chars_with_escapes() {
         // Visible: "あいう" (6 cols), width=5 -> wraps after "あい" (4 cols)
-        let line = Line::new("\x1b[31mあいう\x1b[0m".into());
+        let line = Line::new(0, "\x1b[31mあいう\x1b[0m".into());
         assert_eq!(line.row_count(5), 2);
         assert_eq!(wrap_row_text(&line, 5, 0), "\x1b[31mあい");
         assert_eq!(wrap_row_text(&line, 5, 1), "う\x1b[0m");

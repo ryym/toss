@@ -53,7 +53,11 @@ impl Document {
 
     /// Parse a string into lines, holding everything in memory.
     pub fn from_string(content: String) -> Self {
-        let lines = content.lines().map(|s| Line::new(s.to_string())).collect();
+        let lines = content
+            .lines()
+            .enumerate()
+            .map(|(i, s)| Line::new(i, s.to_string()))
+            .collect();
         Self {
             source: Source::InMemory { lines },
         }
@@ -74,7 +78,7 @@ impl Document {
                     return cache.get(index);
                 }
                 let (start, end) = line_index.line_byte_range(index)?;
-                let line = read_line_from_file(file, start, end).ok()?;
+                let line = read_line_from_file(file, index, start, end).ok()?;
                 Some(cache.insert(index, line))
             }
         }
@@ -90,7 +94,7 @@ impl Document {
 }
 
 /// Read a single line from a file at the given byte range.
-fn read_line_from_file(file: &mut File, start: u64, end: u64) -> io::Result<Line> {
+fn read_line_from_file(file: &mut File, index: usize, start: u64, end: u64) -> io::Result<Line> {
     let len = (end - start) as usize;
     let mut buf = vec![0u8; len];
     file.seek(SeekFrom::Start(start))?;
@@ -100,7 +104,7 @@ fn read_line_from_file(file: &mut File, start: u64, end: u64) -> io::Result<Line
         buf.pop();
     }
     let raw = String::from_utf8_lossy(&buf).into_owned();
-    Ok(Line::new(raw))
+    Ok(Line::new(index, raw))
 }
 
 #[cfg(test)]
