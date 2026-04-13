@@ -2,7 +2,7 @@ mod header;
 pub mod viewport;
 
 pub use header::HeaderLayout;
-pub use viewport::{Direction, ScreenRow, ScrollPlan, Viewport};
+pub use viewport::{Direction, ScrollPlan, Viewport};
 
 use crate::document::Document;
 use crate::options::Options;

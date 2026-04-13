@@ -1,16 +1,7 @@
 use std::num::NonZeroUsize;
-use std::ops::Range;
 
 use crate::document::Document;
-
-/// Identifies a single screen row: which document line, which wrap row within it.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ScreenRow {
-    pub line_index: usize,
-    pub wrap_index: usize,
-    /// Byte range in the raw text for this wrap row.
-    pub raw_range: Range<usize>,
-}
+use crate::line::Row;
 
 /// Direction of scrolling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,31 +19,12 @@ pub struct ScrollPlan {
     pub direction: Direction,
 }
 
-/// Build all ScreenRows for a single line from its wrap ranges.
-fn screen_rows_for_line(
-    doc: &mut Document,
-    width: usize,
-    line_index: usize,
-) -> Option<Vec<ScreenRow>> {
-    doc.line(line_index).map(|line| {
-        line.wrap(width)
-            .into_iter()
-            .enumerate()
-            .map(|(wrap_index, raw_range)| ScreenRow {
-                line_index,
-                wrap_index,
-                raw_range,
-            })
-            .collect()
-    })
-}
-
 /// Viewport of the content area (excludes header, status line, etc.).
 /// Tracks which document rows are currently visible and provides scroll
 /// operations.
 pub struct Viewport {
     /// What each screen row currently shows.
-    rows: Vec<ScreenRow>,
+    rows: Vec<Row>,
     /// Width of the content area.
     width: usize,
     /// Height of the content area.
@@ -99,7 +71,7 @@ impl Viewport {
     }
 
     /// Current screen rows.
-    pub fn rows(&self) -> &[ScreenRow] {
+    pub fn rows(&self) -> &[Row] {
         &self.rows
     }
 
@@ -109,7 +81,7 @@ impl Viewport {
     }
 
     /// Screen rows visible to the user, excluding rows hidden by the overlay.
-    pub fn visible_rows(&self) -> &[ScreenRow] {
+    pub fn visible_rows(&self) -> &[Row] {
         &self.rows[self.overlay_height.min(self.rows.len())..]
     }
 
@@ -220,7 +192,7 @@ impl Viewport {
         start_line: usize,
         start_wrap: usize,
         count: usize,
-    ) -> Vec<ScreenRow> {
+    ) -> Vec<Row> {
         if count == 0 || doc.line(start_line).is_none() {
             return vec![];
         }
@@ -228,7 +200,7 @@ impl Viewport {
         let mut line_index = start_line;
         let mut skip_wraps = start_wrap;
         while rows.len() < count {
-            let Some(line_rows) = screen_rows_for_line(doc, width, line_index) else {
+            let Some(line_rows) = doc.line(line_index).map(|line| line.wrap(width)) else {
                 break;
             };
             for r in line_rows.into_iter().skip(skip_wraps) {
@@ -249,7 +221,7 @@ impl Viewport {
         width: usize,
         count: usize,
         fixed_line_len: usize,
-    ) -> Vec<ScreenRow> {
+    ) -> Vec<Row> {
         let line_count = doc.line_count();
         if line_count == 0 || line_count <= fixed_line_len {
             return vec![];
@@ -261,12 +233,7 @@ impl Viewport {
     }
 
     /// Advance forward from `after` by `n` screen rows.
-    fn advance_forward(
-        doc: &mut Document,
-        width: usize,
-        after: &ScreenRow,
-        n: usize,
-    ) -> Vec<ScreenRow> {
+    fn advance_forward(doc: &mut Document, width: usize, after: &Row, n: usize) -> Vec<Row> {
         Self::build_rows_forward(doc, width, after.line_index, after.wrap_index + 1, n)
     }
 
@@ -275,13 +242,16 @@ impl Viewport {
     fn advance_backward(
         doc: &mut Document,
         width: usize,
-        before: &ScreenRow,
+        before: &Row,
         n: usize,
         fixed_line_len: usize,
-    ) -> Vec<ScreenRow> {
+    ) -> Vec<Row> {
         let mut rows = Vec::with_capacity(n);
         // Remaining wrap rows of the current line (before the current wrap).
-        let line_rows = screen_rows_for_line(doc, width, before.line_index).unwrap_or_default();
+        let line_rows = doc
+            .line(before.line_index)
+            .map(|line| line.wrap(width))
+            .unwrap_or_default();
         for r in line_rows.into_iter().take(before.wrap_index).rev() {
             rows.push(r);
             if rows.len() >= n {
@@ -300,7 +270,7 @@ impl Viewport {
     fn collect_rows_backward(
         doc: &mut Document,
         width: usize,
-        rows: &mut Vec<ScreenRow>,
+        rows: &mut Vec<Row>,
         end_line: usize,
         count: usize,
         min_line: usize,
@@ -308,7 +278,7 @@ impl Viewport {
         let mut line_index = end_line;
         while rows.len() < count && line_index > min_line {
             line_index -= 1;
-            let Some(line_rows) = screen_rows_for_line(doc, width, line_index) else {
+            let Some(line_rows) = doc.line(line_index).map(|line| line.wrap(width)) else {
                 break;
             };
             for r in line_rows.into_iter().rev() {
@@ -331,7 +301,7 @@ mod tests {
     }
 
     /// Extract (line_index, wrap_index) pairs for concise test assertions.
-    fn row_ids(rows: &[ScreenRow]) -> Vec<(usize, usize)> {
+    fn row_ids(rows: &[Row]) -> Vec<(usize, usize)> {
         rows.iter().map(|r| (r.line_index, r.wrap_index)).collect()
     }
 

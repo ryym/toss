@@ -1,19 +1,19 @@
 use regex::Regex;
 
-use super::viewport::ScreenRow;
 use crate::document::Document;
+use crate::line::Row;
 use crate::options::SectionOptions;
 
 /// Resolved header layout for the current viewport position.
 pub struct HeaderLayout {
-    rows: Vec<ScreenRow>,
+    rows: Vec<Row>,
     fixed_height: usize,
 }
 
 impl HeaderLayout {
     /// All header rows (fixed + section overlay).
     #[inline]
-    pub fn rows(&self) -> &[ScreenRow] {
+    pub fn rows(&self) -> &[Row] {
         &self.rows
     }
 
@@ -104,13 +104,7 @@ impl Header {
             let mut block_rows = Vec::new();
             for i in effective_start..section_start + index.header_lines() {
                 if let Some(line) = doc.line(i) {
-                    for (w, raw_range) in line.wrap(width).into_iter().enumerate() {
-                        block_rows.push(ScreenRow {
-                            line_index: i,
-                            wrap_index: w,
-                            raw_range,
-                        });
-                    }
+                    block_rows.extend(line.wrap(width));
                 }
             }
 
@@ -142,17 +136,11 @@ impl Header {
     }
 
     /// Resolve only the fixed header rows.
-    fn resolve_fixed(&self, doc: &mut Document, width: usize) -> Vec<ScreenRow> {
+    fn resolve_fixed(&self, doc: &mut Document, width: usize) -> Vec<Row> {
         let mut rows = vec![];
         for i in 0..self.fixed_lines {
             if let Some(line) = doc.line(i) {
-                for (w, raw_range) in line.wrap(width).into_iter().enumerate() {
-                    rows.push(ScreenRow {
-                        line_index: i,
-                        wrap_index: w,
-                        raw_range,
-                    });
-                }
+                rows.extend(line.wrap(width));
             }
         }
         rows

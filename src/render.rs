@@ -4,7 +4,8 @@ use std::io;
 use std::num::NonZeroUsize;
 
 use crate::document::Document;
-use crate::page::{Direction, Page, ScreenRow, ScrollPlan};
+use crate::line::Row;
+use crate::page::{Direction, Page, ScrollPlan};
 use crate::screen::Screen;
 use crate::search::SearchState;
 
@@ -15,7 +16,7 @@ use crate::search::SearchState;
 fn draw_rows_grouped<S: Screen>(
     screen: &mut S,
     doc: &mut Document,
-    rows: &[ScreenRow],
+    rows: &[Row],
     search: Option<&SearchState>,
     screen_y: usize,
 ) -> io::Result<()> {
@@ -158,7 +159,7 @@ pub fn apply_jump_scroll<S: Screen>(
                 Direction::Down => 0..dirty_from,
                 Direction::Up => dirty_to..visible_rows.len(),
             };
-            let dirty_rows: Vec<ScreenRow> = visible_rows[overlap_range]
+            let dirty_rows: Vec<Row> = visible_rows[overlap_range]
                 .iter()
                 .filter(|r| highlight_dirty_lines.contains(&r.line_index))
                 .cloned()
@@ -222,11 +223,11 @@ pub fn draw_search_highlight_update<S: Screen>(
 
 /// Filter rows to only those belonging to lines that need highlight redraw.
 fn filter_dirty_rows(
-    rows: &[ScreenRow],
+    rows: &[Row],
     doc: &mut Document,
     search: Option<&SearchState>,
     old_match_lines: &[usize],
-) -> Vec<ScreenRow> {
+) -> Vec<Row> {
     let mut dirty = Vec::new();
     let mut last_line = None;
     let mut last_dirty = false;
@@ -263,7 +264,7 @@ fn filter_dirty_rows(
 /// edge. This function returns the range extended to include adjacent existing
 /// rows from the same logical line, so soft-wrap groups are drawn correctly.
 fn scroll_dirty_range(
-    visible_rows: &[ScreenRow],
+    visible_rows: &[Row],
     scroll_rows: usize,
     direction: Direction,
 ) -> (usize, usize) {
@@ -296,13 +297,13 @@ fn scroll_dirty_range(
 fn draw_dirty_rows_at_positions<S: Screen>(
     screen: &mut S,
     doc: &mut Document,
-    visible_rows: &[ScreenRow],
-    dirty_rows: &[ScreenRow],
+    visible_rows: &[Row],
+    dirty_rows: &[Row],
     search: Option<&SearchState>,
     header_height: usize,
 ) -> io::Result<()> {
     // Build a set of dirty rows for lookup.
-    let dirty_set: std::collections::HashSet<ScreenRow> = dirty_rows.iter().cloned().collect();
+    let dirty_set: std::collections::HashSet<Row> = dirty_rows.iter().cloned().collect();
 
     // Walk visible_rows and find contiguous groups of dirty rows.
     let mut i = 0;

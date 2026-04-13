@@ -5,8 +5,9 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use regex::Regex;
 
 use crate::document::Document;
+use crate::line::Row;
 use crate::line_editor::LineEditor;
-use crate::page::{Direction, Page, ScreenRow};
+use crate::page::{Direction, Page};
 use crate::render;
 use crate::screen::Screen;
 use crate::scroll::ScrollPhysics;
@@ -644,7 +645,7 @@ fn is_match_visible(
     doc: &mut Document,
     query: &Regex,
     pos: MatchPosition,
-    visible_rows: &[ScreenRow],
+    visible_rows: &[Row],
 ) -> bool {
     let Some(line) = doc.line(pos.line) else {
         return false;
@@ -663,7 +664,7 @@ fn is_match_visible(
 fn find_first_match_in_viewport(
     doc: &mut Document,
     query: &Regex,
-    visible_rows: &[ScreenRow],
+    visible_rows: &[Row],
 ) -> Option<MatchPosition> {
     for row in visible_rows {
         let line = doc.line(row.line_index)?;
@@ -685,10 +686,7 @@ fn find_first_match_in_viewport(
 /// Returns the scroll distance and direction if the viewports overlap.
 /// We determine the direction by comparing actual rows rather than using SearchDirection,
 /// because wraparound can cause the scroll direction to be opposite to the search direction.
-fn compute_scroll_overlap(
-    old_rows: &[ScreenRow],
-    new_rows: &[ScreenRow],
-) -> Option<(usize, Direction)> {
+fn compute_scroll_overlap(old_rows: &[Row], new_rows: &[Row]) -> Option<(usize, Direction)> {
     if old_rows.is_empty() || new_rows.is_empty() {
         return None;
     }
