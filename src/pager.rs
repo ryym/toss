@@ -56,7 +56,6 @@ fn dummy_line(num: usize, num_width: usize, total_length: usize) -> String {
     format!("{}{}", base_content, "=".repeat(remaining_length))
 }
 
-#[derive(Clone)]
 struct Line {
     index: usize,
     text: String,
