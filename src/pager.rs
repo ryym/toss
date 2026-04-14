@@ -4,6 +4,7 @@
 // todo: renderer のイメージを固めて、 Pager と Renderer をもとに App を実装させて、
 // その後に細かいリファクタリングって感じかな
 // あるいは先に既存 App の page を pager で置き換えて試せるとよりよい
+// 一旦全部 draw full page にするのあり？　テストが通ることの確認ならそれで十分かも
 
 use std::ops::Range;
 
