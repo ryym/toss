@@ -82,7 +82,7 @@ impl Line {
         rows
     }
 
-    fn match_pattern(&self, query: &regex::Regex) -> bool {
+    fn has_match(&self, query: &regex::Regex) -> bool {
         query.is_match(&self.text)
     }
 }
@@ -358,7 +358,7 @@ impl Section {
     // 行が section header のパターンにマッチするかを調べる。
     fn is_header(&self, line: &Line) -> bool {
         match &self.config {
-            Some(cfg) => line.match_pattern(&cfg.pattern),
+            Some(cfg) => line.has_match(&cfg.pattern),
             None => false,
         }
     }
@@ -399,7 +399,7 @@ impl Section {
         if range.end > range.start {
             for i in (range.start..range.end).rev() {
                 let line = doc.line(i)?;
-                if line.match_pattern(&config.pattern) {
+                if line.has_match(&config.pattern) {
                     nearest = Some(i);
                     break;
                 }
