@@ -9,6 +9,7 @@
 use std::ops::Range;
 
 use crate::{
+    document::Document,
     line::{Line, Row},
     options::{Options, SectionOptions},
 };
@@ -16,45 +17,6 @@ use crate::{
 struct ViewportSize {
     width: usize,
     height: usize,
-}
-
-struct Document {
-    lines: Vec<String>,
-}
-
-impl Document {
-    fn new(count: usize, width: usize) -> Self {
-        let num_width = count.to_string().len() + 1;
-        let mut lines = Vec::new();
-        for i in 0..count {
-            lines.push(dummy_line(i, num_width, width));
-        }
-        Document { lines }
-    }
-
-    fn line(&mut self, i: usize) -> Option<Line> {
-        self.lines.get(i).map(|text| Line::new(i, text.clone()))
-    }
-
-    fn line_count(&self) -> usize {
-        self.lines.len()
-    }
-}
-
-fn dummy_line(num: usize, num_width: usize, total_length: usize) -> String {
-    // 1. 固定幅の数字（例: "005"）を作成
-    let unit = format!("{:_>width$}", num, width = num_width);
-    let unit_len = unit.len();
-
-    // 2. ユニットがいくつ完全に入るか計算
-    let full_units_count = total_length / unit_len;
-    let base_content = unit.repeat(full_units_count);
-
-    // 3. 全体の長さに足りない分を計算
-    let remaining_length = total_length - base_content.len();
-
-    // 4. ベースに不足分のイコールを足して返す
-    format!("{}{}", base_content, "=".repeat(remaining_length))
 }
 
 fn rows_from_lines(
@@ -202,7 +164,7 @@ impl Pager {
                 continue;
             }
             if let Some(line) = self.doc.line(row.line_index)
-                && self.section.is_header(&line)
+                && self.section.is_header(line)
             {
                 other_section_start = i;
                 break;
