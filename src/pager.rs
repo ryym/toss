@@ -8,7 +8,10 @@
 
 use std::ops::Range;
 
-use crate::options::{Options, SectionOptions};
+use crate::{
+    line::{Line, Row},
+    options::{Options, SectionOptions},
+};
 
 struct ViewportSize {
     width: usize,
@@ -30,10 +33,7 @@ impl Document {
     }
 
     fn line(&mut self, i: usize) -> Option<Line> {
-        self.lines.get(i).map(|text| Line {
-            index: i,
-            text: text.clone(),
-        })
+        self.lines.get(i).map(|text| Line::new(i, text.clone()))
     }
 
     fn line_count(&self) -> usize {
@@ -55,49 +55,6 @@ fn dummy_line(num: usize, num_width: usize, total_length: usize) -> String {
 
     // 4. ベースに不足分のイコールを足して返す
     format!("{}{}", base_content, "=".repeat(remaining_length))
-}
-
-struct Line {
-    index: usize,
-    text: String,
-}
-
-impl Line {
-    fn wrap(&self, width: usize) -> Vec<Row> {
-        let mut rows = Vec::new();
-        let mut wrap_index = 0;
-        let chars: Vec<char> = self.text.chars().collect();
-        let mut i = 0;
-        while i < chars.len() {
-            let end = (i + width).min(chars.len());
-            let part: String = chars[i..end].iter().collect();
-            rows.push(Row {
-                line_index: self.index,
-                wrap_index,
-                text: part,
-            });
-            wrap_index += 1;
-            i += width;
-        }
-        rows
-    }
-
-    fn has_match(&self, query: &regex::Regex) -> bool {
-        query.is_match(&self.text)
-    }
-}
-
-#[derive(Clone)]
-struct Row {
-    line_index: usize,
-    wrap_index: usize,
-    text: String,
-}
-
-impl Row {
-    fn to_tuple(&self) -> (usize, usize) {
-        (self.line_index, self.wrap_index)
-    }
 }
 
 fn rows_from_lines(
@@ -452,7 +409,12 @@ impl Viewport {
     }
 
     fn resize(&mut self, doc: &mut Document, size: &ViewportSize) {
-        self.rows = build_rows_forward(doc, size.width, self.rows[0].to_tuple(), size.height);
+        self.rows = build_rows_forward(
+            doc,
+            size.width,
+            (self.rows[0].line_index, self.rows[0].wrap_index),
+            size.height,
+        );
         self.size = ViewportSize {
             width: size.width,
             height: size.height,
