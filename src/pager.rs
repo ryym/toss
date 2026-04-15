@@ -39,6 +39,13 @@ fn rows_from_lines(
 // 検索はあくまで viewport のみで行い、正しい位置に動いた上で overlay を被せればいいのでは。
 // ただし section header は global header の終了位置を把握し、それ以降は探索しない制御が必要。
 
+pub struct PageSnapshot<'pager> {
+    pub global_header: &'pager [Row],
+    pub section_header: &'pager [Row],
+    pub content: &'pager [Row],
+    pub height: usize,
+}
+
 struct Pager {
     doc: Document,
     header: GlobalHeader,
@@ -59,6 +66,15 @@ impl Pager {
         };
         pager.jump_to(0, 0);
         pager
+    }
+
+    fn snapshot<'pager>(&'pager self) -> PageSnapshot<'pager> {
+        PageSnapshot {
+            global_header: self.header.rows(),
+            section_header: self.section.header_rows(),
+            content: &self.viewport.all_rows()[self.total_header_height()..],
+            height: self.viewport.size().height,
+        }
     }
 
     fn resize(&mut self, size: &ViewportSize) {
@@ -244,10 +260,10 @@ impl Section {
         }
     }
 
-    fn header_rows(&self) -> Vec<Row> {
+    fn header_rows(&self) -> &[Row] {
         match &self.header {
-            None => vec![],
-            Some(h) => h.rows[h.offset..].to_vec(),
+            None => &[],
+            Some(h) => &h.rows[h.offset..],
         }
     }
 
