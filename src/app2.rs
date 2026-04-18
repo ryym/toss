@@ -110,6 +110,7 @@ impl<S: Screen> App2<S> {
     fn draw(&mut self) -> io::Result<()> {
         let status_text = self.status_text();
         let search = active_search(&self.mode, &self.search);
+        log::debug!("DRAW {:?}", search.map(|s| &s.query));
         let (snapshot, doc) = self.pager.snapshot2();
         render::draw_full_page2(&mut self.screen, doc, snapshot, search, &status_text)
     }
@@ -192,6 +193,7 @@ impl<S: Screen> App2<S> {
 
     fn enter_search_mode(&mut self, direction: SearchDirection) {
         log::debug!("Enter search mode: {direction:?}");
+        log::debug!("hoge {:?}", self.search.as_ref().map(|s| &s.query));
         self.scroll_physics.stop();
         // XXX: 検索実行時、固定ヘッダーの扱いはどうあるべきだろう？
         // => section header 内に cursor がある間は page は section header を開始位置とする状態になるだけ。
@@ -414,7 +416,7 @@ fn active_search<'a>(
     committed: &'a Option<SearchState>,
 ) -> Option<&'a SearchState> {
     match mode {
-        AppMode::Search { preview, .. } => preview.as_ref(),
+        AppMode::Search { preview, .. } => preview.as_ref().or(committed.as_ref()),
         _ => committed.as_ref(),
     }
 }
