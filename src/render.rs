@@ -131,22 +131,23 @@ pub fn draw_full_page<S: Screen>(
 
 pub fn draw_full_page2<S: Screen>(
     screen: &mut S,
-    mut doc: &mut Document,
-    page: &PageSnapshot,
+    doc: &mut Document,
+    page: PageSnapshot,
     search: Option<&SearchState>,
+    status_text: &str,
 ) -> io::Result<()> {
     with_sync(screen, |screen| {
-        draw_rows_grouped(screen, &mut doc, page.global_header, search, 0)?;
+        draw_rows_grouped(screen, doc, page.global_header, search, 0)?;
         draw_rows_grouped(
             screen,
-            &mut doc,
+            doc,
             page.section_header,
             search,
             page.global_header.len(),
         )?;
         draw_rows_grouped(
             screen,
-            &mut doc,
+            doc,
             page.content,
             search,
             page.global_header.len() + page.section_header.len(),
@@ -159,9 +160,8 @@ pub fn draw_full_page2<S: Screen>(
             screen.clear_row(y as u16)?;
         }
 
-        // draw_status_line_inner(screen, page)
         screen.clear_row(content_last_y as u16)?;
-        screen.write_at(content_last_y as u16, ":")?;
+        screen.write_at(content_last_y as u16, status_text)?;
         Ok(())
     })
 }

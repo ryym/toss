@@ -14,9 +14,15 @@ use crate::{
     options::{Options, SectionOptions},
 };
 
-struct ViewportSize {
+pub struct ViewportSize {
     width: usize,
     height: usize,
+}
+
+impl ViewportSize {
+    pub fn new(width: usize, height: usize) -> Self {
+        ViewportSize { width, height }
+    }
 }
 
 fn rows_from_lines(
@@ -46,7 +52,7 @@ pub struct PageSnapshot<'pager> {
     pub height: usize,
 }
 
-struct Pager {
+pub struct Pager {
     doc: Document,
     header: GlobalHeader,
     section: Section,
@@ -54,7 +60,7 @@ struct Pager {
 }
 
 impl Pager {
-    fn new(mut doc: Document, size: &ViewportSize, options: Options) -> Self {
+    pub fn new(mut doc: Document, size: &ViewportSize, options: Options) -> Self {
         let header = GlobalHeader::new(&mut doc, size, options.header);
         let section = Section::new(options.section, size, header.height());
         let viewport = Viewport::new(&mut doc, size);
@@ -68,7 +74,7 @@ impl Pager {
         pager
     }
 
-    fn snapshot<'pager>(&'pager self) -> PageSnapshot<'pager> {
+    pub fn snapshot<'pager>(&'pager self) -> PageSnapshot<'pager> {
         PageSnapshot {
             global_header: self.header.rows(),
             section_header: self.section.header_rows(),
@@ -77,18 +83,48 @@ impl Pager {
         }
     }
 
-    fn resize(&mut self, size: &ViewportSize) {
+    pub fn snapshot2<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
+        let snapshot = PageSnapshot {
+            global_header: self.header.rows(),
+            section_header: self.section.header_rows(),
+            content: &self.viewport.all_rows()[self.total_header_height()..],
+            height: self.viewport.size().height,
+        };
+        (snapshot, &mut self.doc)
+    }
+
+    pub fn resize(&mut self, size: &ViewportSize) {
         self.header.resize(&mut self.doc, size);
         self.section
             .resize(&mut self.doc, size, self.header.height());
         self.viewport.resize(&mut self.doc, size);
     }
 
-    fn total_header_height(&self) -> usize {
+    pub fn total_header_height(&self) -> usize {
         self.header.height() + self.section.header_height()
     }
 
-    fn jump_to(&mut self, mut line_index: usize, offset: usize) {
+    pub fn content_height(&self) -> usize {
+        self.viewport.size().height - self.total_header_height()
+    }
+
+    pub fn doc_mut(&mut self) -> &mut Document {
+        &mut self.doc
+    }
+
+    pub fn content_top_line_index(&self) -> usize {
+        self.viewport
+            .all_rows()
+            .get(self.total_header_height())
+            .map(|r| r.line_index)
+            .unwrap_or(0)
+    }
+
+    pub fn visible_content_rows_cloned(&self) -> Vec<Row> {
+        self.viewport.all_rows()[self.total_header_height()..].to_vec()
+    }
+
+    pub fn jump_to(&mut self, mut line_index: usize, offset: usize) {
         // section header をセットする。
         self.section.resolve(&mut self.doc, line_index);
 
@@ -107,7 +143,7 @@ impl Pager {
             .jump_to(&mut self.doc, line_index, offset + header_offset);
     }
 
-    fn jump_to_end(&mut self) {
+    pub fn jump_to_end(&mut self) {
         // まずドキュメント末尾を基準に viewport をセットする。
         self.viewport.jump_to_end(&mut self.doc);
         // それをもとに対応する section header を被せる。
@@ -117,7 +153,7 @@ impl Pager {
         self.push_up_section_header_if_needed();
     }
 
-    fn scroll(&mut self, n_rows: i32) {
+    pub fn scroll(&mut self, n_rows: i32) {
         if n_rows.unsigned_abs() as usize > self.viewport.size().height {
             panic!("scroll rows too big");
         }
@@ -179,9 +215,7 @@ impl Pager {
             if row.wrap_index != 0 {
                 continue;
             }
-            if let Some(line) = self.doc.line(row.line_index)
-                && self.section.is_header(line)
-            {
+            if self.section.is_header(&mut self.doc, row.line_index) {
                 other_section_start = i;
                 break;
             }
@@ -291,9 +325,9 @@ impl Section {
     }
 
     // 行が section header のパターンにマッチするかを調べる。
-    fn is_header(&self, line: &Line) -> bool {
+    fn is_header(&self, doc: &mut Document, line_index: usize) -> bool {
         match &self.config {
-            Some(cfg) => line.has_match(&cfg.pattern),
+            Some(config) => is_header(doc, line_index, config),
             None => false,
         }
     }
@@ -333,8 +367,7 @@ impl Section {
         let mut nearest = None;
         if range.end > range.start {
             for i in (range.start..range.end).rev() {
-                let line = doc.line(i)?;
-                if line.has_match(&config.pattern) {
+                if is_header(doc, i, config) {
                     nearest = Some(i);
                     break;
                 }
@@ -358,6 +391,26 @@ impl Section {
             h.offset = n_rows;
         }
     }
+}
+
+fn is_header(doc: &mut Document, line_index: usize, config: &SectionOptions) -> bool {
+    match doc.line(line_index) {
+        Some(line) if line.has_match(&config.pattern) => {}
+        _ => return false,
+    }
+    // 例え line が pattern にマッチしても header lines 内にマッチする行があるなら、
+    // その line はヘッダーではないとする。
+    for i in 1..config.header_lines {
+        match doc.line(line_index + i) {
+            Some(line) => {
+                if line.has_match(&config.pattern) {
+                    return false;
+                }
+            }
+            None => return true,
+        }
+    }
+    true
 }
 
 struct Viewport {

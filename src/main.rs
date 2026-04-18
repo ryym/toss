@@ -1,5 +1,6 @@
 mod ansi;
 mod app;
+mod app2;
 mod cli;
 mod document;
 mod line;
@@ -22,10 +23,11 @@ use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 use std::process;
 
-use app::App;
 use document::Document;
-use page::Page;
 use screen::TermScreen;
+
+use crate::app2::App2;
+use crate::pager::{Pager, ViewportSize};
 
 struct AppError {
     message: String,
@@ -84,21 +86,26 @@ fn run() -> Result<(), AppError> {
 
     let (w, h) = crossterm::terminal::size()
         .map_err(|e| AppError::new(format!("Error getting terminal size: {e}"), 1))?;
-    let mut page = Page::new(doc, &args.options, w as usize, h as usize);
 
-    if args.options.quit_if_one_screen && page.content_fits_on_screen(h as usize, shell_lines()) {
-        for i in 0..page.doc.line_count() {
-            if let Some(line) = page.doc.line(i) {
-                println!("{}", line.raw());
-            }
-        }
-        return Ok(());
-    }
+    // let mut page = Page::new(doc, &args.options, w as usize, h as usize);
+    // if args.options.quit_if_one_screen && page.content_fits_on_screen(h as usize, shell_lines()) {
+    //     for i in 0..page.doc.line_count() {
+    //         if let Some(line) = page.doc.line(i) {
+    //             println!("{}", line.raw());
+    //         }
+    //     }
+    //     return Ok(());
+    // }
 
     let screen = TermScreen::new()
         .map_err(|e| AppError::new(format!("Error initializing terminal: {e}"), 1))?;
 
-    let mut app = App::new(screen, page).map_err(|e| AppError::new(format!("{e}"), 1))?;
+    // let mut app = App::new(screen, page).map_err(|e| AppError::new(format!("{e}"), 1))?;
+    // app.run().map_err(|e| AppError::new(format!("{e}"), 1))?;
+
+    let size = ViewportSize::new(w as usize, h as usize - 1);
+    let pager = Pager::new(doc, &size, args.options);
+    let mut app = App2::new(screen, pager).map_err(|e| AppError::new(format!("{e}"), 1))?;
     app.run().map_err(|e| AppError::new(format!("{e}"), 1))?;
 
     Ok(())
