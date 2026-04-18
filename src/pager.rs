@@ -112,12 +112,37 @@ impl Pager {
         &mut self.doc
     }
 
-    pub fn content_top_line_index(&self) -> usize {
-        self.viewport
-            .all_rows()
-            .get(self.total_header_height())
-            .map(|r| r.line_index)
-            .unwrap_or(0)
+    // pub fn content_top_line_index(&self) -> usize {
+    //     self.viewport
+    //         .all_rows()
+    //         .get(self.total_header_height())
+    //         .map(|r| r.line_index)
+    //         .unwrap_or(0)
+    // }
+
+    // xxx: maybe unnecessary
+    pub fn contiguous_top_line_index(&self) -> usize {
+        self.viewport.all_rows()[self.contiguous_top_row_index()].line_index
+    }
+
+    pub fn contiguous_rows(&self) -> &[Row] {
+        &self.viewport.all_rows()[self.contiguous_top_row_index()..]
+    }
+
+    fn contiguous_top_row_index(&self) -> usize {
+        let rows = self.viewport.all_rows();
+        // XXX: wrap_index も見るべきな気がする。
+        if let Some(row) = self.header.rows().get(0)
+            && row.line_index == rows[0].line_index
+        {
+            return 0;
+        }
+        if let Some(row) = self.section.header_rows().get(0)
+            && row.line_index == rows[self.header.rows().len()].line_index
+        {
+            return self.header.rows().len();
+        }
+        self.total_header_height()
     }
 
     pub fn visible_content_rows_cloned(&self) -> Vec<Row> {

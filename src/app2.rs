@@ -193,7 +193,11 @@ impl<S: Screen> App2<S> {
     fn enter_search_mode(&mut self, direction: SearchDirection) {
         log::debug!("Enter search mode: {direction:?}");
         self.scroll_physics.stop();
-        let saved_top_line = self.pager.content_top_line_index();
+        // XXX: 検索実行時、固定ヘッダーの扱いはどうあるべきだろう？
+        // => section header 内に cursor がある間は page は section header を開始位置とする状態になるだけ。
+
+        // let saved_top_line = self.pager.content_top_line_index();
+        let saved_top_line = self.pager.contiguous_top_line_index();
         let editor = LineEditor::new();
         self.mode = AppMode::Search {
             direction,
@@ -212,6 +216,7 @@ impl<S: Screen> App2<S> {
 
     fn cancel_search(&mut self) {
         if let AppMode::Search { saved_top_line, .. } = &self.mode {
+            // XXX: これは content top でよい
             let top = *saved_top_line;
             self.pager.jump_to(top, 0);
         }
@@ -233,14 +238,22 @@ impl<S: Screen> App2<S> {
             if let AppMode::Search { preview, .. } = &mut self.mode {
                 *preview = None;
             }
+            // XXX: これは content top でよい
             self.pager.jump_to(saved_top_line, 0);
             self.dirty = true;
             return;
         }
 
         let re = Regex::new(&regex::escape(&input)).unwrap();
+        // XXX: page が section あるけど section が sticky でない状態の場合は、 content でなく
+        //  section から検索を始めないといけない。sticky 状態 (1行でも overlay と一致しない)
+        //  場合には content からでいい。
+        //  XXX: ただそもそも毎回 saved_top_line を起点にした検索でいいのか？　直前の jump 位置からでなく？
+        //  => 入力を一部消した時の挙動とか考えると、これで正しいのかも。
         let matched = search::find_next_match(self.pager.doc_mut(), &re, saved_top_line, direction);
-        log::debug!("Search preview: query={input:?}, result={matched:?}");
+        log::debug!(
+            "Search preview: query={input:?}, saved_top_line={saved_top_line}, result={matched:?}"
+        );
 
         if let Some(ref pos) = matched {
             self.pager.jump_to(pos.line, 0);
@@ -325,6 +338,7 @@ impl<S: Screen> App2<S> {
         let current = search.current;
 
         let next = find_next_match_position(&mut self.pager, &query, current, direction);
+        log::debug!("next:{next:?}");
         if let Some(pos) = next {
             self.pager.jump_to(pos.line, 0);
             if let Some(s) = self.search.as_mut() {
@@ -413,7 +427,14 @@ fn find_next_match_position(
     current: Option<MatchPosition>,
     direction: SearchDirection,
 ) -> Option<MatchPosition> {
-    let visible_rows = pager.visible_content_rows_cloned();
+    // XXX: header が除外されるので今 cursor がある位置が visible と判定されない。
+    // 既存実装だと sticky 状態にならないと section header 判定されないから大丈夫なのかも。
+    // let visible_rows = pager.visible_content_rows_cloned();
+    let visible_rows = pager
+        .contiguous_rows()
+        .into_iter()
+        .map(|r| r.clone())
+        .collect::<Vec<_>>();
     if visible_rows.is_empty() {
         return None;
     }
