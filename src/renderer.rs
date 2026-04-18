@@ -28,6 +28,14 @@ impl PartialEq<Row> for RowRef {
 pub struct Renderer<S: Screen> {
     screen: S,
     last_section_header_start: Option<RowRef>,
+    // 前回の描画時のハイライトがあった行一覧を保持
+    // full 描画のときは特に使わない
+    // scroll でかつ search state が変わっている時は、追加行以外の既存行も適宜更新
+    //   前回のハイライト行 -> 再描画
+    //   ?? それ以外の行は？　そこにも新しいハイライトがある可能性
+    //   でも全行再描画なら、結局 full と変わらない
+    //   実際には matches を探して、前回なかったのに今回あるケースのみ再描画になるか
+    //   行継続の考慮も含めるとなかなか面倒そう
 }
 
 impl<S: Screen> Renderer<S> {
@@ -77,16 +85,9 @@ impl<S: Screen> Renderer<S> {
     ) -> io::Result<()> {
         self.screen.begin_sync()?;
 
-        draw_rows_grouped(&mut self.screen, doc, page.global_header, search, 0)?;
-        draw_rows_grouped(
-            &mut self.screen,
-            doc,
-            page.section_header,
-            search,
-            page.global_header.len(),
-        )?;
-        draw_rows_grouped(
-            &mut self.screen,
+        self.draw_rows_grouped(doc, page.global_header, search, 0)?;
+        self.draw_rows_grouped(doc, page.section_header, search, page.global_header.len())?;
+        self.draw_rows_grouped(
             doc,
             page.content,
             search,
@@ -141,28 +142,16 @@ impl<S: Screen> Renderer<S> {
             let (from, to) = scroll_dirty_range(page.content, scroll_rows, direction);
             log::debug!("render header={header_height} scroll={scroll_rows} {from}..{to}");
             log::debug!("render {:?}", page.section_header);
-            draw_rows_grouped(
-                &mut self.screen,
-                doc,
-                &page.content[from..to],
-                search,
-                header_height + from,
-            )?;
+            self.draw_rows_grouped(doc, &page.content[from..to], search, header_height + from)?;
         }
 
         // todo: highlight の変更もありうる？
 
         if !page.global_header.is_empty() {
-            draw_rows_grouped(&mut self.screen, doc, page.global_header, search, 0)?;
+            self.draw_rows_grouped(doc, page.global_header, search, 0)?;
         }
 
-        draw_rows_grouped(
-            &mut self.screen,
-            doc,
-            page.section_header,
-            search,
-            page.global_header.len(),
-        )?;
+        self.draw_rows_grouped(doc, page.section_header, search, page.global_header.len())?;
 
         let content_last_y =
             page.global_header.len() + page.section_header.len() + page.content.len();
@@ -173,79 +162,93 @@ impl<S: Screen> Renderer<S> {
         self.screen.flush()
     }
 
-    fn is_same_section_header(&self, header: &[Row]) -> bool {
-        match (self.last_section_header_start.as_ref(), header.get(0)) {
-            (Some(last), Some(current)) => last == current,
-            (None, None) => true,
-            _ => false,
-        }
-    }
-}
+    /// Draw screen rows, grouping consecutive rows from the same logical line
+    /// and writing them as a single continuous string so the terminal treats
+    /// line-internal wraps as soft wraps.
+    /// `screen_y` specifies the starting screen row position for drawing.
+    fn draw_rows_grouped(
+        &mut self,
+        doc: &mut Document,
+        rows: &[Row],
+        search: Option<&SearchState>,
+        screen_y: usize,
+    ) -> io::Result<()> {
+        let mut i = 0;
+        while i < rows.len() {
+            let line_idx = rows[i].line_index;
+            let group_start = i;
+            while i < rows.len() && rows[i].line_index == line_idx {
+                i += 1;
+            }
+            // Clear each row in the group
+            for j in group_start..i {
+                self.screen.clear_row((j + screen_y) as u16)?;
+            }
+            // Write the combined text for this group as one continuous piece
+            if let Some(line) = doc.line(line_idx) {
+                let raw_range = rows[group_start].raw_range.start..rows[i - 1].raw_range.end;
 
-// /// Wrap a rendering operation in synchronized output and flush.
-// fn with_sync<S: Screen>(
-//     screen: &mut S,
-//     f: impl FnOnce(&mut S) -> io::Result<()>,
-// ) -> io::Result<()> {
-//     screen.begin_sync()?;
-//     f(screen)?;
-//     screen.end_sync()?;
-//     screen.flush()
-// }
-
-/// Draw screen rows, grouping consecutive rows from the same logical line
-/// and writing them as a single continuous string so the terminal treats
-/// line-internal wraps as soft wraps.
-/// `screen_y` specifies the starting screen row position for drawing.
-fn draw_rows_grouped<S: Screen>(
-    screen: &mut S,
-    doc: &mut Document,
-    rows: &[Row],
-    search: Option<&SearchState>,
-    screen_y: usize,
-) -> io::Result<()> {
-    let mut i = 0;
-    while i < rows.len() {
-        let line_idx = rows[i].line_index;
-        let group_start = i;
-        while i < rows.len() && rows[i].line_index == line_idx {
-            i += 1;
-        }
-        // Clear each row in the group
-        for j in group_start..i {
-            screen.clear_row((j + screen_y) as u16)?;
-        }
-        // Write the combined text for this group as one continuous piece
-        if let Some(line) = doc.line(line_idx) {
-            let raw_range = rows[group_start].raw_range.start..rows[i - 1].raw_range.end;
-
-            let matches = search.map(|sh| line.find_matches(&sh.query));
-            match (search, matches) {
-                (Some(search), Some(matches)) if !matches.is_empty() => {
-                    let current_match_index = search.current.and_then(|current| {
-                        if current.line == line_idx {
-                            Some(current.match_index)
-                        } else {
-                            None
-                        }
-                    });
-                    let positions = highlight::build_highlight_positions(
-                        &matches,
-                        current_match_index,
-                        line.plain_to_raw(),
-                        line.raw().len(),
-                    );
-                    let text =
-                        highlight::apply_highlight_to_range(line.raw(), raw_range, &positions);
-                    screen.write_at((group_start + screen_y) as u16, &text)?;
-                }
-                _ => {
-                    screen.write_at((group_start + screen_y) as u16, &line.raw()[raw_range])?;
+                let matches = search.map(|sh| line.find_matches(&sh.query));
+                match (search, matches) {
+                    (Some(search), Some(matches)) if !matches.is_empty() => {
+                        let current_match_index = search.current.and_then(|current| {
+                            if current.line == line_idx {
+                                Some(current.match_index)
+                            } else {
+                                None
+                            }
+                        });
+                        let positions = highlight::build_highlight_positions(
+                            &matches,
+                            current_match_index,
+                            line.plain_to_raw(),
+                            line.raw().len(),
+                        );
+                        let text =
+                            highlight::apply_highlight_to_range(line.raw(), raw_range, &positions);
+                        self.screen
+                            .write_at((group_start + screen_y) as u16, &text)?;
+                    }
+                    _ => {
+                        self.screen
+                            .write_at((group_start + screen_y) as u16, &line.raw()[raw_range])?;
+                    }
                 }
             }
         }
+        Ok(())
     }
-    Ok(())
+
+    /// Compute the range of rows that need redrawing after a scroll.
+    ///
+    /// After terminal scroll shifts content, `scroll_rows` new rows appear at one
+    /// edge. This function returns the range extended to include adjacent existing
+    /// rows from the same logical line, so soft-wrap groups are drawn correctly.
+    fn scroll_dirty_range(
+        rows: &[Row],
+        scroll_rows: usize,
+        direction: Direction,
+    ) -> (usize, usize) {
+        let len = rows.len();
+        match direction {
+            Direction::Down => {
+                let new_start = len.saturating_sub(scroll_rows);
+                let mut from = new_start;
+                while from > 0 && rows[from - 1].line_index == rows[new_start].line_index {
+                    from -= 1;
+                }
+                (from, len)
+            }
+            Direction::Up => {
+                let new_end = scroll_rows.min(len);
+                let mut to = new_end;
+                while to < len && rows[to].line_index == rows[new_end - 1].line_index {
+                    to += 1;
+                }
+                (0, to)
+            }
+        }
+    }
 }
 
 /// Compute the range of rows that need redrawing after a scroll.
