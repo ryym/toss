@@ -1,6 +1,6 @@
 mod highlight;
 
-use std::{io, num::NonZeroUsize};
+use std::{cmp, io, num::NonZeroUsize};
 
 use crossterm::event::Event;
 
@@ -8,18 +8,34 @@ use crate::{
     document::Document,
     line::Row,
     page::{Direction, ScrollPlan},
-    pager::PageSnapshot,
+    pager::{PageSnapshot, PageUpdate},
     screen::Screen,
     search::SearchState,
 };
 
+#[derive(Clone)]
+struct RowRef {
+    line_index: usize,
+    wrap_index: usize,
+}
+
+impl PartialEq<Row> for RowRef {
+    fn eq(&self, row: &Row) -> bool {
+        self.line_index == row.line_index && self.wrap_index == row.wrap_index
+    }
+}
+
 pub struct Renderer<S: Screen> {
     screen: S,
+    last_section_header_start: Option<RowRef>,
 }
 
 impl<S: Screen> Renderer<S> {
     pub fn new(screen: S) -> Self {
-        Self { screen }
+        Self {
+            screen,
+            last_section_header_start: None,
+        }
     }
 
     #[cfg(test)]
@@ -38,47 +54,144 @@ impl<S: Screen> Renderer<S> {
         search: Option<&SearchState>,
         status_text: &str,
     ) -> io::Result<()> {
-        with_sync(&mut self.screen, |screen| {
-            draw_rows_grouped(screen, doc, page.global_header, search, 0)?;
-            draw_rows_grouped(
-                screen,
-                doc,
-                page.section_header,
-                search,
-                page.global_header.len(),
-            )?;
-            draw_rows_grouped(
-                screen,
-                doc,
-                page.content,
-                search,
-                page.global_header.len() + page.section_header.len(),
-            )?;
-
-            // Clear any rows below content that may have stale content.
-            let content_last_y =
-                page.global_header.len() + page.section_header.len() + page.content.len();
-            for y in content_last_y..page.height {
-                screen.clear_row(y as u16)?;
+        let result = match page.last_update {
+            PageUpdate::Full => self.redraw_full_page(doc, &page, search, status_text),
+            PageUpdate::Scroll { up, n_rows } => {
+                // todo: ヘッダーサイズが変わってたら一旦常に full redraw
+                self.scroll(doc, &page, search, status_text, up, n_rows)
             }
+        };
+        self.last_section_header_start = page.section_header.get(0).map(|row| RowRef {
+            line_index: row.line_index,
+            wrap_index: row.wrap_index,
+        });
+        result
+    }
 
-            screen.clear_row(content_last_y as u16)?;
-            screen.write_at(content_last_y as u16, status_text)?;
-            Ok(())
-        })
+    fn redraw_full_page(
+        &mut self,
+        doc: &mut Document,
+        page: &PageSnapshot,
+        search: Option<&SearchState>,
+        status_text: &str,
+    ) -> io::Result<()> {
+        self.screen.begin_sync()?;
+
+        draw_rows_grouped(&mut self.screen, doc, page.global_header, search, 0)?;
+        draw_rows_grouped(
+            &mut self.screen,
+            doc,
+            page.section_header,
+            search,
+            page.global_header.len(),
+        )?;
+        draw_rows_grouped(
+            &mut self.screen,
+            doc,
+            page.content,
+            search,
+            page.global_header.len() + page.section_header.len(),
+        )?;
+
+        // Clear any rows below content that may have stale content.
+        let content_last_y =
+            page.global_header.len() + page.section_header.len() + page.content.len();
+        for y in content_last_y..page.height {
+            self.screen.clear_row(y as u16)?;
+        }
+
+        self.screen.clear_row(content_last_y as u16)?;
+        self.screen.write_at(content_last_y as u16, status_text)?;
+
+        self.screen.end_sync()?;
+        self.screen.flush()
+    }
+
+    fn scroll(
+        &mut self,
+        doc: &mut Document,
+        page: &PageSnapshot,
+        search: Option<&SearchState>,
+        status_text: &str,
+        is_up: bool,
+        scroll_rows: usize,
+    ) -> io::Result<()> {
+        self.screen.begin_sync()?;
+
+        if scroll_rows > 0 {
+            let direction = if is_up {
+                Direction::Up
+            } else {
+                Direction::Down
+            };
+            self.screen.scroll_terminal(&ScrollPlan {
+                terminal_scroll: NonZeroUsize::new(scroll_rows).unwrap(),
+                direction,
+            })?;
+
+            let header_height = page.global_header.len() + page.section_header.len();
+            // let (from, to) = if is_up {
+            //     (0, cmp::min(scroll_rows, page.content.len()))
+            // } else {
+            //     (
+            //         cmp::max(0, page.content.len() - scroll_rows),
+            //         page.content.len(),
+            //     )
+            // };
+            let (from, to) = scroll_dirty_range(page.content, scroll_rows, direction);
+            log::debug!("render header={header_height} scroll={scroll_rows} {from}..{to}");
+            log::debug!("render {:?}", page.section_header);
+            draw_rows_grouped(
+                &mut self.screen,
+                doc,
+                &page.content[from..to],
+                search,
+                header_height + from,
+            )?;
+        }
+
+        // todo: highlight の変更もありうる？
+
+        if !page.global_header.is_empty() {
+            draw_rows_grouped(&mut self.screen, doc, page.global_header, search, 0)?;
+        }
+
+        draw_rows_grouped(
+            &mut self.screen,
+            doc,
+            page.section_header,
+            search,
+            page.global_header.len(),
+        )?;
+
+        let content_last_y =
+            page.global_header.len() + page.section_header.len() + page.content.len();
+        self.screen.clear_row(content_last_y as u16)?;
+        self.screen.write_at(content_last_y as u16, status_text)?;
+
+        self.screen.end_sync()?;
+        self.screen.flush()
+    }
+
+    fn is_same_section_header(&self, header: &[Row]) -> bool {
+        match (self.last_section_header_start.as_ref(), header.get(0)) {
+            (Some(last), Some(current)) => last == current,
+            (None, None) => true,
+            _ => false,
+        }
     }
 }
 
-/// Wrap a rendering operation in synchronized output and flush.
-fn with_sync<S: Screen>(
-    screen: &mut S,
-    f: impl FnOnce(&mut S) -> io::Result<()>,
-) -> io::Result<()> {
-    screen.begin_sync()?;
-    f(screen)?;
-    screen.end_sync()?;
-    screen.flush()
-}
+// /// Wrap a rendering operation in synchronized output and flush.
+// fn with_sync<S: Screen>(
+//     screen: &mut S,
+//     f: impl FnOnce(&mut S) -> io::Result<()>,
+// ) -> io::Result<()> {
+//     screen.begin_sync()?;
+//     f(screen)?;
+//     screen.end_sync()?;
+//     screen.flush()
+// }
 
 /// Draw screen rows, grouping consecutive rows from the same logical line
 /// and writing them as a single continuous string so the terminal treats
@@ -133,4 +246,31 @@ fn draw_rows_grouped<S: Screen>(
         }
     }
     Ok(())
+}
+
+/// Compute the range of rows that need redrawing after a scroll.
+///
+/// After terminal scroll shifts content, `scroll_rows` new rows appear at one
+/// edge. This function returns the range extended to include adjacent existing
+/// rows from the same logical line, so soft-wrap groups are drawn correctly.
+fn scroll_dirty_range(rows: &[Row], scroll_rows: usize, direction: Direction) -> (usize, usize) {
+    let len = rows.len();
+    match direction {
+        Direction::Down => {
+            let new_start = len.saturating_sub(scroll_rows);
+            let mut from = new_start;
+            while from > 0 && rows[from - 1].line_index == rows[new_start].line_index {
+                from -= 1;
+            }
+            (from, len)
+        }
+        Direction::Up => {
+            let new_end = scroll_rows.min(len);
+            let mut to = new_end;
+            while to < len && rows[to].line_index == rows[new_end - 1].line_index {
+                to += 1;
+            }
+            (0, to)
+        }
+    }
 }
