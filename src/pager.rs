@@ -321,7 +321,10 @@ impl Section {
     }
 
     fn header_contains(&self, line_index: usize) -> bool {
-        line_index < self.header_height()
+        let rows = self.header_rows();
+        !rows.is_empty()
+            && rows[0].line_index <= line_index
+            && line_index <= rows[rows.len() - 1].line_index
     }
 
     // 行が section header のパターンにマッチするかを調べる。
@@ -346,7 +349,7 @@ impl Section {
     // line_index に対応する直近の section header を探してセットする。
     // line_index が section header の先頭もしくは一部であるなら、その section header がセットされる。
     fn resolve(&mut self, doc: &mut Document, line_index: usize) {
-        self.header = self.find_header(doc, self.size.min_line_index..line_index);
+        self.header = self.find_header(doc, self.size.min_line_index..(line_index + 1));
     }
 
     // line_index_range 内で section header を探し、見つかった場合のみそれをセットする。
