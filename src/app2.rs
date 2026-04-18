@@ -14,6 +14,7 @@ use crate::line::Row;
 use crate::line_editor::LineEditor;
 use crate::pager::{Pager, ViewportSize};
 use crate::render;
+use crate::renderer::Renderer;
 use crate::screen::Screen;
 use crate::scroll::ScrollPhysics;
 use crate::search::{self, MatchPosition, SearchDirection, SearchState};
@@ -33,8 +34,8 @@ enum AppMode {
     },
 }
 
-pub struct App2<S> {
-    screen: S,
+pub struct App2<S: Screen> {
+    renderer: Renderer<S>,
     pager: Pager,
     mode: AppMode,
     search: Option<SearchState>,
@@ -46,10 +47,11 @@ pub struct App2<S> {
 impl<S: Screen> App2<S> {
     pub fn new(screen: S, pager: Pager) -> io::Result<Self> {
         let (_, h) = screen.size()?;
+        let renderer = Renderer::new(screen);
         let mut scroll_physics = ScrollPhysics::new();
         scroll_physics.configure(h as usize);
         Ok(Self {
-            screen,
+            renderer,
             pager,
             mode: AppMode::View,
             search: None,
@@ -66,7 +68,7 @@ impl<S: Screen> App2<S> {
 
     #[cfg(test)]
     pub fn into_screen(self) -> S {
-        self.screen
+        self.renderer.into_screen()
     }
 
     pub fn run(&mut self) -> io::Result<()> {
@@ -80,7 +82,7 @@ impl<S: Screen> App2<S> {
                 FRAME_DURATION_IDLE
             };
 
-            if let Some(event) = self.screen.poll_event(timeout)? {
+            if let Some(event) = self.renderer.poll_event(timeout)? {
                 match event {
                     Event::Key(key) => {
                         if self.handle_key(key)? {
@@ -112,7 +114,7 @@ impl<S: Screen> App2<S> {
         let search = active_search(&self.mode, &self.search);
         log::debug!("DRAW {:?}", search.map(|s| &s.query));
         let (snapshot, doc) = self.pager.snapshot2();
-        render::draw_full_page2(&mut self.screen, doc, snapshot, search, &status_text)
+        self.renderer.render(doc, snapshot, search, &status_text)
     }
 
     fn status_text(&self) -> String {

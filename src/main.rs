@@ -10,6 +10,7 @@ mod options;
 mod page;
 mod pager;
 mod render;
+mod renderer;
 mod screen;
 mod scroll;
 mod search;
