@@ -386,31 +386,9 @@ impl<S: Screen> App2<S> {
         if clamped == 0 {
             return;
         }
-        let before = view_signature(&self.pager);
-        self.pager.scroll(clamped);
-        let after = view_signature(&self.pager);
-        if before != after {
-            self.dirty = true;
-        }
+        let scroll_rows = self.pager.scroll(clamped);
+        self.dirty = scroll_rows != 0;
     }
-}
-
-/// Lightweight signature of the current rendered view to detect state changes.
-/// Captures header sizes and the top content row so scroll-at-boundary (no
-/// change) can be distinguished from section-header transitions.
-fn view_signature(pager: &Pager) -> (usize, usize, usize, usize) {
-    let snapshot = pager.snapshot();
-    let (top_line, top_wrap) = snapshot
-        .content
-        .first()
-        .map(|r| (r.line_index, r.wrap_index))
-        .unwrap_or((0, 0));
-    (
-        snapshot.global_header.len(),
-        snapshot.section_header.len(),
-        top_line,
-        top_wrap,
-    )
 }
 
 fn active_search<'a>(

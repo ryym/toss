@@ -45,11 +45,19 @@ fn rows_from_lines(
 // 検索はあくまで viewport のみで行い、正しい位置に動いた上で overlay を被せればいいのでは。
 // ただし section header は global header の終了位置を把握し、それ以降は探索しない制御が必要。
 
+#[derive(Debug, Clone, Copy)]
+pub enum PageUpdate {
+    Full,
+    Scroll { up: bool, n_rows: usize },
+}
+
+#[derive(Debug)]
 pub struct PageSnapshot<'pager> {
     pub global_header: &'pager [Row],
     pub section_header: &'pager [Row],
     pub content: &'pager [Row],
     pub height: usize,
+    pub last_update: PageUpdate,
 }
 
 pub struct Pager {
@@ -57,6 +65,7 @@ pub struct Pager {
     header: GlobalHeader,
     section: Section,
     viewport: Viewport,
+    last_update: PageUpdate,
 }
 
 impl Pager {
@@ -69,6 +78,7 @@ impl Pager {
             header,
             section,
             viewport,
+            last_update: PageUpdate::Full,
         };
         pager.jump_to(0, 0);
         pager
@@ -80,6 +90,7 @@ impl Pager {
             section_header: self.section.header_rows(),
             content: &self.viewport.all_rows()[self.total_header_height()..],
             height: self.viewport.size().height,
+            last_update: self.last_update,
         }
     }
 
@@ -89,7 +100,9 @@ impl Pager {
             section_header: self.section.header_rows(),
             content: &self.viewport.all_rows()[self.total_header_height()..],
             height: self.viewport.size().height,
+            last_update: self.last_update,
         };
+        self.last_update = PageUpdate::Full;
         (snapshot, &mut self.doc)
     }
 
@@ -150,6 +163,8 @@ impl Pager {
     }
 
     pub fn jump_to(&mut self, mut line_index: usize, offset: usize) {
+        self.last_update = PageUpdate::Full;
+
         // section header をセットする。
         self.section.resolve(&mut self.doc, line_index);
 
@@ -169,6 +184,8 @@ impl Pager {
     }
 
     pub fn jump_to_end(&mut self) {
+        self.last_update = PageUpdate::Full;
+
         // まずドキュメント末尾を基準に viewport をセットする。
         self.viewport.jump_to_end(&mut self.doc);
         // それをもとに対応する section header を被せる。
@@ -178,26 +195,33 @@ impl Pager {
         self.push_up_section_header_if_needed();
     }
 
-    pub fn scroll(&mut self, n_rows: i32) {
+    pub fn scroll(&mut self, n_rows: i32) -> usize {
         if n_rows.unsigned_abs() as usize > self.viewport.size().height {
             panic!("scroll rows too big");
         }
 
-        if n_rows < 0 {
-            self.scroll_up((-n_rows) as usize);
+        let scrolll_rows = if n_rows < 0 {
+            self.scroll_up((-n_rows) as usize)
         } else if n_rows > 0 {
-            self.scroll_down(n_rows as usize);
-        }
+            self.scroll_down(n_rows as usize)
+        } else {
+            0
+        };
+        self.last_update = PageUpdate::Scroll {
+            up: n_rows < 0,
+            n_rows: scrolll_rows,
+        };
+        scrolll_rows
     }
 
-    fn scroll_up(&mut self, n_rows: usize) {
+    fn scroll_up(&mut self, n_rows: usize) -> usize {
         // viewport をスクロールする。
-        self.viewport.scroll_up(&mut self.doc, n_rows);
+        let scroll_rows = self.viewport.scroll_up(&mut self.doc, n_rows);
 
         // 元々 section がない場合、上方向へのスクロールで新たに section が見つかることはありえないので、何もしない。
         let section_header_start = match self.section.start_line_index() {
             Some(idx) => idx,
-            None => return,
+            None => return scroll_rows,
         };
         // 新しい viewport 先頭が今の section header より手前にあるなら、より上の section を探してセットする。
         let top_index = self.viewport.all_rows()[self.header.height()].line_index;
@@ -207,13 +231,16 @@ impl Pager {
 
         // 1つ前の section header がまだ overlay 領域にいる場合、新しい section header の位置を調整する。
         self.push_up_section_header_if_needed();
+        log::debug!("AAA {top_index} {:?}", self.section.header);
+
+        scroll_rows
     }
 
-    fn scroll_down(&mut self, n_rows: usize) {
+    fn scroll_down(&mut self, n_rows: usize) -> usize {
         let prev_top_line = self.viewport.all_rows()[self.header.height()].line_index;
 
         // viewport をスクロールする。
-        self.viewport.scroll_down(&mut self.doc, n_rows);
+        let scroll_rows = self.viewport.scroll_down(&mut self.doc, n_rows);
         let top_line = self.viewport.all_rows()[self.header.height()].line_index;
 
         // 移動範囲内に新たな section header があればそれに置き換える。
@@ -222,12 +249,19 @@ impl Pager {
 
         // overlay 領域にその次の section があるか探し、あれば section header 領域を狭める。
         self.push_up_section_header_if_needed();
+
+        scroll_rows
     }
 
     // section header の overlay 配下に別の section header がないかを探し、
     // ある場合 (= section が切り替わっている途中の場合) にはその section が見えるよう
     // 今の section のオフセットを調整する。
     fn push_up_section_header_if_needed(&mut self) {
+        let current_start = match self.section.start_line_index() {
+            Some(i) => i,
+            None => return,
+        };
+
         let rows = self.viewport.all_rows();
         let overlay_height = self.header.height() + self.section.header_height_no_offset();
         let mut other_section_start = overlay_height;
@@ -237,7 +271,7 @@ impl Pager {
             .take(overlay_height)
             .skip(self.header.height());
         for (i, row) in rows_under_section_header {
-            if row.wrap_index != 0 {
+            if row.wrap_index != 0 || row.line_index == current_start {
                 continue;
             }
             if self.section.is_header(&mut self.doc, row.line_index) {
@@ -284,18 +318,21 @@ impl GlobalHeader {
     }
 }
 
+#[derive(Debug)]
 struct SectionHeaderData {
     line_range: Range<usize>,
     rows: Vec<Row>,
     offset: usize,
 }
 
+#[derive(Debug)]
 struct SectionSizeConfig {
     min_line_index: usize,
     max_header_height: usize,
     width: usize,
 }
 
+#[derive(Debug)]
 struct Section {
     size: SectionSizeConfig,
     config: Option<SectionOptions>,
@@ -481,9 +518,9 @@ impl Viewport {
     }
 
     // 指定行数分を末尾から除去し、同じ行数分を先頭に追加する。
-    fn scroll_up(&mut self, doc: &mut Document, n_rows: usize) {
+    fn scroll_up(&mut self, doc: &mut Document, n_rows: usize) -> usize {
         if n_rows == 0 || self.rows.is_empty() {
-            return;
+            return 0;
         }
         if n_rows > self.size.height {
             panic!("scroll rows too big");
@@ -491,17 +528,21 @@ impl Viewport {
         // 指定行数分の新しい行を取得
         let first = self.rows[0].clone();
         let new_rows = build_rows_backward(doc, self.size.width, BuildFrom::Before(first), n_rows);
+        let scroll_rows = new_rows.len();
+        log::debug!("scroll up {new_rows:?} {scroll_rows}");
 
         // 新しく取得した行分だけ末尾から削除し、先頭に新しい行を追加
         let len = self.rows.len();
         self.rows.truncate(len - new_rows.len());
         self.rows.splice(0..0, new_rows);
+
+        scroll_rows
     }
 
     // 指定行数分を先頭から除去し、同じ行数分を末尾に追加する。
-    fn scroll_down(&mut self, doc: &mut Document, n_rows: usize) {
+    fn scroll_down(&mut self, doc: &mut Document, n_rows: usize) -> usize {
         if n_rows == 0 || self.rows.is_empty() {
-            return;
+            return 0;
         }
         if n_rows > self.size.height {
             panic!("scroll rows too big");
@@ -514,10 +555,14 @@ impl Viewport {
             (last.line_index, last.wrap_index + 1),
             n_rows,
         );
+        let scroll_rows = new_rows.len();
+
         // 新しく取得した行分だけ先頭から削除し、末尾に新しい行を追加
         let remove_count = new_rows.len();
         self.rows.drain(0..remove_count);
         self.rows.extend(new_rows);
+
+        scroll_rows
     }
 
     fn jump_to(&mut self, doc: &mut Document, line_index: usize, row_offset: usize) {
