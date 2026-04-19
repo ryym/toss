@@ -37,6 +37,7 @@ pub struct MatchPosition {
 }
 
 /// Active search state, preserved across search submissions.
+#[derive(Debug, Clone)]
 pub struct SearchState {
     pub query: Regex,
     pub direction: SearchDirection,

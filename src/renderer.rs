@@ -10,7 +10,7 @@ use crate::{
     page::{Direction, ScrollPlan},
     pager::{PageSnapshot, PageUpdate},
     screen::Screen,
-    search::SearchState,
+    search::{MatchPosition, SearchState},
 };
 
 #[derive(Clone)]
@@ -25,9 +25,21 @@ impl PartialEq<Row> for RowRef {
     }
 }
 
+struct SearchStateRef {
+    query: String,
+    current: Option<MatchPosition>,
+}
+
+impl PartialEq<SearchState> for SearchStateRef {
+    fn eq(&self, other: &SearchState) -> bool {
+        &self.query == other.query.as_str() && self.current == other.current
+    }
+}
+
 pub struct Renderer<S: Screen> {
     screen: S,
     last_section_header_start: Option<RowRef>,
+    last_search: Option<SearchStateRef>,
     // 前回の描画時のハイライトがあった行一覧を保持
     // full 描画のときは特に使わない
     // scroll でかつ search state が変わっている時は、追加行以外の既存行も適宜更新
@@ -43,6 +55,7 @@ impl<S: Screen> Renderer<S> {
         Self {
             screen,
             last_section_header_start: None,
+            last_search: None,
         }
     }
 
@@ -72,6 +85,11 @@ impl<S: Screen> Renderer<S> {
         self.last_section_header_start = page.section_header.get(0).map(|row| RowRef {
             line_index: row.line_index,
             wrap_index: row.wrap_index,
+        });
+        // XXX: 1行スクロールも含めて毎回コピーが走っちゃう。
+        self.last_search = search.map(|s| SearchStateRef {
+            query: s.query.as_str().to_string(),
+            current: s.current,
         });
         result
     }
@@ -119,7 +137,8 @@ impl<S: Screen> Renderer<S> {
     ) -> io::Result<()> {
         self.screen.begin_sync()?;
 
-        if scroll_rows > 0 {
+        let header_height = page.global_header.len() + page.section_header.len();
+        let (from, to) = if scroll_rows > 0 {
             let direction = if is_up {
                 Direction::Up
             } else {
@@ -130,22 +149,43 @@ impl<S: Screen> Renderer<S> {
                 direction,
             })?;
 
-            let header_height = page.global_header.len() + page.section_header.len();
-            // let (from, to) = if is_up {
-            //     (0, cmp::min(scroll_rows, page.content.len()))
-            // } else {
-            //     (
-            //         cmp::max(0, page.content.len() - scroll_rows),
-            //         page.content.len(),
-            //     )
-            // };
             let (from, to) = scroll_dirty_range(page.content, scroll_rows, direction);
             log::debug!("render header={header_height} scroll={scroll_rows} {from}..{to}");
             log::debug!("render {:?}", page.section_header);
             self.draw_rows_grouped(doc, &page.content[from..to], search, header_height + from)?;
-        }
+            (from, to)
+        } else {
+            (0, 0)
+        };
 
-        // todo: highlight の変更もありうる？
+        log::debug!("render scroll {:?}", (from, to));
+        let is_search_same = match (&self.last_search, search) {
+            (Some(prev), Some(current)) => prev == current,
+            (None, None) => true,
+            _ => false,
+        };
+        // last_search != search なら、元々あった各行について higlight を更新。
+        // todo: 直前のハイライト行位置を記憶し、再描画すべきもののみ再描画
+        if !is_search_same {
+            let (rest_from, rest_to) = if from == 0 {
+                (to, page.content.len())
+            } else {
+                (0, from)
+            };
+
+            // last_hilight_lines
+            // !last && !current => no draw
+            // !last && current => draw
+            // last && !current => draw
+            // last && current => draw
+
+            self.draw_rows_grouped(
+                doc,
+                &page.content[rest_from..rest_to],
+                search,
+                header_height + rest_from,
+            )?;
+        }
 
         if !page.global_header.is_empty() {
             self.draw_rows_grouped(doc, page.global_header, search, 0)?;

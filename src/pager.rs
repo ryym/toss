@@ -71,7 +71,8 @@ pub struct Pager {
 impl Pager {
     pub fn new(mut doc: Document, size: &ViewportSize, options: Options) -> Self {
         let header = GlobalHeader::new(&mut doc, size, options.header);
-        let section = Section::new(options.section, size, header.height());
+        let mut section = Section::new(options.section, size, header.height());
+        section.resolve(&mut doc, 0);
         let viewport = Viewport::new(&mut doc, size);
         let mut pager = Pager {
             doc,
@@ -80,7 +81,7 @@ impl Pager {
             viewport,
             last_update: PageUpdate::Full,
         };
-        pager.jump_to(0);
+        // pager.jump_to(0);
         pager
     }
 
@@ -163,7 +164,18 @@ impl Pager {
     }
 
     pub fn jump_to(&mut self, mut line_index: usize) {
-        self.last_update = PageUpdate::Full;
+        let prev_line_pos = self
+            .viewport
+            .all_rows()
+            .iter()
+            .enumerate()
+            .find_map(|(i, row)| {
+                if row.line_index == line_index && row.wrap_index == 0 {
+                    Some(i)
+                } else {
+                    None
+                }
+            });
 
         // section header をセットする。
         self.section.resolve(&mut self.doc, line_index);
@@ -181,6 +193,19 @@ impl Pager {
         };
         self.viewport
             .jump_to(&mut self.doc, line_index, header_offset);
+
+        self.last_update = if let Some(row_index) = prev_line_pos {
+            log::debug!("jump but scroll {row_index} {header_offset}");
+            let n_rows = header_offset.abs_diff(row_index);
+            PageUpdate::Scroll {
+                up: header_offset > row_index,
+                n_rows,
+                // todo: highlight
+                // renderer が直前の search state 持って、変更を検知したら highlight 更新か
+            }
+        } else {
+            PageUpdate::Full
+        };
     }
 
     pub fn jump_to_end(&mut self) {
