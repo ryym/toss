@@ -80,7 +80,7 @@ impl Pager {
             viewport,
             last_update: PageUpdate::Full,
         };
-        pager.jump_to(0, 0);
+        pager.jump_to(0);
         pager
     }
 
@@ -162,7 +162,7 @@ impl Pager {
         self.viewport.all_rows()[self.total_header_height()..].to_vec()
     }
 
-    pub fn jump_to(&mut self, mut line_index: usize, offset: usize) {
+    pub fn jump_to(&mut self, mut line_index: usize) {
         self.last_update = PageUpdate::Full;
 
         // section header をセットする。
@@ -180,7 +180,7 @@ impl Pager {
             self.total_header_height()
         };
         self.viewport
-            .jump_to(&mut self.doc, line_index, offset + header_offset);
+            .jump_to(&mut self.doc, line_index, header_offset);
     }
 
     pub fn jump_to_end(&mut self) {

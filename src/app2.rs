@@ -41,6 +41,10 @@ pub struct App2<S: Screen> {
     search: Option<SearchState>,
     scroll_physics: ScrollPhysics,
     instant_scroll: bool,
+    // XXX: event 発火後に dirty にならないケースある？
+    // => 例えばファイル末尾での j とか、スクロールしてもできないケース
+    // Option<PageUpdate> ? でも検索条件の変更もある
+    // Pager が status まで持てば問題ない？
     dirty: bool,
 }
 
@@ -168,7 +172,7 @@ impl<S: Screen> App2<S> {
             }
             KeyCode::Char('g') => {
                 self.scroll_physics.stop();
-                self.pager.jump_to(0, 0);
+                self.pager.jump_to(0);
                 self.dirty = true;
             }
             KeyCode::Char('G') => {
@@ -222,7 +226,7 @@ impl<S: Screen> App2<S> {
         if let AppMode::Search { saved_top_line, .. } = &self.mode {
             // XXX: これは content top でよい
             let top = *saved_top_line;
-            self.pager.jump_to(top, 0);
+            self.pager.jump_to(top);
         }
         self.exit_search_mode();
     }
@@ -243,7 +247,7 @@ impl<S: Screen> App2<S> {
                 *preview = None;
             }
             // XXX: これは content top でよい
-            self.pager.jump_to(saved_top_line, 0);
+            self.pager.jump_to(saved_top_line);
             self.dirty = true;
             return;
         }
@@ -260,7 +264,7 @@ impl<S: Screen> App2<S> {
         );
 
         if let Some(ref pos) = matched {
-            self.pager.jump_to(pos.line, 0);
+            self.pager.jump_to(pos.line);
         }
 
         if let AppMode::Search { preview, .. } = &mut self.mode {
@@ -344,7 +348,7 @@ impl<S: Screen> App2<S> {
         let next = find_next_match_position(&mut self.pager, &query, current, direction);
         log::debug!("next:{next:?}");
         if let Some(pos) = next {
-            self.pager.jump_to(pos.line, 0);
+            self.pager.jump_to(pos.line);
             if let Some(s) = self.search.as_mut() {
                 s.current = Some(pos);
             }

@@ -218,37 +218,6 @@ impl<S: Screen> Renderer<S> {
         }
         Ok(())
     }
-
-    /// Compute the range of rows that need redrawing after a scroll.
-    ///
-    /// After terminal scroll shifts content, `scroll_rows` new rows appear at one
-    /// edge. This function returns the range extended to include adjacent existing
-    /// rows from the same logical line, so soft-wrap groups are drawn correctly.
-    fn scroll_dirty_range(
-        rows: &[Row],
-        scroll_rows: usize,
-        direction: Direction,
-    ) -> (usize, usize) {
-        let len = rows.len();
-        match direction {
-            Direction::Down => {
-                let new_start = len.saturating_sub(scroll_rows);
-                let mut from = new_start;
-                while from > 0 && rows[from - 1].line_index == rows[new_start].line_index {
-                    from -= 1;
-                }
-                (from, len)
-            }
-            Direction::Up => {
-                let new_end = scroll_rows.min(len);
-                let mut to = new_end;
-                while to < len && rows[to].line_index == rows[new_end - 1].line_index {
-                    to += 1;
-                }
-                (0, to)
-            }
-        }
-    }
 }
 
 /// Compute the range of rows that need redrawing after a scroll.
