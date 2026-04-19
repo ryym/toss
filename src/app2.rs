@@ -116,8 +116,12 @@ impl<S: Screen> App2<S> {
     fn draw(&mut self) -> io::Result<()> {
         let status_text = self.status_text();
         let search = active_search(&self.mode, &self.search);
-        log::debug!("DRAW {:?}", search.map(|s| &s.query));
         let (snapshot, doc) = self.pager.snapshot2();
+        log::debug!(
+            "DRAW {:?} {:?}",
+            search.map(|s| &s.query),
+            snapshot.last_update
+        );
         self.renderer.render(doc, snapshot, search, &status_text)
     }
 

@@ -6,7 +6,7 @@
 // あるいは先に既存 App の page を pager で置き換えて試せるとよりよい
 // 一旦全部 draw full page にするのあり？　テストが通ることの確認ならそれで十分かも
 
-use std::ops::Range;
+use std::{cmp, ops::Range};
 
 use crate::{
     document::Document,
@@ -103,6 +103,7 @@ impl Pager {
             height: self.viewport.size().height,
             last_update: self.last_update,
         };
+        // XXX: enter search mode とか status line 描画時にも full になってる
         self.last_update = PageUpdate::Full;
         (snapshot, &mut self.doc)
     }
@@ -164,6 +165,7 @@ impl Pager {
     }
 
     pub fn jump_to(&mut self, mut line_index: usize) {
+        let prev_viewport_top = self.viewport.all_rows()[0].clone();
         let prev_line_pos = self
             .viewport
             .all_rows()
@@ -195,19 +197,42 @@ impl Pager {
             .viewport
             .jump_to(&mut self.doc, line_index, header_offset);
 
-        // XXX: テストは通ったが、実挙動を見るとちらつきが現状よりひどい。なぜ？
-        // 処理の効率とかは誤差で (しかも新実装の方がマシなはず)、ターミナルの再描画がより多く走ってるってことのはず。
-
-        self.last_update = if let Some(prev_line_pos) = prev_line_pos {
-            log::debug!("jump but scroll {prev_line_pos} {header_offset}");
-            let n_rows = new_line_pos.abs_diff(prev_line_pos);
-            PageUpdate::Scroll {
-                up: new_line_pos > prev_line_pos,
-                n_rows,
-            }
+        // down 方向へのジャンプなら、ジャンプ先が今の viweport にすでにある場合に scroll になる。
+        // up 方向へのジャンプなら、元々の top がジャンプ後の viewport 内にある場合に scroll になる。
+        if prev_viewport_top < self.viewport.all_rows()[0] {
+            // down
+            self.last_update = if let Some(prev_line_pos) = prev_line_pos {
+                log::debug!("jump but scroll (down) {prev_line_pos} {header_offset}");
+                let n_rows = new_line_pos.abs_diff(prev_line_pos);
+                PageUpdate::Scroll { up: false, n_rows }
+            } else {
+                PageUpdate::Full
+            };
         } else {
-            PageUpdate::Full
-        };
+            // up
+            let prev_viewport_top_new_pos =
+                self.viewport
+                    .all_rows()
+                    .iter()
+                    .enumerate()
+                    .find_map(|(i, row)| {
+                        if row == &prev_viewport_top {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    });
+            self.last_update = if let Some(pos) = prev_viewport_top_new_pos {
+                log::debug!("jump but scroll (up) {pos} {header_offset}");
+                // let n_rows = new_line_pos.abs_diff(pos);
+                PageUpdate::Scroll {
+                    up: true,
+                    n_rows: pos,
+                }
+            } else {
+                PageUpdate::Full
+            };
+        }
     }
 
     pub fn jump_to_end(&mut self) {
@@ -258,7 +283,6 @@ impl Pager {
 
         // 1つ前の section header がまだ overlay 領域にいる場合、新しい section header の位置を調整する。
         self.push_up_section_header_if_needed();
-        log::debug!("AAA {top_index} {:?}", self.section.header);
 
         scroll_rows
     }
