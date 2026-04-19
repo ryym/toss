@@ -80,6 +80,7 @@ impl<S: Screen> Renderer<S> {
         status_text: &str,
     ) -> io::Result<()> {
         let result = match page.last_update {
+            PageUpdate::None => self.redraw_status_line(&page, status_text),
             PageUpdate::Full => self.redraw_full_page(doc, &page, search, status_text),
             PageUpdate::Scroll { up, n_rows } => {
                 // todo: ヘッダーサイズが変わってたら一旦常に full redraw
@@ -97,6 +98,13 @@ impl<S: Screen> Renderer<S> {
         });
         self.last_highlight_lines = mem::take(&mut self.current_highlight_lines);
         result
+    }
+
+    fn redraw_status_line(&mut self, page: &PageSnapshot, status_text: &str) -> io::Result<()> {
+        let status_y = page.global_header.len() + page.section_header.len() + page.content.len();
+        self.screen.clear_row(status_y as u16)?;
+        self.screen.write_at(status_y as u16, status_text)?;
+        self.screen.flush()
     }
 
     fn redraw_full_page(

@@ -49,6 +49,7 @@ fn rows_from_lines(
 pub enum PageUpdate {
     Full,
     Scroll { up: bool, n_rows: usize },
+    None,
 }
 
 #[derive(Debug)]
@@ -103,8 +104,7 @@ impl Pager {
             height: self.viewport.size().height,
             last_update: self.last_update,
         };
-        // XXX: enter search mode とか status line 描画時にも full になってる
-        self.last_update = PageUpdate::Full;
+        self.last_update = PageUpdate::None;
         (snapshot, &mut self.doc)
     }
 
