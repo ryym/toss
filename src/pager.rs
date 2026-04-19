@@ -191,17 +191,19 @@ impl Pager {
         } else {
             self.total_header_height()
         };
-        self.viewport
+        let new_line_pos = self
+            .viewport
             .jump_to(&mut self.doc, line_index, header_offset);
 
-        self.last_update = if let Some(row_index) = prev_line_pos {
-            log::debug!("jump but scroll {row_index} {header_offset}");
-            let n_rows = header_offset.abs_diff(row_index);
+        // XXX: テストは通ったが、実挙動を見るとちらつきが現状よりひどい。なぜ？
+        // 処理の効率とかは誤差で (しかも新実装の方がマシなはず)、ターミナルの再描画がより多く走ってるってことのはず。
+
+        self.last_update = if let Some(prev_line_pos) = prev_line_pos {
+            log::debug!("jump but scroll {prev_line_pos} {header_offset}");
+            let n_rows = new_line_pos.abs_diff(prev_line_pos);
             PageUpdate::Scroll {
-                up: header_offset > row_index,
+                up: new_line_pos > prev_line_pos,
                 n_rows,
-                // todo: highlight
-                // renderer が直前の search state 持って、変更を検知したら highlight 更新か
             }
         } else {
             PageUpdate::Full
@@ -590,7 +592,9 @@ impl Viewport {
         scroll_rows
     }
 
-    fn jump_to(&mut self, doc: &mut Document, line_index: usize, row_offset: usize) {
+    // 指定された line の viewport rows における最終的な index を返す。
+    // ファイル末尾の方に line がある場合は line が row_offset より更に下に位置する可能性がある。
+    fn jump_to(&mut self, doc: &mut Document, line_index: usize, row_offset: usize) -> usize {
         let height = self.size.height;
         let rows_after_line = build_rows_forward(doc, self.size.width, (line_index, 0), height);
 
@@ -604,10 +608,13 @@ impl Viewport {
             padding,
         );
 
+        let final_line_row_index = rows_before_line.len();
         let mut combined: Vec<Row> = rows_before_line;
         combined.extend(rows_after_line);
         combined.truncate(height);
         self.rows = combined;
+
+        final_line_row_index
     }
 
     fn jump_to_end(&mut self, doc: &mut Document) {

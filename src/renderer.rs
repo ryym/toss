@@ -1,6 +1,6 @@
 mod highlight;
 
-use std::{cmp, io, num::NonZeroUsize};
+use std::{cmp, collections::HashSet, io, mem, num::NonZeroUsize};
 
 use crossterm::event::Event;
 
@@ -40,6 +40,8 @@ pub struct Renderer<S: Screen> {
     screen: S,
     last_section_header_start: Option<RowRef>,
     last_search: Option<SearchStateRef>,
+    last_highlight_lines: HashSet<usize>,
+    current_highlight_lines: HashSet<usize>,
     // 前回の描画時のハイライトがあった行一覧を保持
     // full 描画のときは特に使わない
     // scroll でかつ search state が変わっている時は、追加行以外の既存行も適宜更新
@@ -56,6 +58,8 @@ impl<S: Screen> Renderer<S> {
             screen,
             last_section_header_start: None,
             last_search: None,
+            last_highlight_lines: HashSet::new(),
+            current_highlight_lines: HashSet::new(),
         }
     }
 
@@ -91,6 +95,7 @@ impl<S: Screen> Renderer<S> {
             query: s.query.as_str().to_string(),
             current: s.current,
         });
+        self.last_highlight_lines = mem::take(&mut self.current_highlight_lines);
         result
     }
 
@@ -173,13 +178,13 @@ impl<S: Screen> Renderer<S> {
                 (0, from)
             };
 
-            // last_hilight_lines
+            // last_highlight_lines
             // !last && !current => no draw
             // !last && current => draw
             // last && !current => draw
             // last && current => draw
 
-            self.draw_rows_grouped(
+            self.draw_rows_grouped2(
                 doc,
                 &page.content[rest_from..rest_to],
                 search,
@@ -231,6 +236,8 @@ impl<S: Screen> Renderer<S> {
                 let matches = search.map(|sh| line.find_matches(&sh.query));
                 match (search, matches) {
                     (Some(search), Some(matches)) if !matches.is_empty() => {
+                        self.current_highlight_lines.insert(line_idx);
+
                         let current_match_index = search.current.and_then(|current| {
                             if current.line == line_idx {
                                 Some(current.match_index)
@@ -250,6 +257,69 @@ impl<S: Screen> Renderer<S> {
                             .write_at((group_start + screen_y) as u16, &text)?;
                     }
                     _ => {
+                        self.screen
+                            .write_at((group_start + screen_y) as u16, &line.raw()[raw_range])?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn draw_rows_grouped2(
+        &mut self,
+        doc: &mut Document,
+        rows: &[Row],
+        search: Option<&SearchState>,
+        screen_y: usize,
+    ) -> io::Result<()> {
+        let mut i = 0;
+        while i < rows.len() {
+            let line_idx = rows[i].line_index;
+
+            let group_start = i;
+            while i < rows.len() && rows[i].line_index == line_idx {
+                i += 1;
+            }
+            // Write the combined text for this group as one continuous piece
+            if let Some(line) = doc.line(line_idx) {
+                let raw_range = rows[group_start].raw_range.start..rows[i - 1].raw_range.end;
+
+                let matches = search.map(|sh| line.find_matches(&sh.query));
+                match (search, matches) {
+                    (Some(search), Some(matches)) if !matches.is_empty() => {
+                        self.current_highlight_lines.insert(line_idx);
+
+                        // Clear each row in the group
+                        for j in group_start..i {
+                            self.screen.clear_row((j + screen_y) as u16)?;
+                        }
+                        let current_match_index = search.current.and_then(|current| {
+                            if current.line == line_idx {
+                                Some(current.match_index)
+                            } else {
+                                None
+                            }
+                        });
+                        let positions = highlight::build_highlight_positions(
+                            &matches,
+                            current_match_index,
+                            line.plain_to_raw(),
+                            line.raw().len(),
+                        );
+                        let text =
+                            highlight::apply_highlight_to_range(line.raw(), raw_range, &positions);
+                        self.screen
+                            .write_at((group_start + screen_y) as u16, &text)?;
+                    }
+                    _ => {
+                        if !self.last_highlight_lines.contains(&line_idx) {
+                            continue;
+                        }
+                        // Clear each row in the group
+                        for j in group_start..i {
+                            self.screen.clear_row((j + screen_y) as u16)?;
+                        }
                         self.screen
                             .write_at((group_start + screen_y) as u16, &line.raw()[raw_range])?;
                     }
