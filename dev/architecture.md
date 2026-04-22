@@ -1,70 +1,89 @@
 # Architecture
 
-## Layers
+This document summarizes an architecture overview of Toss, a terminal pager.
 
-The system has four layers. Each layer has a single responsibility and depends only on the layer(s) below it.
+## Main Components
+
+The application consists of the following main components and each component has its own clear responsibility.
+
+- `App`
+- `Pager`
+  - `Document`
+- `Renderer`
+  - `Screen`
+- `Line` and `Row`
+
+### `App`
+
+`App` is a controller that runs event loop, handle events, and cordinate `Pager` and `Renderer` to update screen based on terminal events.
+An event loop basically looks like:
+
+1. Poll events.
+2. Call `Pager` to update the page state based on the event.
+3. Call `Renderer` with the latest page state to render it to the terminal screen.
+
+### `Pager`
+
+`Pager` is a core state manager.
+It decides which lines should be displayed, reads lines from `Document`, wrap lines as needed, and updates the page state.
+But `Pager` itself never directly writes to the screen. It focuses on maintaining a correct state in memory.
+
+### `Renderer`
+
+`Renderer` is responsible for rendering the page state to the terminal screen correctly and effectively.
+It minimizes actual re-rendering to make screen updates as smooth as possible.
+It applies the page state to `Screen` but never modifies the page state.
+
+### `Document`
+
+`Document` abstracts read operations for the target text paginated by Toss. It supports two backends:
+
+- File: Lines are loaded on demand via byte-offset seeking. An LRU cache holds recently accessed parsed Line objects.
+- In-memory (stdin or test strings): All lines are parsed upfront and held in memory.
+
+It provides access to each `Line` by index in the document.
+
+### `Screen`
+
+`Screen` abstracts write operations for the terminal.
+Tests use an in-memory mock screen to verify any `App`'s behavior without depending on its internal details.
+
+### `Line` and `Row`
+
+- `Line`: A sequence of text in `Document` delimited by line breaks (`\n`).
+- `Row`: A segment of a line wrapped based on display width.
+
+For example, the following 2 lines
 
 ```
-App       Event loop, mode dispatch, animation coordination
-Viewport  What is currently displayed in the content area (row-level bookkeeping)
-Document  Line data (loading, caching, wrapping)
-Screen    Terminal I/O abstraction
+abc-01234
+hello-world
 ```
 
-- **Document** loads lines from a file or stdin and owns the parsed data. It knows nothing about the screen.
-- **Viewport** tracks which document lines (and which wrap segments) occupy each content area row. It never touches the terminal itself. It knows only about the content area dimensions (excluding status line, sticky header, etc.); screen layout is managed by App.
-- **Screen** is a trait that abstracts terminal operations. Production code uses crossterm; tests use an in-memory mock. Rendering functions live alongside the trait.
-- **App** ties everything together: it runs the event loop, dispatches input by mode, drives animations, and decides when to render.
+will be displayed like below when the screen width is 4:
+
+```
+abc-
+0123
+4
+hell
+o-wo
+rld
+```
+
+Each logical line in the second text is `Row`. So the 2 lines are split into 6 rows in this case.
+Wrap positions are determined based on plain text while Toss supports ANSI escape sequences in the original text.
 
 ## Frame-Driven Event Loop
 
-Instead of blocking on input, App runs a game-loop:
+Looking at the `App`'s event loop in more detail, it is a non-blocking game-loop like below:
 
-1. Poll input with a timeout (short during animation, longer when idle)
-2. Handle the event if any (key press, resize)
-3. Advance animation if one is running
-4. Render if the screen state changed
+1. Poll input with a timeout (short during scroll animation, longer when idle).
+2. Handle the event if any (key press, resize).
+   - Call appropriate operation of `Pager` to update the page state based on the event.
+3. Advance scroll animation if one is running.
+4. Render if the page state changed.
+   - Pass the page state to `Renderer` to update the screen.
 
-This design exists because smooth scroll animation requires rendering intermediate frames between user inputs. A blocking-input loop cannot do this.
-
-## Incremental Scroll Rendering
-
-To minimize flicker during scrolling (especially with colored content), scrolling uses incremental rendering:
-
-1. Viewport receives "scroll N rows down/up"
-2. It shifts its internal row array and fills in the newly exposed rows
-3. It returns a ScrollPlan: the direction and how many rows shifted
-4. The rendering function issues a terminal scroll command (which shifts existing content in-place) and only redraws the newly revealed rows plus the header
-
-Full redraws happen only on resize, mode transitions, or when the header height changes.
-
-To prevent tearing, each rendering cycle (both incremental and full) is wrapped with Synchronized Output (DEC Private Mode 2026). Supporting terminals buffer all output between these markers and render atomically; non-supporting terminals simply ignore the sequences.
-
-## ANSI-Aware Wrapping and Highlighting
-
-Source lines may contain ANSI escape sequences. The design principle is: **width calculation and search operate on escape-stripped plain text, while rendering preserves the original raw text.** `Line` maintains both views and a byte-level mapping between them (see `line.rs` for details).
-
-This duality surfaces in two cross-cutting concerns:
-
-- **Wrapping**: Wrap positions are determined by display widths on plain text, then translated to raw byte offsets. Viewport tracks which wrap segment of which line occupies each screen row. When rendering, wrapped rows from the same logical line are written as a single continuous string so the terminal handles line breaks as soft wraps.
-- **Search highlighting**: Matches are found on plain text, then the match ranges are mapped to raw text positions where escape sequences for highlight are injected.
-
-## Mode System
-
-App has two modes: **View** and **Search**.
-
-- **View**: Normal paging. Keys scroll, 'n'/'N' navigate search matches, '/' and '?' enter search mode.
-- **Search**: A line editor captures the query. Each keystroke triggers an incremental search from the current position, updating a **preview** highlight. On Enter the preview becomes the committed search state. On Esc the screen returns to the saved position and the preview is discarded.
-
-The committed search state (`App.search`) persists across mode transitions and is used for 'n'/'N' navigation and rendering highlights in View mode. The preview state exists only inside the Search mode variant.
-
-## Data Loading
-
-Document supports two backends:
-
-- **File**: Lines are loaded on demand via byte-offset seeking. A LineIndex (built once at open by scanning newlines) enables O(1) access to any line. An LRU cache holds recently accessed parsed Line objects.
-- **In-memory** (stdin or test strings): All lines are parsed upfront and held in memory. No caching needed.
-
-## Testing
-
-The Screen trait enables end-to-end testing without a terminal. MockScreen records an in-memory grid and tracks soft-wrap markers. Tests inject a sequence of key events, run the app to completion (a 'q' key), and assert on grid snapshots. ANSI escapes in snapshots are visualized as readable tags (e.g., `{reverse}`) for easy comparison.
+With this design, the application can handle user inputs while running smooth scroll animation.
+For example, the user can speed up the scroll by repeating the key quickly during scroll.
