@@ -22,9 +22,9 @@ fn draw_rows_grouped<S: Screen>(
 ) -> io::Result<()> {
     let mut i = 0;
     while i < rows.len() {
-        let line_idx = rows[i].line_index;
+        let line_idx = rows[i].line_index();
         let group_start = i;
-        while i < rows.len() && rows[i].line_index == line_idx {
+        while i < rows.len() && rows[i].line_index() == line_idx {
             i += 1;
         }
         // Clear each row in the group
@@ -33,7 +33,7 @@ fn draw_rows_grouped<S: Screen>(
         }
         // Write the combined text for this group as one continuous piece
         if let Some(line) = doc.line(line_idx) {
-            let raw_range = rows[group_start].raw_range.start..rows[i - 1].raw_range.end;
+            let raw_range = rows[group_start].raw_range().start..rows[i - 1].raw_range().end;
 
             let matches = search.map(|sh| line.find_matches(&sh.query));
             match (search, matches) {
@@ -161,7 +161,7 @@ pub fn apply_jump_scroll<S: Screen>(
             };
             let dirty_rows: Vec<Row> = visible_rows[overlap_range]
                 .iter()
-                .filter(|r| highlight_dirty_lines.contains(&r.line_index))
+                .filter(|r| highlight_dirty_lines.contains(&r.line_index()))
                 .cloned()
                 .collect();
             if !dirty_rows.is_empty() {
@@ -233,19 +233,19 @@ fn filter_dirty_rows(
     let mut last_dirty = false;
 
     for row in rows {
-        if last_line == Some(row.line_index) {
+        if last_line == Some(row.line_index()) {
             // Same logical line as previous row: same dirty status.
             if last_dirty {
                 dirty.push(row.clone());
             }
             continue;
         }
-        last_line = Some(row.line_index);
+        last_line = Some(row.line_index());
 
-        let is_dirty = old_match_lines.contains(&row.line_index)
+        let is_dirty = old_match_lines.contains(&row.line_index())
             || search
                 .and_then(|s| {
-                    doc.line(row.line_index)
+                    doc.line(row.line_index())
                         .map(|line| line.has_match(&s.query))
                 })
                 .unwrap_or(false);
@@ -274,7 +274,7 @@ fn scroll_dirty_range(
             let new_start = len.saturating_sub(scroll_rows);
             let mut from = new_start;
             while from > 0
-                && visible_rows[from - 1].line_index == visible_rows[new_start].line_index
+                && visible_rows[from - 1].line_index() == visible_rows[new_start].line_index()
             {
                 from -= 1;
             }
@@ -283,7 +283,9 @@ fn scroll_dirty_range(
         Direction::Up => {
             let new_end = scroll_rows.min(len);
             let mut to = new_end;
-            while to < len && visible_rows[to].line_index == visible_rows[new_end - 1].line_index {
+            while to < len
+                && visible_rows[to].line_index() == visible_rows[new_end - 1].line_index()
+            {
                 to += 1;
             }
             (0, to)
@@ -314,9 +316,9 @@ fn draw_dirty_rows_at_positions<S: Screen>(
         }
         // Found a dirty row. Collect the contiguous group from the same line.
         let group_start = i;
-        let line_idx = visible_rows[i].line_index;
+        let line_idx = visible_rows[i].line_index();
         while i < visible_rows.len()
-            && visible_rows[i].line_index == line_idx
+            && visible_rows[i].line_index() == line_idx
             && dirty_set.contains(&visible_rows[i])
         {
             i += 1;

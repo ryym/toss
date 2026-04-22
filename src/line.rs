@@ -26,12 +26,29 @@ use crate::ansi;
 /// to locate the corresponding text in the original line.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Row {
+    line_index: usize,
+    wrap_index: usize,
+    raw_range: Range<usize>,
+}
+
+impl Row {
     /// Index of the source line in the document.
-    pub line_index: usize,
+    #[inline]
+    pub fn line_index(&self) -> usize {
+        self.line_index
+    }
+
     /// Zero-based position of this row among the wrap rows of its line.
-    pub wrap_index: usize,
+    #[inline]
+    pub fn wrap_index(&self) -> usize {
+        self.wrap_index
+    }
+
     /// Byte range in the line's raw text covered by this row.
-    pub raw_range: Range<usize>,
+    #[inline]
+    pub fn raw_range(&self) -> &Range<usize> {
+        &self.raw_range
+    }
 }
 
 impl Row {

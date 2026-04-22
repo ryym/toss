@@ -87,12 +87,12 @@ impl Viewport {
 
     /// Line index of the first visible row, or 0 if no rows exist.
     pub fn top_line_index(&self) -> usize {
-        self.rows.first().map(|r| r.line_index).unwrap_or(0)
+        self.rows.first().map(|r| r.line_index()).unwrap_or(0)
     }
 
     /// Wrap index of the first visible row, or 0 if no rows exist.
     pub fn top_wrap_index(&self) -> usize {
-        self.rows.first().map(|r| r.wrap_index).unwrap_or(0)
+        self.rows.first().map(|r| r.wrap_index()).unwrap_or(0)
     }
 
     /// Scroll down by n screen rows. Returns `None` if no scrolling occurred.
@@ -177,7 +177,7 @@ impl Viewport {
         let (top_line_index, top_wrap_index) = self
             .rows
             .first()
-            .map(|row| (row.line_index, row.wrap_index))
+            .map(|row| (row.line_index(), row.wrap_index()))
             .unwrap_or((0, 0));
         let top_line = top_line_index.max(self.fixed_line_len);
         self.width = width;
@@ -234,7 +234,7 @@ impl Viewport {
 
     /// Advance forward from `after` by `n` screen rows.
     fn advance_forward(doc: &mut Document, width: usize, after: &Row, n: usize) -> Vec<Row> {
-        Self::build_rows_forward(doc, width, after.line_index, after.wrap_index + 1, n)
+        Self::build_rows_forward(doc, width, after.line_index(), after.wrap_index() + 1, n)
     }
 
     /// Advance backward from `before` by `n` screen rows.
@@ -249,10 +249,10 @@ impl Viewport {
         let mut rows = Vec::with_capacity(n);
         // Remaining wrap rows of the current line (before the current wrap).
         let line_rows = doc
-            .line(before.line_index)
+            .line(before.line_index())
             .map(|line| line.wrap(width))
             .unwrap_or_default();
-        for r in line_rows.into_iter().take(before.wrap_index).rev() {
+        for r in line_rows.into_iter().take(before.wrap_index()).rev() {
             rows.push(r);
             if rows.len() >= n {
                 rows.reverse();
@@ -260,7 +260,14 @@ impl Viewport {
             }
         }
         // Continue with preceding lines.
-        Self::collect_rows_backward(doc, width, &mut rows, before.line_index, n, fixed_line_len);
+        Self::collect_rows_backward(
+            doc,
+            width,
+            &mut rows,
+            before.line_index(),
+            n,
+            fixed_line_len,
+        );
         rows.reverse();
         rows
     }
@@ -302,7 +309,9 @@ mod tests {
 
     /// Extract (line_index, wrap_index) pairs for concise test assertions.
     fn row_ids(rows: &[Row]) -> Vec<(usize, usize)> {
-        rows.iter().map(|r| (r.line_index, r.wrap_index)).collect()
+        rows.iter()
+            .map(|r| (r.line_index(), r.wrap_index()))
+            .collect()
     }
 
     #[test]
@@ -335,7 +344,7 @@ mod tests {
         let mut doc = make_doc(&["aaa", "bbb", "ccc"]);
         let mut state = Viewport::new(&mut doc, 80, 3, 0);
         assert!(state.scroll_down(1, &mut doc).is_none());
-        assert_eq!(state.rows()[0].line_index, 0);
+        assert_eq!(state.rows()[0].line_index(), 0);
     }
 
     #[test]
@@ -343,7 +352,7 @@ mod tests {
         // Line "abcdefgh" wraps to 2 rows at width 5
         let mut doc = make_doc(&["short", "abcdefgh", "end"]);
         let mut state = Viewport::new(&mut doc, 5, 3, 0);
-        assert_eq!(state.rows()[0].line_index, 0);
+        assert_eq!(state.rows()[0].line_index(), 0);
 
         let plan = state.scroll_down(1, &mut doc).unwrap();
         assert_eq!(plan.terminal_scroll.get(), 1);
@@ -458,9 +467,9 @@ mod tests {
         let state = Viewport::new(&mut doc, 5, 4, 0);
         let rows = state.rows();
         // "abcdefgh" wraps at width 5: "abcde" (0..5), "fgh" (5..8)
-        assert_eq!(rows[0].raw_range, 0..5);
-        assert_eq!(rows[1].raw_range, 5..8);
+        assert_eq!(rows[0].raw_range(), &(0..5));
+        assert_eq!(rows[1].raw_range(), &(5..8));
         // "xy": 0..2
-        assert_eq!(rows[2].raw_range, 0..2);
+        assert_eq!(rows[2].raw_range(), &(0..2));
     }
 }

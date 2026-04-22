@@ -497,7 +497,7 @@ impl<S: Screen> App<S> {
                     }
                 }
             },
-            _ => visible_rows[0].line_index,
+            _ => visible_rows[0].line_index(),
         };
 
         let matched = search::find_next_match(&mut page.doc, &search.query, from, direction);
@@ -550,28 +550,28 @@ impl<S: Screen> App<S> {
         let mut lines = Vec::new();
         let mut last_line = None;
         for row in rows {
-            if last_line == Some(row.line_index) {
+            if last_line == Some(row.line_index()) {
                 continue;
             }
-            last_line = Some(row.line_index);
-            if let Some(line) = self.page.doc.line(row.line_index)
+            last_line = Some(row.line_index());
+            if let Some(line) = self.page.doc.line(row.line_index())
                 && line.has_match(&search.query)
             {
-                lines.push(row.line_index);
+                lines.push(row.line_index());
             }
         }
         // Also include header rows.
         let header = self.page.resolve_header();
         let mut last_line = None;
         for row in header.rows() {
-            if last_line == Some(row.line_index) {
+            if last_line == Some(row.line_index()) {
                 continue;
             }
-            last_line = Some(row.line_index);
-            if let Some(line) = self.page.doc.line(row.line_index)
+            last_line = Some(row.line_index());
+            if let Some(line) = self.page.doc.line(row.line_index())
                 && line.has_match(&search.query)
             {
-                lines.push(row.line_index);
+                lines.push(row.line_index());
             }
         }
         lines
@@ -657,7 +657,7 @@ fn is_match_visible(
     let raw_offset = line.plain_to_raw()[start];
     visible_rows
         .iter()
-        .any(|r| r.line_index == pos.line && r.raw_range.contains(&raw_offset))
+        .any(|r| r.line_index() == pos.line && r.raw_range().contains(&raw_offset))
 }
 
 /// Find the first match that falls on a visible wrap row in the viewport.
@@ -667,13 +667,13 @@ fn find_first_match_in_viewport(
     visible_rows: &[Row],
 ) -> Option<MatchPosition> {
     for row in visible_rows {
-        let line = doc.line(row.line_index)?;
+        let line = doc.line(row.line_index())?;
         let matches = line.find_matches(query);
         for (mi, &(start, _)) in matches.iter().enumerate() {
             let raw_offset = line.plain_to_raw()[start];
-            if row.raw_range.contains(&raw_offset) {
+            if row.raw_range().contains(&raw_offset) {
                 return Some(MatchPosition {
-                    line: row.line_index,
+                    line: row.line_index(),
                     match_index: mi,
                 });
             }

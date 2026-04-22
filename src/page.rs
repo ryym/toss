@@ -91,7 +91,7 @@ impl Page {
                 .viewport
                 .visible_rows()
                 .iter()
-                .any(|r| r.line_index == line && r.wrap_index == 0);
+                .any(|r| r.line_index() == line && r.wrap_index() == 0);
             if found {
                 break;
             }
