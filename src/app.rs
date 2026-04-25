@@ -405,139 +405,11 @@ impl<S: Screen> App<S> {
         } else {
             search.direction
         };
-        let next = Self::determine_next_match_to_jump(&mut self.page, search, direction);
+        let next = find_next_match_position(&mut self.page, search, direction);
         if let Some((pos, redraw)) = next {
             search.current = Some(pos);
             self.redraw = redraw;
         }
-    }
-
-    fn determine_next_match_to_jump(
-        page: &mut Page,
-        search: &SearchState,
-        direction: SearchDirection,
-    ) -> Option<(MatchPosition, RedrawState)> {
-        let old_current_line = search.current.map(|c| c.line);
-
-        let visible_rows = page.viewport.visible_rows();
-        if visible_rows.is_empty() {
-            return None;
-        }
-        log::debug!(
-            "Jump to next match: direction={direction:?}, current={:?}",
-            search.current
-        );
-
-        // If the current cursor is outside the visible area, re-anchor it
-        // to the first visible match instead of jumping from the old position.
-        let needs_reanchor = match search.current {
-            Some(c) => !is_match_visible(&mut page.doc, &search.query, c, visible_rows),
-            None => false,
-        };
-
-        if needs_reanchor {
-            let reanchored =
-                find_first_match_in_viewport(&mut page.doc, &search.query, visible_rows);
-            log::debug!("Cursor outside viewport, re-anchor: {reanchored:?}");
-            if let Some(pos) = reanchored {
-                let mut dirty = Vec::new();
-                if let Some(old_line) = old_current_line {
-                    dirty.push(old_line);
-                }
-                dirty.push(pos.line);
-                return Some((
-                    pos,
-                    RedrawState::SearchHighlight {
-                        old_match_lines: dirty,
-                    },
-                ));
-            }
-            // No matches in viewport; fall through to search from viewport top.
-        }
-
-        if !needs_reanchor {
-            // Try to move to the next match within the same line first.
-            if let Some(current) = search.current
-                && let Some(next_mi) = search::find_next_match_in_line(
-                    &mut page.doc,
-                    &search.query,
-                    current,
-                    direction,
-                )
-            {
-                log::debug!("Next match on same line: index={next_mi}");
-                return Some((
-                    MatchPosition {
-                        line: current.line,
-                        match_index: next_mi,
-                    },
-                    // Same line, just current match index changed — delta redraw.
-                    RedrawState::SearchHighlight {
-                        old_match_lines: vec![current.line],
-                    },
-                ));
-            }
-        }
-
-        // Search the next line from the appropriate starting point.
-        let from = match search.current {
-            Some(pos) if !needs_reanchor => match direction {
-                SearchDirection::Forward => {
-                    if pos.line + 1 < page.doc.line_count() {
-                        pos.line + 1
-                    } else {
-                        0
-                    }
-                }
-                SearchDirection::Backward => {
-                    if pos.line > 0 {
-                        pos.line - 1
-                    } else {
-                        page.doc.line_count().saturating_sub(1)
-                    }
-                }
-            },
-            _ => visible_rows[0].line_index(),
-        };
-
-        let matched = search::find_next_match(&mut page.doc, &search.query, from, direction);
-        log::debug!("Next match from line {from}: {matched:?}");
-        let pos = matched?;
-
-        let old_rows = page.viewport.rows().to_vec();
-        let old_header_height = page.resolve_header().height();
-        let scrolled = page.jump_to_visible(pos.line);
-
-        let mut dirty = Vec::new();
-        if let Some(old_line) = old_current_line {
-            dirty.push(old_line);
-        }
-        dirty.push(pos.line);
-
-        if !scrolled {
-            return Some((
-                pos,
-                RedrawState::SearchHighlight {
-                    old_match_lines: dirty,
-                },
-            ));
-        }
-
-        let new_header_height = page.resolve_header().height();
-        if old_header_height == new_header_height
-            && let Some((n, dir)) = compute_scroll_overlap(&old_rows, page.viewport.rows())
-        {
-            return Some((
-                pos,
-                RedrawState::JumpScroll {
-                    scroll_rows: n,
-                    direction: dir,
-                    highlight_dirty_lines: dirty,
-                },
-            ));
-        }
-
-        Some((pos, RedrawState::Full))
     }
 
     /// Collect line indices of visible rows that have search matches.
@@ -638,6 +510,131 @@ fn active_search<'a>(
         AppMode::Search { preview, .. } => preview.as_ref(),
         _ => committed.as_ref(),
     }
+}
+
+/// Find the next match to jump to. Handles re-anchoring when the current match
+/// is no longer visible (e.g., after g/G).
+fn find_next_match_position(
+    page: &mut Page,
+    search: &SearchState,
+    direction: SearchDirection,
+) -> Option<(MatchPosition, RedrawState)> {
+    let old_current_line = search.current.map(|c| c.line);
+
+    let visible_rows = page.viewport.visible_rows();
+    if visible_rows.is_empty() {
+        return None;
+    }
+    log::debug!(
+        "Jump to next match: direction={direction:?}, current={:?}",
+        search.current
+    );
+
+    // If the current cursor is outside the visible area, re-anchor it
+    // to the first visible match instead of jumping from the old position.
+    let needs_reanchor = match search.current {
+        Some(c) => !is_match_visible(&mut page.doc, &search.query, c, visible_rows),
+        None => false,
+    };
+
+    if needs_reanchor {
+        let reanchored = find_first_match_in_viewport(&mut page.doc, &search.query, visible_rows);
+        log::debug!("Cursor outside viewport, re-anchor: {reanchored:?}");
+        if let Some(pos) = reanchored {
+            let mut dirty = Vec::new();
+            if let Some(old_line) = old_current_line {
+                dirty.push(old_line);
+            }
+            dirty.push(pos.line);
+            return Some((
+                pos,
+                RedrawState::SearchHighlight {
+                    old_match_lines: dirty,
+                },
+            ));
+        }
+        // No matches in viewport; fall through to search from viewport top.
+    }
+
+    if !needs_reanchor {
+        // Try to move to the next match within the same line first.
+        if let Some(current) = search.current
+            && let Some(next_mi) =
+                search::find_next_match_in_line(&mut page.doc, &search.query, current, direction)
+        {
+            log::debug!("Next match on same line: index={next_mi}");
+            return Some((
+                MatchPosition {
+                    line: current.line,
+                    match_index: next_mi,
+                },
+                // Same line, just current match index changed — delta redraw.
+                RedrawState::SearchHighlight {
+                    old_match_lines: vec![current.line],
+                },
+            ));
+        }
+    }
+
+    // Search the next line from the appropriate starting point.
+    let from = match search.current {
+        Some(pos) if !needs_reanchor => match direction {
+            SearchDirection::Forward => {
+                if pos.line + 1 < page.doc.line_count() {
+                    pos.line + 1
+                } else {
+                    0
+                }
+            }
+            SearchDirection::Backward => {
+                if pos.line > 0 {
+                    pos.line - 1
+                } else {
+                    page.doc.line_count().saturating_sub(1)
+                }
+            }
+        },
+        _ => visible_rows[0].line_index(),
+    };
+
+    let matched = search::find_next_match(&mut page.doc, &search.query, from, direction);
+    log::debug!("Next match from line {from}: {matched:?}");
+    let pos = matched?;
+
+    let old_rows = page.viewport.rows().to_vec();
+    let old_header_height = page.resolve_header().height();
+    let scrolled = page.jump_to_visible(pos.line);
+
+    let mut dirty = Vec::new();
+    if let Some(old_line) = old_current_line {
+        dirty.push(old_line);
+    }
+    dirty.push(pos.line);
+
+    if !scrolled {
+        return Some((
+            pos,
+            RedrawState::SearchHighlight {
+                old_match_lines: dirty,
+            },
+        ));
+    }
+
+    let new_header_height = page.resolve_header().height();
+    if old_header_height == new_header_height
+        && let Some((n, dir)) = compute_scroll_overlap(&old_rows, page.viewport.rows())
+    {
+        return Some((
+            pos,
+            RedrawState::JumpScroll {
+                scroll_rows: n,
+                direction: dir,
+                highlight_dirty_lines: dirty,
+            },
+        ));
+    }
+
+    Some((pos, RedrawState::Full))
 }
 
 /// Check if a match is on a wrap row that is actually visible on screen.
