@@ -126,6 +126,12 @@ impl Line {
         }
     }
 
+    /// Returns the position of this line in the document.
+    #[inline]
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
     /// Returns the original raw text including ANSI escape sequences.
     #[inline]
     pub fn raw(&self) -> &str {

@@ -4,7 +4,9 @@
 //! then injects reverse-video escape sequences to highlight matches while
 //! preserving existing styling.
 
-use std::ops::Range;
+use std::{borrow::Cow, ops::Range};
+
+use crate::{line::Line, search::SearchState};
 
 /// Highlight style for search matches.
 #[derive(Debug, Clone, Copy)]
@@ -31,12 +33,6 @@ impl HighlightStyle {
     }
 }
 
-/// Positions in raw text where highlight styling should be injected.
-#[derive(Debug)]
-pub struct HighlightPositions {
-    positions: Vec<HighlightPos>,
-}
-
 /// A single highlight injection point in the raw text.
 #[derive(Debug)]
 struct HighlightPos {
@@ -56,6 +52,39 @@ enum HighlightPosKind {
     End,
 }
 
+/// Highlight parts in a range of `line` that match the search query.
+/// Builds a string only if there are matches. Otherwise returns a reference to the `line` range.
+pub fn apply_highlight_if_matches<'line>(
+    search: Option<&SearchState>,
+    line: &'line Line,
+    raw_range: Range<usize>,
+) -> Cow<'line, str> {
+    let search = match search {
+        Some(search) => search,
+        None => return Cow::Borrowed(&line.raw()[raw_range]),
+    };
+    let matches = line.find_matches(&search.query);
+    if matches.is_empty() {
+        return Cow::Borrowed(&line.raw()[raw_range]);
+    }
+
+    let current_match_index = search.current.and_then(|current| {
+        if current.line == line.index() {
+            Some(current.match_index)
+        } else {
+            None
+        }
+    });
+    let positions = build_highlight_positions(
+        &matches,
+        current_match_index,
+        line.plain_to_raw(),
+        line.raw().len(),
+    );
+    let text = apply_highlight_to_range(line.raw(), raw_range, &positions);
+    Cow::Owned(text)
+}
+
 /// Build highlight positions from plain-text match ranges.
 /// The different highlight style is used for the current match specified by `current_match_index`.
 ///
@@ -63,12 +92,12 @@ enum HighlightPosKind {
 /// positions. Detects escape sequences within matches by checking for gaps in
 /// the mapping and inserts `InnerControlEnd` markers so highlighting is
 /// re-applied after each internal escape sequence.
-pub fn build_highlight_positions(
+fn build_highlight_positions(
     plain_ranges: &[(usize, usize)],
     current_match_index: Option<usize>,
     plain_to_raw: &[usize],
     raw_len: usize,
-) -> HighlightPositions {
+) -> Vec<HighlightPos> {
     let mut positions = Vec::new();
 
     for (match_idx, &(start, end)) in plain_ranges.iter().enumerate() {
@@ -116,7 +145,7 @@ pub fn build_highlight_positions(
         });
     }
 
-    HighlightPositions { positions }
+    positions
 }
 
 /// Apply highlight escape sequences to a range of raw text.
@@ -124,17 +153,17 @@ pub fn build_highlight_positions(
 /// `raw_range` specifies which portion of the full raw text to render
 /// (e.g., a single wrapped row). Only highlight positions within that range
 /// are processed. Returns the text with reverse-video escapes injected.
-pub fn apply_highlight_to_range(
+fn apply_highlight_to_range(
     raw_text: &str,
     raw_range: Range<usize>,
-    positions: &HighlightPositions,
+    positions: &[HighlightPos],
 ) -> String {
     let slice = &raw_text[raw_range.clone()];
 
     // Find positions relevant to this range and track if we start inside a highlight.
-    let mut i_pos_from = positions.positions.len();
+    let mut i_pos_from = positions.len();
     let mut active_style = None;
-    for (i, pos) in positions.positions.iter().enumerate() {
+    for (i, pos) in positions.iter().enumerate() {
         if raw_range.start <= pos.index {
             i_pos_from = i;
             break;
@@ -153,7 +182,7 @@ pub fn apply_highlight_to_range(
 
     let mut i_prev = raw_range.start;
 
-    for pos in positions.positions.iter().skip(i_pos_from) {
+    for pos in positions.iter().skip(i_pos_from) {
         if raw_range.end <= pos.index {
             break;
         }
@@ -186,12 +215,12 @@ mod tests {
     use crate::line::Line;
 
     /// Helper to build positions from a line and plain-text ranges (all Reverse).
-    fn build_from_line(line: &Line, ranges: &[(usize, usize)]) -> HighlightPositions {
+    fn build_from_line(line: &Line, ranges: &[(usize, usize)]) -> Vec<HighlightPos> {
         build_highlight_positions(ranges, Some(0), line.plain_to_raw(), line.raw().len())
     }
 
     /// Helper to apply highlight to the full raw text.
-    fn apply_full(line: &Line, positions: &HighlightPositions) -> String {
+    fn apply_full(line: &Line, positions: &[HighlightPos]) -> String {
         apply_highlight_to_range(line.raw(), 0..line.raw().len(), positions)
     }
 

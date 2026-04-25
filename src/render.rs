@@ -34,31 +34,8 @@ fn draw_rows_grouped<S: Screen>(
         // Write the combined text for this group as one continuous piece
         if let Some(line) = doc.line(line_idx) {
             let raw_range = rows[group_start].raw_range().start..rows[i - 1].raw_range().end;
-
-            let matches = search.map(|sh| line.find_matches(&sh.query));
-            match (search, matches) {
-                (Some(search), Some(matches)) if !matches.is_empty() => {
-                    let current_match_index = search.current.and_then(|current| {
-                        if current.line == line_idx {
-                            Some(current.match_index)
-                        } else {
-                            None
-                        }
-                    });
-                    let positions = highlight::build_highlight_positions(
-                        &matches,
-                        current_match_index,
-                        line.plain_to_raw(),
-                        line.raw().len(),
-                    );
-                    let text =
-                        highlight::apply_highlight_to_range(line.raw(), raw_range, &positions);
-                    screen.write_at((group_start + screen_y) as u16, &text)?;
-                }
-                _ => {
-                    screen.write_at((group_start + screen_y) as u16, &line.raw()[raw_range])?;
-                }
-            }
+            let text = highlight::apply_highlight_if_matches(search, line, raw_range);
+            screen.write_at((group_start + screen_y) as u16, &text)?;
         }
     }
     Ok(())
