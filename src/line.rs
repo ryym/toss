@@ -141,12 +141,6 @@ impl Line {
         &self.plain
     }
 
-    /// Returns the original raw text including ANSI escape sequences.
-    #[cfg(test)]
-    pub fn text(&self) -> &str {
-        &self.raw
-    }
-
     /// Compute the wrapped rows at the given width.
     ///
     /// Wrapping is computed on the plain text (visible characters only) but
@@ -288,7 +282,7 @@ mod tests {
     #[test]
     fn plain_text_strips_escapes() {
         let line = Line::new(0, "\x1b[1mHi\x1b[0m, 😀".into());
-        assert_eq!(line.text(), "\x1b[1mHi\x1b[0m, 😀");
+        assert_eq!(line.raw(), "\x1b[1mHi\x1b[0m, 😀");
         // plain should have escapes stripped
         assert_eq!(line.plain, "Hi, 😀");
     }

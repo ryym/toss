@@ -115,9 +115,9 @@ mod tests {
     fn from_string_splits_lines() {
         let mut doc = Document::from_string("hello\nworld\nfoo".into());
         assert_eq!(doc.line_count(), 3);
-        assert_eq!(doc.line(0).unwrap().text(), "hello");
-        assert_eq!(doc.line(1).unwrap().text(), "world");
-        assert_eq!(doc.line(2).unwrap().text(), "foo");
+        assert_eq!(doc.line(0).unwrap().raw(), "hello");
+        assert_eq!(doc.line(1).unwrap().raw(), "world");
+        assert_eq!(doc.line(2).unwrap().raw(), "foo");
     }
 
     #[test]
@@ -150,9 +150,9 @@ mod tests {
 
         let mut doc = Document::from_file(&path).unwrap();
         assert_eq!(doc.line_count(), 3);
-        assert_eq!(doc.line(0).unwrap().text(), "aaa");
-        assert_eq!(doc.line(2).unwrap().text(), "ccc");
-        assert_eq!(doc.line(1).unwrap().text(), "bbb");
+        assert_eq!(doc.line(0).unwrap().raw(), "aaa");
+        assert_eq!(doc.line(2).unwrap().raw(), "ccc");
+        assert_eq!(doc.line(1).unwrap().raw(), "bbb");
         assert!(doc.line(3).is_none());
 
         std::fs::remove_file(&path).unwrap();
@@ -167,8 +167,8 @@ mod tests {
 
         let mut doc = Document::from_file(&path).unwrap();
         assert_eq!(doc.line_count(), 2);
-        assert_eq!(doc.line(0).unwrap().text(), "hello");
-        assert_eq!(doc.line(1).unwrap().text(), "world");
+        assert_eq!(doc.line(0).unwrap().raw(), "hello");
+        assert_eq!(doc.line(1).unwrap().raw(), "world");
 
         std::fs::remove_file(&path).unwrap();
     }

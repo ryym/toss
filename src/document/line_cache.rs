@@ -76,8 +76,8 @@ mod tests {
         let mut cache = LineCache::new(10);
         cache.insert(0, make_line("hello"));
         cache.insert(5, make_line("world"));
-        assert_eq!(cache.get(0).unwrap().text(), "hello");
-        assert_eq!(cache.get(5).unwrap().text(), "world");
+        assert_eq!(cache.get(0).unwrap().raw(), "hello");
+        assert_eq!(cache.get(5).unwrap().raw(), "world");
         assert!(cache.get(1).is_none());
     }
 
@@ -89,8 +89,8 @@ mod tests {
         // Cache is full. Inserting a third evicts the oldest (index 0).
         cache.insert(2, make_line("c"));
         assert!(cache.get(0).is_none());
-        assert_eq!(cache.get(1).unwrap().text(), "b");
-        assert_eq!(cache.get(2).unwrap().text(), "c");
+        assert_eq!(cache.get(1).unwrap().raw(), "b");
+        assert_eq!(cache.get(2).unwrap().raw(), "c");
     }
 
     #[test]
@@ -102,9 +102,9 @@ mod tests {
         cache.insert(0, make_line("a2"));
         cache.insert(2, make_line("c"));
         // Index 1 should have been evicted (it was the oldest).
-        assert_eq!(cache.get(0).unwrap().text(), "a2");
+        assert_eq!(cache.get(0).unwrap().raw(), "a2");
         assert!(cache.get(1).is_none());
-        assert_eq!(cache.get(2).unwrap().text(), "c");
+        assert_eq!(cache.get(2).unwrap().raw(), "c");
     }
 
     #[test]
@@ -116,8 +116,8 @@ mod tests {
         cache.get(0);
         // Insert a new entry — index 1 (the least recently used) should be evicted.
         cache.insert(2, make_line("c"));
-        assert_eq!(cache.get(0).unwrap().text(), "a");
+        assert_eq!(cache.get(0).unwrap().raw(), "a");
         assert!(cache.get(1).is_none());
-        assert_eq!(cache.get(2).unwrap().text(), "c");
+        assert_eq!(cache.get(2).unwrap().raw(), "c");
     }
 }
