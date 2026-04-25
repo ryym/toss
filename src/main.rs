@@ -6,14 +6,11 @@ mod line;
 mod line_editor;
 mod logger;
 mod options;
-mod page;
 mod pager;
-mod render;
 mod renderer;
 mod screen;
 mod scroll;
 mod search;
-mod status_line;
 
 #[cfg(test)]
 mod tests;
