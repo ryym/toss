@@ -127,16 +127,19 @@ impl Line {
     }
 
     /// Returns the original raw text including ANSI escape sequences.
+    #[inline]
     pub fn raw(&self) -> &str {
         &self.raw
     }
 
     /// Returns the byte index mapping from plain text to raw text.
+    #[inline]
     pub fn plain_to_raw(&self) -> &[usize] {
         &self.plain_to_raw
     }
 
     /// Returns the plain text without ANSI escape sequences.
+    #[inline]
     pub fn plain(&self) -> &str {
         &self.plain
     }
