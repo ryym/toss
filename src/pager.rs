@@ -17,6 +17,13 @@ struct ViewportSize {
 }
 
 impl ViewportSize {
+    fn new(screen_width: usize, screen_height: usize) -> Self {
+        Self {
+            width: screen_width,
+            height: screen_height - 1, // Reserve the status line area
+        }
+    }
+
     #[inline]
     pub fn width(&self) -> usize {
         self.width
@@ -96,8 +103,13 @@ pub struct Pager {
 }
 
 impl Pager {
-    pub fn new(mut doc: Document, options: Options, width: usize, height: usize) -> Self {
-        let size = ViewportSize { width, height };
+    pub fn new(
+        mut doc: Document,
+        options: Options,
+        screen_width: usize,
+        screen_height: usize,
+    ) -> Self {
+        let size = ViewportSize::new(screen_width, screen_height);
         let global_header = GlobalHeader::new(&mut doc, &size, options.header);
         let mut section_header = SectionHeader::new(options.section, &size, global_header.height());
         section_header.resolve(&mut doc, 0);
@@ -178,8 +190,8 @@ impl Pager {
     }
 
     /// Resize the page to fit the new dimensions.
-    pub fn resize(&mut self, width: usize, height: usize) {
-        let size = ViewportSize { width, height };
+    pub fn resize(&mut self, screen_width: usize, screen_height: usize) {
+        let size = ViewportSize::new(screen_width, screen_height);
         self.global_header.resize(&mut self.doc, &size);
         self.section_header
             .resize(&mut self.doc, &size, self.global_header.height());
