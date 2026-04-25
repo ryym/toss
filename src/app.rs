@@ -189,7 +189,19 @@ impl<S: Screen> App<S> {
         log::debug!("Enter search mode: {direction:?}");
         self.scroll_physics.stop();
 
+        // Save the top line of the contiguous rows. This line is:
+        //   1. the start line of the search range performing an incremental search within
+        //   2. the position to go back to when the search is cancelled
+        //
+        // The first purpose is why it needs to be a first line of contiguous rows that
+        // may include header rows. When the header line is not overlaid, include it in the
+        // search range. If a match is found, place the initial cursor position within the header.
+        // Excluding the header would cause unnatural behavior where the cursor starts in the content
+        // during preview and only jumps to the header via n/N after the query is submitted.
+        //
+        // The position is restored correctly upon cancel, whether or not the top line is a header.
         let saved_top_line = self.pager.contiguous_rows()[0].line_index();
+
         let editor = LineEditor::new();
         self.mode = AppMode::Search {
             direction,
