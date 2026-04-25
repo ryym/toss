@@ -3,6 +3,7 @@ use crate::{
     line::Row,
     options::Options,
     pager::{global_header::GlobalHeader, section_header::SectionHeader, viewport::Viewport},
+    screen::{Direction, Scroll},
 };
 
 mod global_header;
@@ -35,23 +36,10 @@ impl ViewportSize {
     }
 }
 
-/// Direction of scrolling.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Direction {
-    Down,
-    Up,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ScrollSpec {
-    pub direction: Direction,
-    pub num_rows: usize,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum PageUpdate {
     Full,
-    Scroll(ScrollSpec),
+    Scroll(Scroll),
     None,
 }
 
@@ -228,7 +216,7 @@ impl Pager {
             // we can treat this update as a scroll rather than a jump.
             self.last_update = if let Some(prev_line_pos) = prev_line_pos {
                 let num_rows = new_line_pos.abs_diff(prev_line_pos);
-                PageUpdate::Scroll(ScrollSpec {
+                PageUpdate::Scroll(Scroll {
                     direction: Direction::Down,
                     num_rows,
                 })
@@ -243,7 +231,7 @@ impl Pager {
                 prev_viewport_top.wrap_index(),
             );
             self.last_update = if let Some(pos) = prev_viewport_top_new_pos {
-                PageUpdate::Scroll(ScrollSpec {
+                PageUpdate::Scroll(Scroll {
                     direction: Direction::Up,
                     num_rows: pos,
                 })
@@ -279,7 +267,7 @@ impl Pager {
         } else {
             0
         };
-        self.last_update = PageUpdate::Scroll(ScrollSpec {
+        self.last_update = PageUpdate::Scroll(Scroll {
             direction: if num_rows < 0 {
                 Direction::Up
             } else {

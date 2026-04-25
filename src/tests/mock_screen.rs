@@ -4,8 +4,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use unicode_width::UnicodeWidthChar;
 
 use crate::ansi;
-use crate::page::{Direction, ScrollPlan};
-use crate::screen::Screen;
+use crate::screen::{Direction, Screen, Scroll};
 
 #[derive(Debug, Clone)]
 struct GridRow {
@@ -228,14 +227,12 @@ impl Screen for MockScreen {
         Ok(())
     }
 
-    fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()> {
-        let n = plan.terminal_scroll.get();
+    fn scroll_terminal(&mut self, scroll: &Scroll) -> io::Result<()> {
         let height = self.height as usize;
-
-        match plan.direction {
+        match scroll.direction {
             Direction::Down => {
                 // Content moves up: remove n rows from top, add blank at bottom.
-                let remove = n.min(height);
+                let remove = scroll.num_rows.min(height);
                 for _ in 0..remove {
                     self.grid.remove(0);
                     self.grid.push(GridRow::new());
@@ -243,7 +240,7 @@ impl Screen for MockScreen {
             }
             Direction::Up => {
                 // Content moves down: remove n rows from bottom, add blank at top.
-                let remove = n.min(height);
+                let remove = scroll.num_rows.min(height);
                 for _ in 0..remove {
                     self.grid.pop();
                     self.grid.insert(0, GridRow::new());

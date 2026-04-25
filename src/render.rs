@@ -6,7 +6,7 @@ use std::num::NonZeroUsize;
 use crate::document::Document;
 use crate::line::Row;
 use crate::page::{Direction, Page, ScrollPlan};
-use crate::screen::Screen;
+use crate::screen::{Screen, Scroll};
 use crate::search::SearchState;
 
 /// Draw screen rows, grouping consecutive rows from the same logical line
@@ -344,7 +344,13 @@ fn apply_scroll_inner<S: Screen>(
 
     // Terminal scroll shifts the entire screen (including header and status line).
     // We redraw the header and status line after scrolling.
-    screen.scroll_terminal(plan)?;
+    screen.scroll_terminal(&Scroll {
+        num_rows: plan.terminal_scroll.get(),
+        direction: match plan.direction {
+            Direction::Up => crate::screen::Direction::Up,
+            Direction::Down => crate::screen::Direction::Down,
+        },
+    })?;
 
     let visible_rows = page.viewport.visible_rows();
     let n_scroll = plan.terminal_scroll.get();

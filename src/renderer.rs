@@ -1,15 +1,14 @@
 mod highlight;
 
-use std::{borrow::Cow, collections::HashSet, io, mem, num::NonZeroUsize, ops::Range};
+use std::{borrow::Cow, collections::HashSet, io, mem, ops::Range};
 
 use crossterm::event::Event;
 
 use crate::{
     document::Document,
     line::Row,
-    page::{Direction, ScrollPlan},
-    pager::{PageSnapshot, PageUpdate, ScrollSpec},
-    screen::Screen,
+    pager::{PageSnapshot, PageUpdate},
+    screen::{Direction, Screen, Scroll},
     search::{MatchPosition, SearchState},
 };
 
@@ -130,24 +129,17 @@ impl<S: Screen> Renderer<S> {
         page: &PageSnapshot,
         search: Option<&SearchState>,
         status_text: &str,
-        scroll: ScrollSpec,
+        scroll: Scroll,
     ) -> io::Result<()> {
         self.screen.begin_sync()?;
 
         let header_height = page.total_header_height();
-        let direction = match scroll.direction {
-            crate::pager::Direction::Up => Direction::Up,
-            crate::pager::Direction::Down => Direction::Down,
-        };
-        let ranges = compute_scroll_redraw_ranges(page.content, scroll.num_rows, direction);
+        let ranges = compute_scroll_redraw_ranges(page.content, &scroll);
         log::debug!("render as scroll: new_rows_range={:?}", ranges);
 
         // Scroll the terminal and draw newly appeared rows.
         if !ranges.new_rows.is_empty() {
-            self.screen.scroll_terminal(&ScrollPlan {
-                terminal_scroll: NonZeroUsize::new(scroll.num_rows).unwrap(),
-                direction,
-            })?;
+            self.screen.scroll_terminal(&scroll)?;
             let screen_y = header_height + ranges.new_rows.start;
             self.draw_rows(doc, &page.content[ranges.new_rows], search, screen_y)?;
         }
@@ -259,12 +251,8 @@ struct ScrollRedrawRanges {
 }
 
 /// Compute the range of rows that need redrawing after a scroll as well as the remaining rows.
-fn compute_scroll_redraw_ranges(
-    rows: &[Row],
-    scroll_rows: usize,
-    direction: Direction,
-) -> ScrollRedrawRanges {
-    let (from, to) = scroll_dirty_range(rows, scroll_rows, direction);
+fn compute_scroll_redraw_ranges(rows: &[Row], scroll: &Scroll) -> ScrollRedrawRanges {
+    let (from, to) = scroll_dirty_range(rows, scroll);
     let remaining = if from == 0 { to..rows.len() } else { 0..from };
     ScrollRedrawRanges {
         new_rows: from..to,
@@ -275,14 +263,14 @@ fn compute_scroll_redraw_ranges(
 /// After terminal scroll shifts content, `scroll_rows` new rows appear at one edge.
 /// This function returns the range extended to include adjacent existing
 /// rows from the same logical line, so soft-wrap groups are drawn correctly.
-fn scroll_dirty_range(rows: &[Row], scroll_rows: usize, direction: Direction) -> (usize, usize) {
-    if scroll_rows == 0 {
+fn scroll_dirty_range(rows: &[Row], scroll: &Scroll) -> (usize, usize) {
+    if scroll.num_rows == 0 {
         return (0, 0);
     }
     let len = rows.len();
-    match direction {
+    match scroll.direction {
         Direction::Down => {
-            let new_start = len.saturating_sub(scroll_rows);
+            let new_start = len.saturating_sub(scroll.num_rows);
             let mut from = new_start;
             while from > 0 && rows[from - 1].line_index() == rows[new_start].line_index() {
                 from -= 1;
@@ -290,7 +278,7 @@ fn scroll_dirty_range(rows: &[Row], scroll_rows: usize, direction: Direction) ->
             (from, len)
         }
         Direction::Up => {
-            let new_end = scroll_rows.min(len);
+            let new_end = scroll.num_rows.min(len);
             let mut to = new_end;
             while to < len && rows[to].line_index() == rows[new_end - 1].line_index() {
                 to += 1;
