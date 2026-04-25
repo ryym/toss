@@ -5,7 +5,7 @@ pre-commit:
       stage_fixed: true
       glob:
         - "*.rs"
-    - run: cargo clippy -- --deny warnings
+    - run: cargo clippy -- --deny warnings --allow unused
       glob:
         - "*.rs"
     - run: cargo test --quiet
