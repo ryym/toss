@@ -188,7 +188,7 @@ impl SectionIndex {
             let check_start = current.saturating_sub(self.header_lines - 1);
             let earlier = (check_start..current).find(|&j| {
                 doc.line(j)
-                    .is_some_and(|line| self.pattern.is_match(line.plain()))
+                    .is_some_and(|line| line.has_match(&self.pattern))
             });
             match earlier {
                 Some(j) => current = j,
@@ -206,7 +206,7 @@ impl SectionIndex {
         }
         for i in (0..viewport_top).rev() {
             if let Some(line) = doc.line(i)
-                && self.pattern.is_match(line.plain())
+                && line.has_match(&self.pattern)
             {
                 let start = self.resolve_section_start(doc, i);
                 self.cached_section = Some(start);
@@ -237,7 +237,7 @@ impl SectionIndex {
         let mut line_idx = viewport_top;
         while row_count < max_rows {
             let line = doc.line(line_idx)?;
-            if line_idx >= skip_until && self.pattern.is_match(line.plain()) {
+            if line_idx >= skip_until && line.has_match(&self.pattern) {
                 return Some(row_count);
             }
             let rows = line.row_count(width);
@@ -264,7 +264,7 @@ impl SectionIndex {
                 continue;
             }
             if let Some(line) = doc.line(i)
-                && self.pattern.is_match(line.plain())
+                && line.has_match(&self.pattern)
             {
                 self.cached_section = Some(i);
                 skip_until = i + self.header_lines;
@@ -285,7 +285,7 @@ impl SectionIndex {
             }
             for i in (0..new_top).rev() {
                 if let Some(line) = doc.line(i)
-                    && self.pattern.is_match(line.plain())
+                    && line.has_match(&self.pattern)
                 {
                     let start = self.resolve_section_start(doc, i);
                     self.cached_section = Some(start);

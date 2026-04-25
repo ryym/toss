@@ -144,12 +144,6 @@ impl Line {
         &self.plain_to_raw
     }
 
-    /// Returns the plain text without ANSI escape sequences.
-    #[inline]
-    pub fn plain(&self) -> &str {
-        &self.plain
-    }
-
     /// Compute the wrapped rows at the given width.
     ///
     /// Wrapping is computed on the plain text (visible characters only) but
