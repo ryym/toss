@@ -2,11 +2,11 @@ use crate::{
     document::Document,
     line::Row,
     options::Options,
-    pager::{global_header::GlobalHeader, heading::Heading, viewport::Viewport},
+    pager::{header::Header, heading::Heading, viewport::Viewport},
     screen::{Direction, Scroll},
 };
 
-mod global_header;
+mod header;
 mod heading;
 mod rows;
 mod viewport;
@@ -45,7 +45,7 @@ pub enum PageUpdate {
 
 #[derive(Debug)]
 pub struct PageSnapshot<'pager> {
-    pub global_header: &'pager [Row],
+    pub header: &'pager [Row],
     pub heading: &'pager [Row],
     pub content: &'pager [Row],
     pub height: usize,
@@ -54,7 +54,7 @@ pub struct PageSnapshot<'pager> {
 
 impl<'pager> PageSnapshot<'pager> {
     pub fn total_header_height(&self) -> usize {
-        self.global_header.len() + self.heading.len()
+        self.header.len() + self.heading.len()
     }
 
     pub fn viewport_height(&self) -> usize {
@@ -70,12 +70,12 @@ impl<'pager> PageSnapshot<'pager> {
 /// the top of the viewport.
 ///
 /// Internally the following structs manage the content displayed in the headers and viewport:
-/// - Global header: [`GlobalHeader`]
-/// - Section header: [`Heading`]
+/// - Global header: [`Header`]
+/// - Sticky heading: [`Heading`]
 /// - Viewport: [`Viewport`]
 ///
 /// [`Viewport`] is unaware of headers and just holds a specific range of [`Document`] as
-/// directed by [`Pager`]. The header rows managed by [`GlobalHeader`] and [`Heading`]
+/// directed by [`Pager`]. The header rows managed by [`Header`] and [`Heading`]
 /// are rendered as if overlaid on top of [`Viewport`].
 /// With this overlay approach, [`Viewport`] can manage its rows independently,
 /// without being affected by header content or height.
@@ -84,7 +84,7 @@ impl<'pager> PageSnapshot<'pager> {
 /// [`Pager`] only holds the state but does not write anything to the screen itself.
 pub struct Pager {
     doc: Document,
-    global_header: GlobalHeader,
+    header: Header,
     heading: Heading,
     viewport: Viewport,
     last_update: PageUpdate,
@@ -98,13 +98,13 @@ impl Pager {
         screen_height: usize,
     ) -> Self {
         let size = ViewportSize::new(screen_width, screen_height);
-        let global_header = GlobalHeader::new(&mut doc, &size, options.header);
-        let mut heading = Heading::new(options.heading, &size, global_header.height());
+        let header = Header::new(&mut doc, &size, options.header);
+        let mut heading = Heading::new(options.heading, &size, header.height());
         heading.resolve(&mut doc, 0);
         let viewport = Viewport::new(&mut doc, size);
         Self {
             doc,
-            global_header,
+            header,
             heading,
             viewport,
             last_update: PageUpdate::Full,
@@ -117,7 +117,7 @@ impl Pager {
 
     pub fn snapshot<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
         let snapshot = PageSnapshot {
-            global_header: self.global_header.rows(),
+            header: self.header.rows(),
             heading: self.heading.rows(),
             content: &self.viewport.rows()[self.total_header_height()..],
             height: self.viewport.size().height,
@@ -128,7 +128,7 @@ impl Pager {
     }
 
     pub fn total_header_height(&self) -> usize {
-        self.global_header.height() + self.heading.height()
+        self.header.height() + self.heading.height()
     }
 
     /// Returns the height of the display area (the number of rows) excluding the header region.
@@ -150,15 +150,15 @@ impl Pager {
 
     fn contiguous_top_row_index(&self) -> usize {
         let rows = self.viewport.rows();
-        if let Some(row) = self.global_header.rows().first()
+        if let Some(row) = self.header.rows().first()
             && row == &rows[0]
         {
             return 0;
         }
         if let Some(row) = self.heading.rows().first()
-            && row.line_index() == rows[self.global_header.rows().len()].line_index()
+            && row.line_index() == rows[self.header.rows().len()].line_index()
         {
-            return self.global_header.rows().len();
+            return self.header.rows().len();
         }
         self.total_header_height()
     }
@@ -180,9 +180,9 @@ impl Pager {
     /// Resize the page to fit the new dimensions.
     pub fn resize(&mut self, screen_width: usize, screen_height: usize) {
         let size = ViewportSize::new(screen_width, screen_height);
-        self.global_header.resize(&mut self.doc, &size);
+        self.header.resize(&mut self.doc, &size);
         self.heading
-            .resize(&mut self.doc, &size, self.global_header.height());
+            .resize(&mut self.doc, &size, self.header.height());
         self.viewport.resize(&mut self.doc, size);
         self.last_update = PageUpdate::Full;
     }
@@ -192,7 +192,7 @@ impl Pager {
     /// - If the specified line is within any heading, move so that it comes to the top.
     /// - Otherwise, move so that the specified line comes right after the headers.
     pub fn jump_to(&mut self, mut line_index: usize) {
-        if self.global_header.contains(line_index) {
+        if self.header.contains(line_index) {
             line_index = 0;
         }
 
@@ -203,7 +203,7 @@ impl Pager {
         self.heading.resolve(&mut self.doc, line_index);
 
         let jump_offset = if self.heading.contains(line_index) {
-            self.global_header.height()
+            self.header.height()
         } else {
             self.total_header_height()
         };
@@ -289,7 +289,7 @@ impl Pager {
         };
 
         // If the new top row is above the current heading, search for a heading above it.
-        let top_line = self.viewport.rows()[self.global_header.height()].line_index();
+        let top_line = self.viewport.rows()[self.header.height()].line_index();
         if top_line < heading_start {
             self.heading.resolve(&mut self.doc, top_line);
         }
@@ -299,9 +299,9 @@ impl Pager {
     }
 
     fn scroll_down(&mut self, num_rows: usize) -> usize {
-        let prev_top_line = self.viewport.rows()[self.global_header.height()].line_index();
+        let prev_top_line = self.viewport.rows()[self.header.height()].line_index();
         let rows_scrolled = self.viewport.scroll_down(&mut self.doc, num_rows);
-        let top_line = self.viewport.rows()[self.global_header.height()].line_index();
+        let top_line = self.viewport.rows()[self.header.height()].line_index();
 
         // If a new heading exists within the moved range, replace the current one with it.
         self.heading
@@ -320,7 +320,7 @@ impl Pager {
             None => return,
         };
 
-        let overlay_height = self.global_header.height() + self.heading.full_height();
+        let overlay_height = self.header.height() + self.heading.full_height();
         let mut other_section_start = overlay_height;
         let rows_under_heading = self
             .viewport
@@ -328,7 +328,7 @@ impl Pager {
             .iter()
             .enumerate()
             .take(overlay_height)
-            .skip(self.global_header.height());
+            .skip(self.header.height());
         for (i, row) in rows_under_heading {
             if row.wrap_index() != 0 || row.line_index() == current_start_line {
                 continue;
@@ -372,7 +372,7 @@ mod tests {
     fn snapshot_starts_at_top_of_doc() {
         let mut pager = Pager::new(doc_lines(10), Options::default(), 20, 5);
         let (snap, _doc) = pager.snapshot();
-        assert!(snap.global_header.is_empty());
+        assert!(snap.header.is_empty());
         assert!(snap.heading.is_empty());
         // viewport height = screen_height - 1 = 4.
         assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
@@ -386,7 +386,7 @@ mod tests {
         };
         let mut pager = Pager::new(doc_lines(10), opts, 20, 6);
         let (snap, _doc) = pager.snapshot();
-        assert_eq!(line_indices(snap.global_header), vec![0, 1]);
+        assert_eq!(line_indices(snap.header), vec![0, 1]);
         assert_eq!(line_indices(snap.content), vec![2, 3, 4]);
     }
 
@@ -418,7 +418,7 @@ mod tests {
         let mut pager = Pager::new(doc_lines(20), opts, 20, 6);
         pager.scroll(3);
         let (snap, _doc) = pager.snapshot();
-        assert_eq!(line_indices(snap.global_header), vec![0, 1]);
+        assert_eq!(line_indices(snap.header), vec![0, 1]);
         assert_eq!(line_indices(snap.content), vec![5, 6, 7]);
     }
 
@@ -448,7 +448,7 @@ mod tests {
         pager.scroll(5);
         pager.jump_to(1);
         let (snap, _doc) = pager.snapshot();
-        assert_eq!(line_indices(snap.global_header), vec![0, 1]);
+        assert_eq!(line_indices(snap.header), vec![0, 1]);
         assert_eq!(line_indices(snap.content), vec![2, 3, 4, 5, 6]);
     }
 

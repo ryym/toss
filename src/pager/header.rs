@@ -8,12 +8,12 @@ use crate::{
 /// are used as the header and are always shown at the top of the page.
 /// The header content does not change during pagination, except when width changes due to resize.
 #[derive(Debug)]
-pub(super) struct GlobalHeader {
+pub(super) struct Header {
     num_lines: usize,
     rows: Vec<Row>,
 }
 
-impl GlobalHeader {
+impl Header {
     pub fn new(doc: &mut Document, size: &ViewportSize, num_lines: usize) -> Self {
         let rows = build_rows(doc, size, num_lines);
         Self { num_lines, rows }
@@ -60,7 +60,7 @@ mod tests {
             width: 10,
             height: 5,
         };
-        let h = GlobalHeader::new(&mut doc, &size, 0);
+        let h = Header::new(&mut doc, &size, 0);
         assert_eq!(h.height(), 0);
         assert!(h.rows().is_empty());
         assert!(!h.contains(0));
@@ -73,7 +73,7 @@ mod tests {
             width: 10,
             height: 5,
         };
-        let h = GlobalHeader::new(&mut doc, &size, 2);
+        let h = Header::new(&mut doc, &size, 2);
         assert_eq!(pos(h.rows()), vec![(0, 0), (1, 0)]);
         assert_eq!(h.height(), 2);
     }
@@ -85,7 +85,7 @@ mod tests {
             width: 10,
             height: 5,
         };
-        let h = GlobalHeader::new(&mut doc, &size, 2);
+        let h = Header::new(&mut doc, &size, 2);
         assert!(h.contains(0));
         assert!(h.contains(1));
         assert!(!h.contains(2));
@@ -99,7 +99,7 @@ mod tests {
             width: 10,
             height: 5,
         };
-        let h = GlobalHeader::new(&mut doc, &size, 5);
+        let h = Header::new(&mut doc, &size, 5);
         assert_eq!(h.height(), 4);
         // contains() reflects the configured num_lines, not the visible row count.
         assert!(h.contains(4));
@@ -113,7 +113,7 @@ mod tests {
             width: 2,
             height: 6,
         };
-        let h = GlobalHeader::new(&mut doc, &size, 1);
+        let h = Header::new(&mut doc, &size, 1);
         assert_eq!(pos(h.rows()), vec![(0, 0), (0, 1)]);
     }
 
@@ -124,7 +124,7 @@ mod tests {
             width: 10,
             height: 5,
         };
-        let mut h = GlobalHeader::new(&mut doc, &size, 1);
+        let mut h = Header::new(&mut doc, &size, 1);
         assert_eq!(pos(h.rows()), vec![(0, 0)]);
 
         let new_size = ViewportSize {
