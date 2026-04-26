@@ -47,18 +47,18 @@ Only the most recent section heading is shown at the top; there is no stacking o
 
 #### Pattern matches within a heading block
 
-When `--heading-lines` is greater than 1, lines within the heading block may also match the `--heading` pattern. These intra-block matches are **not** treated as new section starts.
+When `--heading-lines` is greater than 1, multiple lines within an `--heading-lines` window may match the `--heading` pattern. In that case, the **last** matching line in the window becomes the heading start; earlier matches are not treated as headings.
 
-For example, with `--heading '^#'` and `--heading-lines 3`:
+For example, with `--heading '^#'` and `--heading-lines 2`:
 
 ```
-# Changelog          ← section start (line 0)
-                     ← part of heading block (line 1)
-## 1.0.23            ← matches '^#' but is part of line 0's block (line 2)
-                     ← first content line (line 3)
+# Changelog          ← matches, but the next line within the 2-line window also matches → not a heading (line 0)
+## 1.0.23            ← matches and no further match within its window → heading start (line 1)
+                     ← part of line 1's heading block (line 2)
+release notes...     ← first content line (line 3)
 ```
 
-Line 2 (`## 1.0.23`) matches the pattern but falls within the 3-line heading block of line 0. It is treated as part of that block, not as a separate section. The next section can only start at line 3 or later.
+Line 0 matches the pattern, but because line 1 also matches within its 2-line window, line 0 is not treated as a heading. Line 1 becomes the section heading start, and its block spans lines 1–2.
 
 ### Combining `--header` and `--heading`
 
