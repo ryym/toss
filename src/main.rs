@@ -1,30 +1,14 @@
-mod ansi;
-mod app;
-mod cli;
-mod document;
-mod line;
-mod line_editor;
-mod logger;
-mod options;
-mod pager;
-mod renderer;
-mod screen;
-mod scroll;
-mod search;
-
-#[cfg(test)]
-mod tests;
-
 use std::fmt;
 use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 use std::process;
 
-use app::App;
-use document::Document;
-use screen::TermScreen;
-
-use crate::pager::Pager;
+use toss::app::App;
+use toss::cli;
+use toss::document::Document;
+use toss::logger;
+use toss::pager::Pager;
+use toss::screen::TermScreen;
 
 struct AppError {
     message: String,

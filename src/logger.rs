@@ -39,7 +39,7 @@ impl Log for FileLogger {
 }
 
 /// A guard object to flush logs written by [`FileLogger`] on drop.
-pub(crate) struct FileLoggerGuard {
+pub struct FileLoggerGuard {
     file: SharedFile,
 }
 
@@ -54,7 +54,7 @@ impl Drop for FileLoggerGuard {
 /// Set up a [`FileLogger`] as a global logger.
 /// The logger is enabled when `RUST_LOG` environment variable is set to a non-empty value.
 /// Logs are written to `toss-debug.log` in the current directory.
-pub(crate) fn setup_file_logger() -> Result<Option<FileLoggerGuard>, Box<dyn std::error::Error>> {
+pub fn setup_file_logger() -> Result<Option<FileLoggerGuard>, Box<dyn std::error::Error>> {
     let env_var = match env::var("RUST_LOG").ok() {
         None => {
             store_logs_on_panic(None);
