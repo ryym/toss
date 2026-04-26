@@ -6,7 +6,13 @@
 
 ## Commit message format
 
-Write the message in present tense sentence.
+### Title
 
-Use conventional commits format. Valid prefixes: feat, fix, refactor, docs, chore, perf.
-Treat test code as the same as production code. For example, use `feat` when adding test cases.
+- Concisely describe what was done in present tense sentence.
+- Use conventional commits format. Valid prefixes: feat, fix, refactor, docs, chore, perf.
+  Treat test code as the same as production code. For example, use `feat` when adding test cases.
+
+### Body
+
+- Include decision-making context and complex implementation details that aren't obvious from the code diff.
+- Always include you as a co-author.
