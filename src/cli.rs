@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::options::{Options, SectionOptions};
+use crate::options::{HeadingOptions, Options};
 
 const VERSION: &str = "0.0.0";
 
@@ -14,9 +14,9 @@ A terminal pager.
 
 Options:
   -F, --quit-if-one-screen   Quit if the entire content fits on one screen
-      --header <N>           Pin the first N lines as a fixed header
-      --section <REGEX>      Regex to identify section start lines for sticky headers
-      --section-header <N>   Number of lines per section header (default 1)
+      --header <N>           Fix the top N lines of the input as a global header
+      --heading <REGEX>      Regex matching section heading lines (sticky per section)
+      --heading-lines <N>    Number of lines per section heading (default 1)
   -h, --help                 Print help
   -v, --version              Print version
 
@@ -61,8 +61,8 @@ fn parse_from(mut parser: lexopt::Parser) -> Result<Action, lexopt::Error> {
     let mut file = None;
     let mut quit_if_one_screen = false;
     let mut header = 0;
-    let mut section_pattern: Option<String> = None;
-    let mut section_header_lines: Option<usize> = None;
+    let mut heading_pattern: Option<String> = None;
+    let mut heading_lines: Option<usize> = None;
 
     while let Some(arg) = parser.next()? {
         match arg {
@@ -76,15 +76,15 @@ fn parse_from(mut parser: lexopt::Parser) -> Result<Action, lexopt::Error> {
             Long("header") => {
                 header = parser.value()?.parse()?;
             }
-            Long("section") => {
-                section_pattern = Some(parser.value()?.parse()?);
+            Long("heading") => {
+                heading_pattern = Some(parser.value()?.parse()?);
             }
-            Long("section-header") => {
+            Long("heading-lines") => {
                 let n: usize = parser.value()?.parse()?;
                 if n == 0 {
-                    return Err("--section-header must be at least 1".into());
+                    return Err("--heading-lines must be at least 1".into());
                 }
-                section_header_lines = Some(n);
+                heading_lines = Some(n);
             }
             Value(val) if file.is_none() => {
                 file = Some(PathBuf::from(val));
@@ -93,17 +93,17 @@ fn parse_from(mut parser: lexopt::Parser) -> Result<Action, lexopt::Error> {
         }
     }
 
-    if section_header_lines.is_some() && section_pattern.is_none() {
-        return Err("--section-header requires --section".into());
+    if heading_lines.is_some() && heading_pattern.is_none() {
+        return Err("--heading-lines requires --heading".into());
     }
 
-    let section = section_pattern
+    let heading = heading_pattern
         .map(|pat| {
             let pattern =
-                regex::Regex::new(&pat).map_err(|e| format!("invalid --section regex: {e}"))?;
-            Ok::<_, String>(SectionOptions {
+                regex::Regex::new(&pat).map_err(|e| format!("invalid --heading regex: {e}"))?;
+            Ok::<_, String>(HeadingOptions {
                 pattern,
-                header_lines: section_header_lines.unwrap_or(1),
+                num_lines: heading_lines.unwrap_or(1),
             })
         })
         .transpose()
@@ -114,7 +114,7 @@ fn parse_from(mut parser: lexopt::Parser) -> Result<Action, lexopt::Error> {
         options: Options {
             quit_if_one_screen,
             header,
-            section,
+            heading,
         },
     }))
 }
@@ -159,7 +159,7 @@ mod tests {
         assert!(args.file.is_none());
         assert!(!args.options.quit_if_one_screen);
         assert_eq!(args.options.header, 0);
-        assert!(args.options.section.is_none());
+        assert!(args.options.heading.is_none());
     }
 
     #[test]
@@ -187,29 +187,29 @@ mod tests {
     }
 
     #[test]
-    fn section_option() {
-        let args = unwrap_run(parse(&["--section", "^##"]));
-        let section = args.options.section.unwrap();
-        assert_eq!(section.pattern.as_str(), "^##");
-        assert_eq!(section.header_lines, 1);
+    fn heading_option() {
+        let args = unwrap_run(parse(&["--heading", "^##"]));
+        let heading = args.options.heading.unwrap();
+        assert_eq!(heading.pattern.as_str(), "^##");
+        assert_eq!(heading.num_lines, 1);
     }
 
     #[test]
-    fn section_with_header_lines() {
-        let args = unwrap_run(parse(&["--section", "^##", "--section-header", "2"]));
-        let section = args.options.section.unwrap();
-        assert_eq!(section.header_lines, 2);
+    fn heading_with_lines() {
+        let args = unwrap_run(parse(&["--heading", "^##", "--heading-lines", "2"]));
+        let heading = args.options.heading.unwrap();
+        assert_eq!(heading.num_lines, 2);
     }
 
     #[test]
-    fn section_header_without_section_is_error() {
-        let err = parse_err(&["--section-header", "2"]);
-        assert!(err.contains("--section-header requires --section"), "{err}");
+    fn heading_lines_without_heading_is_error() {
+        let err = parse_err(&["--heading-lines", "2"]);
+        assert!(err.contains("--heading-lines requires --heading"), "{err}");
     }
 
     #[test]
-    fn section_header_zero_is_error() {
-        let err = parse_err(&["--section", "^##", "--section-header", "0"]);
+    fn heading_lines_zero_is_error() {
+        let err = parse_err(&["--heading", "^##", "--heading-lines", "0"]);
         assert!(err.contains("at least 1"), "{err}");
     }
 

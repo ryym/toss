@@ -1,17 +1,17 @@
 use pretty_assertions::assert_eq;
 
 use super::{TestCase, key, run_test_screen};
-use crate::options::{Options, SectionOptions};
+use crate::options::{HeadingOptions, Options};
 
-fn section_opts_n(pattern: &str, header_lines: usize) -> Option<SectionOptions> {
-    Some(SectionOptions {
+fn heading_opts_n(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
+    Some(HeadingOptions {
         pattern: regex::Regex::new(pattern).unwrap(),
-        header_lines,
+        num_lines,
     })
 }
 
 #[test]
-fn sticky_header() {
+fn sticky_heading() {
     let content = "\
 # Section A
 description A
@@ -26,7 +26,7 @@ line 5
         screen_height: 6,
         content,
         options: Options {
-            section: section_opts_n("^# ", 2),
+            heading: heading_opts_n("^# ", 2),
             ..Default::default()
         },
         events: vec![key('j'), key('j'), key('q')],
@@ -62,7 +62,7 @@ line 5
 }
 
 #[test]
-fn header_switching() {
+fn heading_switching() {
     let content = "\
 # Section A
 description A
@@ -83,7 +83,7 @@ line 10
         screen_height: 6,
         content,
         options: Options {
-            section: section_opts_n("^# ", 2),
+            heading: heading_opts_n("^# ", 2),
             ..Default::default()
         },
         events: vec![
@@ -159,7 +159,7 @@ line 7
 }
 
 #[test]
-fn wrapped_header_switching() {
+fn wrapped_heading_switching() {
     let content = "\
 # abcde
 012345678
@@ -177,7 +177,7 @@ line 6
         screen_height: 6,
         content,
         options: Options {
-            section: section_opts_n("^# ", 2),
+            heading: heading_opts_n("^# ", 2),
             ..Default::default()
         },
         events: vec![
@@ -252,11 +252,11 @@ line 5
     assert_eq!(screen.out(), want);
 }
 
-/// When a line within the header block also matches the section pattern,
+/// When a line within the heading block also matches the section pattern,
 /// it should be treated as part of the current section's block, not as
 /// a new section start.
 #[test]
-fn pattern_match_within_header_block() {
+fn pattern_match_within_heading_block() {
     let content = "\
 # Changelog
 
@@ -271,7 +271,7 @@ fn pattern_match_within_header_block() {
         screen_height: 6,
         content,
         options: Options {
-            section: section_opts_n("^#", 3),
+            heading: heading_opts_n("^#", 3),
             ..Default::default()
         },
         events: vec![key('j'), key('j'), key('j'), key('q')],
@@ -315,7 +315,7 @@ atures like go-to-definition, find references, and hover documentati
 }
 
 #[test]
-fn regression_wrapped_header_switching() {
+fn regression_wrapped_heading_switching() {
     let content = "\
 # Changelog
 
@@ -335,7 +335,7 @@ fn regression_wrapped_header_switching() {
         screen_height: 7,
         content,
         options: Options {
-            section: section_opts_n("^##", 3),
+            heading: heading_opts_n("^##", 3),
             ..Default::default()
         },
         events: vec![
@@ -447,11 +447,11 @@ e default viewer
     assert_eq!(screen.out(), want);
 }
 
-/// When section-header N equals the viewport content rows, the section header
+/// When heading-lines N equals the viewport content rows, the heading
 /// fills the entire viewport. Scrolling down past the section start results
 /// in a frozen display. Scrolling back up reveals pre-section content.
 #[test]
-fn section_header_fills_viewport() {
+fn heading_fills_viewport() {
     let content = "\
 pre 1
 pre 2
@@ -469,7 +469,7 @@ body 5
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts_n("^# ", 4),
+            heading: heading_opts_n("^# ", 4),
             ..Default::default()
         },
         events: vec![
@@ -553,11 +553,11 @@ desc 1
     assert_eq!(screen.out(), want);
 }
 
-/// When section-header N exceeds the viewport content rows, only the first
-/// viewport-height lines of the section header are visible (the rest are
-/// truncated). The display freezes on the header while scrolling down.
+/// When heading-lines N exceeds the viewport content rows, only the first
+/// viewport-height lines of the heading are visible (the rest are
+/// truncated). The display freezes on the heading while scrolling down.
 #[test]
-fn section_header_exceeds_viewport() {
+fn heading_exceeds_viewport() {
     let content = "\
 pre 1
 pre 2
@@ -577,7 +577,7 @@ body 4
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts_n("^# ", 6),
+            heading: heading_opts_n("^# ", 6),
             ..Default::default()
         },
         events: vec![

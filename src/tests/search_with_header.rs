@@ -2,16 +2,16 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
 use super::{TestCase, key, run_test_screen};
-use crate::options::{Options, SectionOptions};
+use crate::options::{HeadingOptions, Options};
 
 fn enter() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
 }
 
-fn section_opts(pattern: &str, header_lines: usize) -> Option<SectionOptions> {
-    Some(SectionOptions {
+fn heading_opts(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
+    Some(HeadingOptions {
         pattern: regex::Regex::new(pattern).unwrap(),
-        header_lines,
+        num_lines,
     })
 }
 
@@ -154,10 +154,10 @@ line 5
     assert_eq!(screen.out(), want);
 }
 
-/// When searching with a section header,
-/// the matched line is visible below the sticky header, not hidden behind it.
+/// When searching with a heading,
+/// the matched line is visible below the sticky heading, not hidden behind it.
 #[test]
-fn search_with_section_header() {
+fn search_with_heading() {
     let content = "\
 # Section A
 line 1
@@ -172,7 +172,7 @@ line 6
         screen_height: 4,
         content,
         options: Options {
-            section: section_opts("^# ", 1),
+            heading: heading_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![key('/'), key('3'), enter()],
@@ -206,10 +206,10 @@ line 4
     assert_eq!(screen.out(), want);
 }
 
-/// When searching and jumping with a section header,
-/// the matched line is visible below the sticky header, not hidden behind it.
+/// When searching and jumping with a heading,
+/// the matched line is visible below the sticky heading, not hidden behind it.
 #[test]
-fn search_jump_with_section_header() {
+fn search_jump_with_heading() {
     let content = "\
 # Section 1
 AAA
@@ -228,7 +228,7 @@ line 6
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# ", 1),
+            heading: heading_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![
@@ -306,7 +306,7 @@ line 4
 }
 
 #[test]
-fn search_with_section_header_jump_back_one_line() {
+fn search_with_heading_jump_back_one_line() {
     let content = "\
 # Section A
 127
@@ -323,7 +323,7 @@ fn search_with_section_header_jump_back_one_line() {
         screen_height: 4,
         content,
         options: Options {
-            section: section_opts("^# ", 1),
+            heading: heading_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![
@@ -400,7 +400,7 @@ fn search_with_section_header_jump_back_one_line() {
 }
 
 #[test]
-fn search_with_section_header_multi_line() {
+fn search_with_heading_multi_line() {
     let content = "\
 # Section 1
 description 1-1
@@ -425,7 +425,7 @@ line 8
         screen_height: 6,
         content,
         options: Options {
-            section: section_opts("^# ", 3),
+            heading: heading_opts("^# ", 3),
             ..Default::default()
         },
         events: vec![
@@ -492,7 +492,7 @@ line 6
 }
 
 #[test]
-fn search_with_section_header_containing_match() {
+fn search_with_heading_containing_match() {
     let content = "\
 # Section A1
 AX
@@ -512,7 +512,7 @@ line 7
         screen_height: 4,
         content,
         options: Options {
-            section: section_opts("^# ", 1),
+            heading: heading_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![

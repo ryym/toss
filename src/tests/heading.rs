@@ -1,16 +1,16 @@
 use pretty_assertions::assert_eq;
 
 use super::{TestCase, key, run_test_screen};
-use crate::options::{Options, SectionOptions};
+use crate::options::{HeadingOptions, Options};
 
-fn section_opts(pattern: &str) -> Option<SectionOptions> {
-    Some(SectionOptions {
+fn heading_opts(pattern: &str) -> Option<HeadingOptions> {
+    Some(HeadingOptions {
         pattern: regex::Regex::new(pattern).unwrap(),
-        header_lines: 1,
+        num_lines: 1,
     })
 }
 
-/// Section line is visible in the viewport at the top, so no sticky header.
+/// Section line is visible in the viewport at the top, so no sticky heading.
 /// Scrolling down 1 makes it sticky. Scrolling back up removes the sticky.
 #[test]
 fn sticky_appears_and_disappears_on_scroll() {
@@ -26,7 +26,7 @@ line 4
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# "),
+            heading: heading_opts("^# "),
             ..Default::default()
         },
         events: vec![key('j'), key('k'), key('q')],
@@ -75,7 +75,7 @@ line 4
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# "),
+            heading: heading_opts("^# "),
             ..Default::default()
         },
         events: vec![key('j'), key('j'), key('q')],
@@ -107,9 +107,9 @@ line 4
     assert_eq!(screen.out(), want);
 }
 
-/// Fixed header stays, and section header appears below it when scrolled.
+/// Fixed header stays, and heading appears below it when scrolled.
 #[test]
-fn section_with_fixed_header() {
+fn heading_with_fixed_header() {
     let content = "\
 FIXED
 # Section A
@@ -125,7 +125,7 @@ line 4
         content,
         options: Options {
             header: 1,
-            section: section_opts("^# "),
+            heading: heading_opts("^# "),
             ..Default::default()
         },
         events: vec![key('j'), key('j'), key('q')],
@@ -160,10 +160,10 @@ line 4
     assert_eq!(screen.out(), want);
 }
 
-/// Jump to end with section headers. Section B is at the top of
-/// the viewport, so section A's sticky header is pushed off.
+/// Jump to end with headings. Section B is at the top of
+/// the viewport, so section A's sticky heading is pushed off.
 #[test]
-fn jump_end_with_section() {
+fn jump_end_with_heading() {
     let content = "\
 # Section A
 line 1
@@ -178,7 +178,7 @@ line 5
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# "),
+            heading: heading_opts("^# "),
             ..Default::default()
         },
         events: vec![key('G'), key('q')],
@@ -203,9 +203,9 @@ line 5
     assert_eq!(screen.out(), want);
 }
 
-/// No section above viewport means no sticky header.
+/// No section above viewport means no sticky heading.
 #[test]
-fn no_section_above_viewport() {
+fn no_heading_above_viewport() {
     let content = "\
 line 1
 line 2
@@ -218,7 +218,7 @@ line 4
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# "),
+            heading: heading_opts("^# "),
             ..Default::default()
         },
         events: vec![key('j'), key('q')],
@@ -243,10 +243,10 @@ line 4
     assert_eq!(screen.out(), want);
 }
 
-/// Section header with fixed header where section line is within the
-/// fixed header range. The section header should not duplicate.
+/// Heading with fixed header where section line is within the
+/// fixed header range. The heading should not duplicate.
 #[test]
-fn section_overlaps_fixed_header() {
+fn heading_overlaps_fixed_header() {
     let content = "\
 # Section A
 line 1
@@ -261,7 +261,7 @@ line 5
         content,
         options: Options {
             header: 1,
-            section: section_opts("^# "),
+            heading: heading_opts("^# "),
             ..Default::default()
         },
         events: vec![key('j'), key('q')],
@@ -307,7 +307,7 @@ line 5
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# "),
+            heading: heading_opts("^# "),
             ..Default::default()
         },
         events: vec![key('j'), key('j'), key('j'), key('k'), key('k'), key('q')],

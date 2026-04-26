@@ -2,13 +2,13 @@ use crate::{
     document::Document,
     line::Row,
     options::Options,
-    pager::{global_header::GlobalHeader, section_header::SectionHeader, viewport::Viewport},
+    pager::{header::Header, heading::Heading, viewport::Viewport},
     screen::{Direction, Scroll},
 };
 
-mod global_header;
+mod header;
+mod heading;
 mod rows;
-mod section_header;
 mod viewport;
 
 #[derive(Debug)]
@@ -45,8 +45,8 @@ pub enum PageUpdate {
 
 #[derive(Debug)]
 pub struct PageSnapshot<'pager> {
-    pub global_header: &'pager [Row],
-    pub section_header: &'pager [Row],
+    pub header: &'pager [Row],
+    pub heading: &'pager [Row],
     pub content: &'pager [Row],
     pub height: usize,
     pub last_update: PageUpdate,
@@ -54,7 +54,7 @@ pub struct PageSnapshot<'pager> {
 
 impl<'pager> PageSnapshot<'pager> {
     pub fn total_header_height(&self) -> usize {
-        self.global_header.len() + self.section_header.len()
+        self.header.len() + self.heading.len()
     }
 
     pub fn viewport_height(&self) -> usize {
@@ -66,16 +66,17 @@ impl<'pager> PageSnapshot<'pager> {
 /// [`Pager`] reads the rows that fit in the display area from [`Document`] and shows them
 /// together with the status line. The whole display area is called the page, and the part
 /// that shows rows of [`Document`] lines in particular is called the viewport.
-/// Depending on the configuration, a global header and a section header may be pinned at
+/// Depending on the configuration, a global header and a heading may be pinned at
 /// the top of the viewport.
 ///
-/// Internally the following structs manage the content displayed in the headers and viewport:
-/// - Global header: [`GlobalHeader`]
-/// - Section header: [`SectionHeader`]
+/// Internally the following structs manage rows displayed in sticky area and viewport:
+/// - Sticky area
+///     - Global header: [`Header`]
+///     - Heading: [`Heading`]
 /// - Viewport: [`Viewport`]
 ///
-/// [`Viewport`] is unaware of headers and just holds a specific range of [`Document`] as
-/// directed by [`Pager`]. The header rows managed by [`GlobalHeader`] and [`SectionHeader`]
+/// [`Viewport`] is unaware of sticky rows and just holds a specific range of [`Document`]
+/// as directed by [`Pager`]. The header rows managed by [`Header`] and [`Heading`]
 /// are rendered as if overlaid on top of [`Viewport`].
 /// With this overlay approach, [`Viewport`] can manage its rows independently,
 /// without being affected by header content or height.
@@ -84,8 +85,8 @@ impl<'pager> PageSnapshot<'pager> {
 /// [`Pager`] only holds the state but does not write anything to the screen itself.
 pub struct Pager {
     doc: Document,
-    global_header: GlobalHeader,
-    section_header: SectionHeader,
+    header: Header,
+    heading: Heading,
     viewport: Viewport,
     last_update: PageUpdate,
 }
@@ -98,14 +99,14 @@ impl Pager {
         screen_height: usize,
     ) -> Self {
         let size = ViewportSize::new(screen_width, screen_height);
-        let global_header = GlobalHeader::new(&mut doc, &size, options.header);
-        let mut section_header = SectionHeader::new(options.section, &size, global_header.height());
-        section_header.resolve(&mut doc, 0);
+        let header = Header::new(&mut doc, &size, options.header);
+        let mut heading = Heading::new(options.heading, &size, header.height());
+        heading.resolve(&mut doc, 0);
         let viewport = Viewport::new(&mut doc, size);
         Self {
             doc,
-            global_header,
-            section_header,
+            header,
+            heading,
             viewport,
             last_update: PageUpdate::Full,
         }
@@ -117,8 +118,8 @@ impl Pager {
 
     pub fn snapshot<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
         let snapshot = PageSnapshot {
-            global_header: self.global_header.rows(),
-            section_header: self.section_header.rows(),
+            header: self.header.rows(),
+            heading: self.heading.rows(),
             content: &self.viewport.rows()[self.total_header_height()..],
             height: self.viewport.size().height,
             last_update: self.last_update,
@@ -128,7 +129,7 @@ impl Pager {
     }
 
     pub fn total_header_height(&self) -> usize {
-        self.global_header.height() + self.section_header.height()
+        self.header.height() + self.heading.height()
     }
 
     /// Returns the height of the display area (the number of rows) excluding the header region.
@@ -137,9 +138,9 @@ impl Pager {
     }
 
     /// Returns the rows that form a contiguous range within the viewport.
-    /// When headers exist, they are included only if the header region and the content region
+    /// When sticky area exists, it is included only if its region and the content region
     /// are adjacent in the document; otherwise they are excluded.
-    /// For example, if the section header shows lines 3-5 of [`Document`] and the content
+    /// For example, if the heading shows lines 3-5 of [`Document`] and the content
     /// shows lines 6-30, the rows for lines 3-30 are returned.
     /// If a global header also exists at lines 1-2, the global header is included as well.
     /// However, if the content starts at line 7 or later (not adjacent), only the content rows
@@ -150,15 +151,15 @@ impl Pager {
 
     fn contiguous_top_row_index(&self) -> usize {
         let rows = self.viewport.rows();
-        if let Some(row) = self.global_header.rows().first()
+        if let Some(row) = self.header.rows().first()
             && row == &rows[0]
         {
             return 0;
         }
-        if let Some(row) = self.section_header.rows().first()
-            && row.line_index() == rows[self.global_header.rows().len()].line_index()
+        if let Some(row) = self.heading.rows().first()
+            && row.line_index() == rows[self.header.rows().len()].line_index()
         {
-            return self.global_header.rows().len();
+            return self.header.rows().len();
         }
         self.total_header_height()
     }
@@ -180,19 +181,19 @@ impl Pager {
     /// Resize the page to fit the new dimensions.
     pub fn resize(&mut self, screen_width: usize, screen_height: usize) {
         let size = ViewportSize::new(screen_width, screen_height);
-        self.global_header.resize(&mut self.doc, &size);
-        self.section_header
-            .resize(&mut self.doc, &size, self.global_header.height());
+        self.header.resize(&mut self.doc, &size);
+        self.heading
+            .resize(&mut self.doc, &size, self.header.height());
         self.viewport.resize(&mut self.doc, size);
         self.last_update = PageUpdate::Full;
     }
 
     /// Move the page so that the specified line comes to the top.
     /// - If the specified line is within the global header, jump to the start of the document.
-    /// - If the specified line is within any section header, move so that it comes to the top.
+    /// - If the specified line is within any heading, move so that it comes to the top.
     /// - Otherwise, move so that the specified line comes right after the headers.
     pub fn jump_to(&mut self, mut line_index: usize) {
-        if self.global_header.contains(line_index) {
+        if self.header.contains(line_index) {
             line_index = 0;
         }
 
@@ -200,10 +201,10 @@ impl Pager {
         let prev_viewport_top = self.viewport.rows()[0].clone();
         let prev_line_pos = self.viewport.row_index(line_index, 0);
 
-        self.section_header.resolve(&mut self.doc, line_index);
+        self.heading.resolve(&mut self.doc, line_index);
 
-        let jump_offset = if self.section_header.contains(line_index) {
-            self.global_header.height()
+        let jump_offset = if self.heading.contains(line_index) {
+            self.header.height()
         } else {
             self.total_header_height()
         };
@@ -246,8 +247,8 @@ impl Pager {
         self.viewport.jump_to_end(&mut self.doc);
 
         let top_line_index = self.viewport.rows()[0].line_index();
-        self.section_header.resolve(&mut self.doc, top_line_index);
-        self.push_up_section_header_if_needed();
+        self.heading.resolve(&mut self.doc, top_line_index);
+        self.push_up_heading_if_needed();
 
         self.last_update = PageUpdate::Full;
     }
@@ -281,75 +282,75 @@ impl Pager {
     fn scroll_up(&mut self, num_rows: usize) -> usize {
         let rows_scrolled = self.viewport.scroll_up(&mut self.doc, num_rows);
 
-        // Check the section header status to update it as needed.
-        let section_header_start = match self.section_header.start_line_index() {
+        // Check the heading status to update it as needed.
+        let heading_start = match self.heading.start_line_index() {
             Some(idx) => idx,
-            // If there is no current section, scrolling upward cannot newly reveal one, so do nothing.
+            // If there is no current heading, scrolling upward cannot newly reveal one, so do nothing.
             None => return rows_scrolled,
         };
 
-        // If the new top row is above the current section header, search for a section header above it.
-        let top_line = self.viewport.rows()[self.global_header.height()].line_index();
-        if top_line < section_header_start {
-            self.section_header.resolve(&mut self.doc, top_line);
+        // If the new top row is above the current heading, search for a heading above it.
+        let top_line = self.viewport.rows()[self.header.height()].line_index();
+        if top_line < heading_start {
+            self.heading.resolve(&mut self.doc, top_line);
         }
-        self.push_up_section_header_if_needed();
+        self.push_up_heading_if_needed();
 
         rows_scrolled
     }
 
     fn scroll_down(&mut self, num_rows: usize) -> usize {
-        let prev_top_line = self.viewport.rows()[self.global_header.height()].line_index();
+        let prev_top_line = self.viewport.rows()[self.header.height()].line_index();
         let rows_scrolled = self.viewport.scroll_down(&mut self.doc, num_rows);
-        let top_line = self.viewport.rows()[self.global_header.height()].line_index();
+        let top_line = self.viewport.rows()[self.header.height()].line_index();
 
-        // If a new section header exists within the moved range, replace the current one with it.
-        self.section_header
+        // If a new heading exists within the moved range, replace the current one with it.
+        self.heading
             .resolve_if_found(&mut self.doc, prev_top_line..(top_line + 1));
-        self.push_up_section_header_if_needed();
+        self.push_up_heading_if_needed();
 
         rows_scrolled
     }
 
-    /// Look for another section header underneath the current section header overlay,
+    /// Look for another heading underneath the current heading overlay,
     /// and if one is found (i.e. a section transition is in progress), adjust the offset of
-    /// the current section so that the new section header becomes visible.
-    fn push_up_section_header_if_needed(&mut self) {
-        let current_start_line = match self.section_header.start_line_index() {
+    /// the current section so that the new heading becomes visible.
+    fn push_up_heading_if_needed(&mut self) {
+        let current_start_line = match self.heading.start_line_index() {
             Some(i) => i,
             None => return,
         };
 
-        let overlay_height = self.global_header.height() + self.section_header.full_height();
+        let overlay_height = self.header.height() + self.heading.full_height();
         let mut other_section_start = overlay_height;
-        let rows_under_section_header = self
+        let rows_under_heading = self
             .viewport
             .rows()
             .iter()
             .enumerate()
             .take(overlay_height)
-            .skip(self.global_header.height());
-        for (i, row) in rows_under_section_header {
+            .skip(self.header.height());
+        for (i, row) in rows_under_heading {
             if row.wrap_index() != 0 || row.line_index() == current_start_line {
                 continue;
             }
             if self
-                .section_header
-                .is_header(&mut self.doc, row.line_index())
+                .heading
+                .is_heading_start(&mut self.doc, row.line_index())
             {
                 other_section_start = i;
                 break;
             }
         }
         let push_up = overlay_height.saturating_sub(other_section_start);
-        self.section_header.push_up(push_up);
+        self.heading.push_up(push_up);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::options::{Options, SectionOptions};
+    use crate::options::{HeadingOptions, Options};
     use regex::Regex;
 
     fn doc_lines(n: usize) -> Document {
@@ -360,10 +361,10 @@ mod tests {
         Document::from_string(s)
     }
 
-    fn section_opts(pattern: &str, header_lines: usize) -> SectionOptions {
-        SectionOptions {
+    fn heading_opts(pattern: &str, num_lines: usize) -> HeadingOptions {
+        HeadingOptions {
             pattern: Regex::new(pattern).unwrap(),
-            header_lines,
+            num_lines,
         }
     }
 
@@ -375,8 +376,8 @@ mod tests {
     fn snapshot_starts_at_top_of_doc() {
         let mut pager = Pager::new(doc_lines(10), Options::default(), 20, 5);
         let (snap, _doc) = pager.snapshot();
-        assert!(snap.global_header.is_empty());
-        assert!(snap.section_header.is_empty());
+        assert!(snap.header.is_empty());
+        assert!(snap.heading.is_empty());
         // viewport height = screen_height - 1 = 4.
         assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
     }
@@ -389,7 +390,7 @@ mod tests {
         };
         let mut pager = Pager::new(doc_lines(10), opts, 20, 6);
         let (snap, _doc) = pager.snapshot();
-        assert_eq!(line_indices(snap.global_header), vec![0, 1]);
+        assert_eq!(line_indices(snap.header), vec![0, 1]);
         assert_eq!(line_indices(snap.content), vec![2, 3, 4]);
     }
 
@@ -421,7 +422,7 @@ mod tests {
         let mut pager = Pager::new(doc_lines(20), opts, 20, 6);
         pager.scroll(3);
         let (snap, _doc) = pager.snapshot();
-        assert_eq!(line_indices(snap.global_header), vec![0, 1]);
+        assert_eq!(line_indices(snap.header), vec![0, 1]);
         assert_eq!(line_indices(snap.content), vec![5, 6, 7]);
     }
 
@@ -451,7 +452,7 @@ mod tests {
         pager.scroll(5);
         pager.jump_to(1);
         let (snap, _doc) = pager.snapshot();
-        assert_eq!(line_indices(snap.global_header), vec![0, 1]);
+        assert_eq!(line_indices(snap.header), vec![0, 1]);
         assert_eq!(line_indices(snap.content), vec![2, 3, 4, 5, 6]);
     }
 
@@ -465,16 +466,16 @@ mod tests {
     }
 
     #[test]
-    fn section_header_becomes_sticky_when_scrolled_past() {
+    fn heading_becomes_sticky_when_scrolled_past() {
         let content = "# A\nx\ny\nz\nw\nv\n";
         let opts = Options {
-            section: Some(section_opts("^# ", 1)),
+            heading: Some(heading_opts("^# ", 1)),
             ..Default::default()
         };
         let mut pager = Pager::new(Document::from_string(content.into()), opts, 20, 5);
         pager.scroll(2);
         let (snap, _doc) = pager.snapshot();
-        assert_eq!(line_indices(snap.section_header), vec![0]);
+        assert_eq!(line_indices(snap.heading), vec![0]);
         assert_eq!(line_indices(snap.content), vec![3, 4, 5]);
     }
 
@@ -524,10 +525,10 @@ mod tests {
     }
 
     #[test]
-    fn contiguous_rows_includes_section_header_when_adjacent() {
+    fn contiguous_rows_includes_heading_when_adjacent() {
         let content = "# A\nline0\nline1\nline2\nline3\n";
         let opts = Options {
-            section: Some(section_opts("^# ", 1)),
+            heading: Some(heading_opts("^# ", 1)),
             ..Default::default()
         };
         let pager = Pager::new(Document::from_string(content.into()), opts, 20, 5);
@@ -535,16 +536,16 @@ mod tests {
     }
 
     #[test]
-    fn contiguous_rows_excludes_section_header_when_far() {
+    fn contiguous_rows_excludes_heading_when_far() {
         let content = "# A\nline0\nline1\nline2\nline3\nline4\n";
         let opts = Options {
-            section: Some(section_opts("^# ", 1)),
+            heading: Some(heading_opts("^# ", 1)),
             ..Default::default()
         };
         let mut pager = Pager::new(Document::from_string(content.into()), opts, 20, 4);
         pager.scroll(2);
         let rows = pager.contiguous_rows();
-        // Section header (line 0) is no longer adjacent to content.
+        // Heading (line 0) is no longer adjacent to content.
         assert_ne!(rows[0].line_index(), 0);
     }
 }

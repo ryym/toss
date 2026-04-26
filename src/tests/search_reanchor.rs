@@ -2,16 +2,16 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
 use super::{TestCase, key, run_test_screen};
-use crate::options::{Options, SectionOptions};
+use crate::options::{HeadingOptions, Options};
 
 fn enter() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
 }
 
-fn section_opts(pattern: &str, header_lines: usize) -> Option<SectionOptions> {
-    Some(SectionOptions {
+fn heading_opts(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
+    Some(HeadingOptions {
         pattern: regex::Regex::new(pattern).unwrap(),
-        header_lines,
+        num_lines,
     })
 }
 
@@ -312,11 +312,11 @@ line 5
     assert_eq!(screen.out(), want);
 }
 
-// When a section header overlay hides a match, re-anchor should skip it
+// When a heading overlay hides a match, re-anchor should skip it
 // and find the first truly visible match (not one behind the overlay).
 #[test]
-fn reanchor_skips_match_hidden_by_section_header() {
-    // Section header "# Sec" is sticky (1 line).
+fn reanchor_skips_match_hidden_by_heading() {
+    // Heading "# Sec" is sticky (1 line).
     // After scrolling, the overlay hides the first viewport row.
     let content = "\
 # Sec
@@ -334,7 +334,7 @@ line 8
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# ", 1),
+            heading: heading_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![
@@ -342,7 +342,7 @@ line 8
             key('A'),
             enter(),
             // Jump to end — cursor ("A 1") goes off-screen.
-            // The sticky header "# Sec" overlays the first viewport row.
+            // The sticky heading "# Sec" overlays the first viewport row.
             key('G'),
             // n: re-anchor. "A 5" is in the viewport rows but hidden by overlay.
             // Should re-anchor to "A 7" (first actually visible match).
