@@ -8,7 +8,17 @@ use crossterm::{
     terminal::{self, BeginSynchronizedUpdate, ClearType, EndSynchronizedUpdate},
 };
 
-use crate::page::{Direction, ScrollPlan};
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Down,
+    Up,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Scroll {
+    pub direction: Direction,
+    pub num_rows: usize,
+}
 
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {
@@ -24,7 +34,7 @@ pub trait Screen {
     fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()>;
 
     /// Issue a terminal scroll command to shift content in-place.
-    fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()>;
+    fn scroll_terminal(&mut self, scroll: &Scroll) -> io::Result<()>;
 
     /// Begin synchronized output. The terminal buffers all subsequent writes
     /// until `end_sync` and renders them in a single frame.
@@ -91,9 +101,12 @@ impl Screen for TermScreen {
         queue!(self.stdout, cursor::MoveTo(0, screen_y), Print(text),)
     }
 
-    fn scroll_terminal(&mut self, plan: &ScrollPlan) -> io::Result<()> {
-        let n = plan.terminal_scroll.get() as u16;
-        match plan.direction {
+    fn scroll_terminal(&mut self, scroll: &Scroll) -> io::Result<()> {
+        if scroll.num_rows == 0 {
+            return Ok(());
+        }
+        let n = scroll.num_rows as u16;
+        match scroll.direction {
             Direction::Down => {
                 queue!(self.stdout, terminal::ScrollUp(n))?;
             }

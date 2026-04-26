@@ -6,12 +6,11 @@ mod line;
 mod line_editor;
 mod logger;
 mod options;
-mod page;
-mod render;
+mod pager;
+mod renderer;
 mod screen;
 mod scroll;
 mod search;
-mod status_line;
 
 #[cfg(test)]
 mod tests;
@@ -23,8 +22,9 @@ use std::process;
 
 use app::App;
 use document::Document;
-use page::Page;
 use screen::TermScreen;
+
+use crate::pager::Pager;
 
 struct AppError {
     message: String,
@@ -83,11 +83,13 @@ fn run() -> Result<(), AppError> {
 
     let (w, h) = crossterm::terminal::size()
         .map_err(|e| AppError::new(format!("Error getting terminal size: {e}"), 1))?;
-    let mut page = Page::new(doc, &args.options, w as usize, h as usize);
 
-    if args.options.quit_if_one_screen && page.content_fits_on_screen(h as usize, shell_lines()) {
-        for i in 0..page.doc.line_count() {
-            if let Some(line) = page.doc.line(i) {
+    let quit_if_one_screen = args.options.quit_if_one_screen;
+    let mut pager = Pager::new(doc, args.options, w as usize, h as usize);
+
+    if quit_if_one_screen && pager.fits_within((h as usize).saturating_sub(shell_lines())) {
+        for i in 0..pager.doc_mut().line_count() {
+            if let Some(line) = pager.doc_mut().line(i) {
                 println!("{}", line.raw());
             }
         }
@@ -97,7 +99,7 @@ fn run() -> Result<(), AppError> {
     let screen = TermScreen::new()
         .map_err(|e| AppError::new(format!("Error initializing terminal: {e}"), 1))?;
 
-    let mut app = App::new(screen, page).map_err(|e| AppError::new(format!("{e}"), 1))?;
+    let mut app = App::new(screen, pager).map_err(|e| AppError::new(format!("{e}"), 1))?;
     app.run().map_err(|e| AppError::new(format!("{e}"), 1))?;
 
     Ok(())

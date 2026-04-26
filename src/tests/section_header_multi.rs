@@ -274,7 +274,7 @@ fn pattern_match_within_header_block() {
             section: section_opts_n("^#", 3),
             ..Default::default()
         },
-        events: vec![key('j'), key('j'), key('q')],
+        events: vec![key('j'), key('j'), key('j'), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -286,19 +286,27 @@ fn pattern_match_within_header_block() {
 :
 -----
 [EVENT]:char:j
-# Changelog
 
 ## 2.0.74
+
 - Added LSP (Language Server Protocol) tool for code intelligence fe>
 atures like go-to-definition, find references, and hover documentati
 :
 -----
 [EVENT]:char:j
-# Changelog
-
 ## 2.0.74
-atures like go-to-definition, find references, and hover documentati>
+
+- Added LSP (Language Server Protocol) tool for code intelligence fe>
+atures like go-to-definition, find references, and hover documentati
 on
+:
+-----
+[EVENT]:char:j
+## 2.0.74
+
+- Added LSP (Language Server Protocol) tool for code intelligence fe>
+atures like go-to-definition, find references, and hover documentati
+- Added `/terminal-setup` support for Kitty, Alacritty, Zed, and War
 :
 -----
 [EVENT]:char:q
@@ -502,21 +510,21 @@ body 1
 # Section A
 desc 1
 desc 2
-body 1
+body 2
 :
 -----
 [EVENT]:char:j
 # Section A
 desc 1
 desc 2
-body 1
+body 3
 :
 -----
 [EVENT]:char:k
 # Section A
 desc 1
 desc 2
-body 1
+body 2
 :
 -----
 [EVENT]:char:k
@@ -610,21 +618,21 @@ desc 3
 # Section A
 desc 1
 desc 2
-desc 3
+desc 4
 :
 -----
 [EVENT]:char:j
 # Section A
 desc 1
 desc 2
-desc 3
+desc 5
 :
 -----
 [EVENT]:char:k
 # Section A
 desc 1
 desc 2
-desc 3
+desc 4
 :
 -----
 [EVENT]:char:k

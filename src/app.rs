@@ -7,8 +7,8 @@ use regex::Regex;
 use crate::document::Document;
 use crate::line::Row;
 use crate::line_editor::LineEditor;
-use crate::page::{Direction, Page};
-use crate::render;
+use crate::pager::Pager;
+use crate::renderer::Renderer;
 use crate::screen::Screen;
 use crate::scroll::ScrollPhysics;
 use crate::search::{self, MatchPosition, SearchDirection, SearchState};
@@ -16,27 +16,6 @@ use crate::search::{self, MatchPosition, SearchDirection, SearchState};
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
 
-/// What kind of redraw is needed for the next frame.
-enum RedrawState {
-    /// No redraw needed.
-    None,
-    /// Full page redraw (resize, scroll jump, cancel search, etc.).
-    Full,
-    /// Only search highlight changes — redraw affected rows only.
-    SearchHighlight {
-        /// Line indices that had highlights before the change.
-        old_match_lines: Vec<usize>,
-    },
-    /// Viewport jumped with overlap — use incremental scroll + highlight update.
-    JumpScroll {
-        scroll_rows: usize,
-        direction: Direction,
-        /// Lines whose highlight style changed (old/new current match).
-        highlight_dirty_lines: Vec<usize>,
-    },
-}
-
-/// Current input mode of the application.
 enum AppMode {
     View,
     Search {
@@ -49,29 +28,30 @@ enum AppMode {
     },
 }
 
-pub struct App<S> {
-    screen: S,
-    page: Page,
+pub struct App<S: Screen> {
+    renderer: Renderer<S>,
+    pager: Pager,
     mode: AppMode,
     search: Option<SearchState>,
     scroll_physics: ScrollPhysics,
     instant_scroll: bool,
-    redraw: RedrawState,
+    dirty: bool,
 }
 
 impl<S: Screen> App<S> {
-    pub fn new(screen: S, page: Page) -> io::Result<Self> {
+    pub fn new(screen: S, pager: Pager) -> io::Result<Self> {
         let (_, h) = screen.size()?;
+        let renderer = Renderer::new(screen);
         let mut scroll_physics = ScrollPhysics::new();
         scroll_physics.configure(h as usize);
         Ok(Self {
-            screen,
-            page,
+            renderer,
+            pager,
             mode: AppMode::View,
             search: None,
             scroll_physics,
             instant_scroll: false,
-            redraw: RedrawState::Full,
+            dirty: false,
         })
     }
 
@@ -82,24 +62,21 @@ impl<S: Screen> App<S> {
 
     #[cfg(test)]
     pub fn into_screen(self) -> S {
-        self.screen
+        self.renderer.into_screen()
     }
 
     pub fn run(&mut self) -> io::Result<()> {
-        // Initial draw
-        let search = active_search(&self.mode, &self.search);
-        render::draw_full_page(&mut self.screen, &mut self.page, search)?;
-        self.redraw = RedrawState::None;
+        self.render()?;
+        self.dirty = false;
 
         loop {
-            // 1. Poll input
             let timeout = if self.scroll_physics.is_active() {
                 FRAME_DURATION_ANIMATING
             } else {
                 FRAME_DURATION_IDLE
             };
 
-            if let Some(event) = self.screen.poll_event(timeout)? {
+            if let Some(event) = self.renderer.poll_event(timeout)? {
                 match event {
                     Event::Key(key) => {
                         if self.handle_key(key)? {
@@ -108,53 +85,36 @@ impl<S: Screen> App<S> {
                     }
                     Event::Resize(w, h) => {
                         log::debug!("Resize: {w}x{h}");
-                        self.page.resize(w as usize, h as usize);
+                        self.pager.resize(w as usize, h as usize);
                         self.scroll_physics.configure(h as usize);
-                        self.redraw = RedrawState::Full;
+                        self.dirty = true;
                     }
                     _ => {}
                 }
             }
 
-            // 2. Update animation
-            self.update_animation()?;
+            self.update_animation();
 
-            // 3. Render if needed
-            match std::mem::replace(&mut self.redraw, RedrawState::None) {
-                RedrawState::Full => {
-                    let search = active_search(&self.mode, &self.search);
-                    render::draw_full_page(&mut self.screen, &mut self.page, search)?;
-                }
-                RedrawState::SearchHighlight { old_match_lines } => {
-                    let search = active_search(&self.mode, &self.search);
-                    render::draw_search_highlight_update(
-                        &mut self.screen,
-                        &mut self.page,
-                        search,
-                        &old_match_lines,
-                    )?;
-                }
-                RedrawState::JumpScroll {
-                    scroll_rows,
-                    direction,
-                    highlight_dirty_lines,
-                } => {
-                    let search = active_search(&self.mode, &self.search);
-                    render::apply_jump_scroll(
-                        &mut self.screen,
-                        &mut self.page,
-                        scroll_rows,
-                        direction,
-                        search,
-                        &highlight_dirty_lines,
-                    )?;
-                }
-                RedrawState::None => {
-                    if self.page.status.is_dirty() {
-                        render::draw_status_line(&mut self.screen, &mut self.page)?;
-                    }
-                }
+            if self.dirty {
+                self.render()?;
+                self.dirty = false;
             }
+        }
+    }
+
+    fn render(&mut self) -> io::Result<()> {
+        let status_text = self.status_text();
+        let search = active_search(&self.mode, &self.search);
+        let (snapshot, doc) = self.pager.snapshot();
+        self.renderer.render(doc, snapshot, search, &status_text)
+    }
+
+    fn status_text(&self) -> String {
+        match &self.mode {
+            AppMode::View => ":".to_string(),
+            AppMode::Search {
+                direction, editor, ..
+            } => format!("{}{}", direction.prompt(), editor.input_with_cursor()),
         }
     }
 
@@ -177,34 +137,36 @@ impl<S: Screen> App<S> {
                 return Ok(true);
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.scroll_immediate(1)?;
+                self.scroll_immediate(1);
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.scroll_immediate(-1)?;
+                self.scroll_immediate(-1);
             }
             KeyCode::Char('d') => {
-                self.scroll_animated(self.page.viewport.height() as isize / 2)?;
+                let half = self.pager.content_height() as i32 / 2;
+                self.scroll_animated(half);
             }
             KeyCode::Char('u') => {
-                self.scroll_animated(-(self.page.viewport.height() as isize / 2))?;
+                let half = -(self.pager.content_height() as i32 / 2);
+                self.scroll_animated(half);
             }
             KeyCode::Char('f') | KeyCode::Char(' ') => {
-                self.scroll_animated(self.page.viewport.height() as isize)?;
+                let full = self.pager.content_height() as i32;
+                self.scroll_animated(full);
             }
             KeyCode::Char('b') => {
-                self.scroll_animated(-(self.page.viewport.height() as isize))?;
+                let full = -(self.pager.content_height() as i32);
+                self.scroll_animated(full);
             }
             KeyCode::Char('g') => {
                 self.scroll_physics.stop();
-                if self.page.viewport.jump_to(&mut self.page.doc, 0) {
-                    self.redraw = RedrawState::Full;
-                }
+                self.pager.jump_to(0);
+                self.dirty = true;
             }
             KeyCode::Char('G') => {
                 self.scroll_physics.stop();
-                if self.page.viewport.jump_to_end(&mut self.page.doc) {
-                    self.redraw = RedrawState::Full;
-                }
+                self.pager.jump_to_end();
+                self.dirty = true;
             }
             KeyCode::Char('/') => {
                 self.enter_search_mode(SearchDirection::Forward);
@@ -226,33 +188,41 @@ impl<S: Screen> App<S> {
     fn enter_search_mode(&mut self, direction: SearchDirection) {
         log::debug!("Enter search mode: {direction:?}");
         self.scroll_physics.stop();
-        let saved_top_line = self.page.viewport.top_line_index();
+
+        // Save the top line of the contiguous rows. This line is:
+        //   1. the start line of the search range performing an incremental search within
+        //   2. the position to go back to when the search is cancelled
+        //
+        // The first purpose is why it needs to be a first line of contiguous rows that
+        // may include header rows. When the header line is not overlaid, include it in the
+        // search range. If a match is found, place the initial cursor position within the header.
+        // Excluding the header would cause unnatural behavior where the cursor starts in the content
+        // during preview and only jumps to the header via n/N after the query is submitted.
+        //
+        // The position is restored correctly upon cancel, whether or not the top line is a header.
+        let saved_top_line = self.pager.contiguous_rows()[0].line_index();
+
         let editor = LineEditor::new();
-        self.page.status.set_content(format!(
-            "{}{}",
-            direction.prompt(),
-            editor.input_with_cursor()
-        ));
         self.mode = AppMode::Search {
             direction,
             editor,
             saved_top_line,
             preview: None,
         };
+        self.dirty = true;
     }
 
     fn exit_search_mode(&mut self) {
         log::debug!("Exit search mode");
         self.mode = AppMode::View;
-        self.page.status.set_content(":".to_string());
+        self.dirty = true;
     }
 
     /// Cancel search: discard preview and restore the original scroll position.
     fn cancel_search(&mut self) {
         if let AppMode::Search { saved_top_line, .. } = &self.mode {
             let top = *saved_top_line;
-            self.page.viewport.jump_to(&mut self.page.doc, top);
-            self.redraw = RedrawState::Full;
+            self.pager.jump_to(top);
         }
         self.exit_search_mode();
     }
@@ -269,30 +239,23 @@ impl<S: Screen> App<S> {
             _ => return,
         };
 
-        // Collect lines with current highlights before making changes.
-        let old_match_lines = self.collect_visible_match_lines();
-
         if input.is_empty() {
             // No query: clear preview and restore position.
             if let AppMode::Search { preview, .. } = &mut self.mode {
                 *preview = None;
             }
-            self.page
-                .viewport
-                .jump_to(&mut self.page.doc, saved_top_line);
-            self.redraw = RedrawState::Full;
+            self.pager.jump_to(saved_top_line);
+            self.dirty = true;
             return;
         }
 
-        let re = regex::Regex::new(&regex::escape(&input)).unwrap();
-        let matched = search::find_next_match(&mut self.page.doc, &re, saved_top_line, direction);
+        let re = Regex::new(&regex::escape(&input)).unwrap();
+        let matched = search::find_next_match(self.pager.doc_mut(), &re, saved_top_line, direction);
         log::debug!("Search preview: query={input:?}, result={matched:?}");
 
-        let scrolled = if let Some(ref pos) = matched {
-            self.page.jump_to_visible(pos.line)
-        } else {
-            false
-        };
+        if let Some(ref pos) = matched {
+            self.pager.jump_to(pos.line);
+        }
 
         if let AppMode::Search { preview, .. } = &mut self.mode {
             *preview = Some(SearchState {
@@ -301,12 +264,7 @@ impl<S: Screen> App<S> {
                 current: matched,
             });
         }
-
-        if scrolled {
-            self.redraw = RedrawState::Full;
-        } else {
-            self.redraw = RedrawState::SearchHighlight { old_match_lines };
-        }
+        self.dirty = true;
     }
 
     fn handle_key_search(&mut self, key: KeyEvent) {
@@ -318,61 +276,31 @@ impl<S: Screen> App<S> {
                 self.cancel_search();
             }
             KeyCode::Backspace => {
-                if let AppMode::Search {
-                    direction, editor, ..
-                } = &mut self.mode
-                {
+                if let AppMode::Search { editor, .. } = &mut self.mode {
                     if editor.input().is_empty() {
                         self.cancel_search();
                         return;
                     }
                     editor.backspace();
-                    self.page.status.set_content(format!(
-                        "{}{}",
-                        direction.prompt(),
-                        editor.input_with_cursor()
-                    ));
                 }
                 self.update_search_preview();
             }
             KeyCode::Char(ch) => {
-                if let AppMode::Search {
-                    direction, editor, ..
-                } = &mut self.mode
-                {
+                if let AppMode::Search { editor, .. } = &mut self.mode {
                     editor.insert(ch);
-                    self.page.status.set_content(format!(
-                        "{}{}",
-                        direction.prompt(),
-                        editor.input_with_cursor()
-                    ));
                 }
                 self.update_search_preview();
             }
             KeyCode::Left => {
-                if let AppMode::Search {
-                    direction, editor, ..
-                } = &mut self.mode
-                {
+                if let AppMode::Search { editor, .. } = &mut self.mode {
                     editor.move_left();
-                    self.page.status.set_content(format!(
-                        "{}{}",
-                        direction.prompt(),
-                        editor.input_with_cursor()
-                    ));
+                    self.dirty = true;
                 }
             }
             KeyCode::Right => {
-                if let AppMode::Search {
-                    direction, editor, ..
-                } = &mut self.mode
-                {
+                if let AppMode::Search { editor, .. } = &mut self.mode {
                     editor.move_right();
-                    self.page.status.set_content(format!(
-                        "{}{}",
-                        direction.prompt(),
-                        editor.input_with_cursor()
-                    ));
+                    self.dirty = true;
                 }
             }
             _ => {}
@@ -396,7 +324,7 @@ impl<S: Screen> App<S> {
 
     /// Jump to next/previous match using the stored search state.
     fn jump_to_next_match(&mut self, reverse: bool) {
-        let Some(ref mut search) = self.search else {
+        let Some(ref search) = self.search else {
             log::debug!("Jump to next match: no active search");
             return;
         };
@@ -405,99 +333,57 @@ impl<S: Screen> App<S> {
         } else {
             search.direction
         };
-        let next = find_next_match_position(&mut self.page, search, direction);
-        if let Some((pos, redraw)) = next {
-            search.current = Some(pos);
-            self.redraw = redraw;
+        let current = search.current;
+
+        let next = find_next_match_position(&mut self.pager, &search.query, current, direction);
+        log::debug!("Jump to next match: {next:?}");
+        if let Some(pos) = next {
+            self.pager.jump_to(pos.line);
+            if let Some(s) = self.search.as_mut() {
+                s.current = Some(pos);
+            }
+            self.dirty = true;
         }
     }
 
-    /// Collect line indices of visible rows that have search matches.
-    fn collect_visible_match_lines(&mut self) -> Vec<usize> {
-        let search = active_search(&self.mode, &self.search);
-        let Some(search) = search else {
-            return Vec::new();
-        };
-        let rows = self.page.viewport.rows();
-        let mut lines = Vec::new();
-        let mut last_line = None;
-        for row in rows {
-            if last_line == Some(row.line_index()) {
-                continue;
-            }
-            last_line = Some(row.line_index());
-            if let Some(line) = self.page.doc.line(row.line_index())
-                && line.has_match(&search.query)
-            {
-                lines.push(row.line_index());
-            }
-        }
-        // Also include header rows.
-        let header = self.page.resolve_header();
-        let mut last_line = None;
-        for row in header.rows() {
-            if last_line == Some(row.line_index()) {
-                continue;
-            }
-            last_line = Some(row.line_index());
-            if let Some(line) = self.page.doc.line(row.line_index())
-                && line.has_match(&search.query)
-            {
-                lines.push(row.line_index());
-            }
-        }
-        lines
-    }
-
-    fn scroll_immediate(&mut self, rows: isize) -> io::Result<()> {
+    fn scroll_immediate(&mut self, rows: i32) {
         self.scroll_physics.stop();
-        self.apply_scroll(rows)
+        self.apply_scroll(rows);
     }
 
     /// Start or add momentum for an animated scroll.
     /// In instant_scroll mode (tests), scrolls immediately instead.
-    fn scroll_animated(&mut self, total_rows: isize) -> io::Result<()> {
+    fn scroll_animated(&mut self, total_rows: i32) {
         if self.instant_scroll {
             self.scroll_physics.stop();
-            self.apply_scroll(total_rows)
+            self.apply_scroll(total_rows);
         } else {
             log::debug!("Scroll animation impulse: rows={total_rows}");
             self.scroll_physics.impulse(total_rows as f64);
-            Ok(())
         }
     }
 
-    fn update_animation(&mut self) -> io::Result<()> {
+    fn update_animation(&mut self) {
         if !self.scroll_physics.is_active() {
-            return Ok(());
+            return;
         }
-
         let rows = self
             .scroll_physics
             .tick(FRAME_DURATION_ANIMATING.as_secs_f64());
-
-        self.apply_scroll(rows)
+        self.apply_scroll(rows as i32);
     }
 
-    /// Apply a scroll and handle section header changes.
-    fn apply_scroll(&mut self, rows: isize) -> io::Result<()> {
-        let old_header_height = self.page.resolve_header().height();
-
-        if let Some(plan) = self.page.plan_scroll(rows) {
-            let new_header_height = self.page.resolve_header().height();
-
-            if old_header_height != new_header_height {
-                // Header height changed (section change, push-up, or overlay change):
-                // need viewport resize + full redraw.
-                let (w, h) = self.screen.size()?;
-                self.page.resize(w as usize, h as usize);
-                self.redraw = RedrawState::Full;
-            } else {
-                let search = active_search(&self.mode, &self.search);
-                render::apply_scroll(&mut self.screen, &plan, &mut self.page, search)?;
-            }
+    fn apply_scroll(&mut self, rows: i32) {
+        if rows == 0 {
+            return;
         }
-        Ok(())
+        let max = self.pager.content_height() as i32;
+        let clamped = rows.clamp(-max, max);
+        if clamped == 0 {
+            return;
+        }
+        let scroll_rows = self.pager.scroll(clamped);
+        self.dirty = scroll_rows != 0;
     }
 }
 
@@ -507,7 +393,7 @@ fn active_search<'a>(
     committed: &'a Option<SearchState>,
 ) -> Option<&'a SearchState> {
     match mode {
-        AppMode::Search { preview, .. } => preview.as_ref(),
+        AppMode::Search { preview, .. } => preview.as_ref().or(committed.as_ref()),
         _ => committed.as_ref(),
     }
 }
@@ -515,72 +401,49 @@ fn active_search<'a>(
 /// Find the next match to jump to. Handles re-anchoring when the current match
 /// is no longer visible (e.g., after g/G).
 fn find_next_match_position(
-    page: &mut Page,
-    search: &SearchState,
+    pager: &mut Pager,
+    query: &Regex,
+    current: Option<MatchPosition>,
     direction: SearchDirection,
-) -> Option<(MatchPosition, RedrawState)> {
-    let old_current_line = search.current.map(|c| c.line);
-
-    let visible_rows = page.viewport.visible_rows();
+) -> Option<MatchPosition> {
+    let visible_rows = pager.contiguous_rows().to_vec();
     if visible_rows.is_empty() {
         return None;
     }
-    log::debug!(
-        "Jump to next match: direction={direction:?}, current={:?}",
-        search.current
-    );
 
     // If the current cursor is outside the visible area, re-anchor it
     // to the first visible match instead of jumping from the old position.
-    let needs_reanchor = match search.current {
-        Some(c) => !is_match_visible(&mut page.doc, &search.query, c, visible_rows),
+    let needs_reanchor = match current {
+        Some(c) => !is_match_visible(pager.doc_mut(), query, c, &visible_rows),
         None => false,
     };
 
     if needs_reanchor {
-        let reanchored = find_first_match_in_viewport(&mut page.doc, &search.query, visible_rows);
+        let reanchored = find_first_match_in_viewport(pager.doc_mut(), query, &visible_rows);
         log::debug!("Cursor outside viewport, re-anchor: {reanchored:?}");
         if let Some(pos) = reanchored {
-            let mut dirty = Vec::new();
-            if let Some(old_line) = old_current_line {
-                dirty.push(old_line);
-            }
-            dirty.push(pos.line);
-            return Some((
-                pos,
-                RedrawState::SearchHighlight {
-                    old_match_lines: dirty,
-                },
-            ));
+            return Some(pos);
         }
         // No matches in viewport; fall through to search from viewport top.
     }
 
-    if !needs_reanchor {
-        // Try to move to the next match within the same line first.
-        if let Some(current) = search.current
-            && let Some(next_mi) =
-                search::find_next_match_in_line(&mut page.doc, &search.query, current, direction)
-        {
-            log::debug!("Next match on same line: index={next_mi}");
-            return Some((
-                MatchPosition {
-                    line: current.line,
-                    match_index: next_mi,
-                },
-                // Same line, just current match index changed — delta redraw.
-                RedrawState::SearchHighlight {
-                    old_match_lines: vec![current.line],
-                },
-            ));
-        }
+    // Try to move to the next match within the same line first.
+    if !needs_reanchor
+        && let Some(current) = current
+        && let Some(next_mi) =
+            search::find_next_match_in_line(pager.doc_mut(), query, current, direction)
+    {
+        return Some(MatchPosition {
+            line: current.line,
+            match_index: next_mi,
+        });
     }
 
-    // Search the next line from the appropriate starting point.
-    let from = match search.current {
+    let line_count = pager.doc_mut().line_count();
+    let from = match current {
         Some(pos) if !needs_reanchor => match direction {
             SearchDirection::Forward => {
-                if pos.line + 1 < page.doc.line_count() {
+                if pos.line + 1 < line_count {
                     pos.line + 1
                 } else {
                     0
@@ -590,51 +453,13 @@ fn find_next_match_position(
                 if pos.line > 0 {
                     pos.line - 1
                 } else {
-                    page.doc.line_count().saturating_sub(1)
+                    line_count.saturating_sub(1)
                 }
             }
         },
         _ => visible_rows[0].line_index(),
     };
-
-    let matched = search::find_next_match(&mut page.doc, &search.query, from, direction);
-    log::debug!("Next match from line {from}: {matched:?}");
-    let pos = matched?;
-
-    let old_rows = page.viewport.rows().to_vec();
-    let old_header_height = page.resolve_header().height();
-    let scrolled = page.jump_to_visible(pos.line);
-
-    let mut dirty = Vec::new();
-    if let Some(old_line) = old_current_line {
-        dirty.push(old_line);
-    }
-    dirty.push(pos.line);
-
-    if !scrolled {
-        return Some((
-            pos,
-            RedrawState::SearchHighlight {
-                old_match_lines: dirty,
-            },
-        ));
-    }
-
-    let new_header_height = page.resolve_header().height();
-    if old_header_height == new_header_height
-        && let Some((n, dir)) = compute_scroll_overlap(&old_rows, page.viewport.rows())
-    {
-        return Some((
-            pos,
-            RedrawState::JumpScroll {
-                scroll_rows: n,
-                direction: dir,
-                highlight_dirty_lines: dirty,
-            },
-        ));
-    }
-
-    Some((pos, RedrawState::Full))
+    search::find_next_match(pager.doc_mut(), query, from, direction)
 }
 
 /// Check if a match is on a wrap row that is actually visible on screen.
@@ -674,31 +499,6 @@ fn find_first_match_in_viewport(
                     match_index: mi,
                 });
             }
-        }
-    }
-    None
-}
-
-/// Detect overlap between old and new viewport rows after a jump.
-/// Returns the scroll distance and direction if the viewports overlap.
-/// We determine the direction by comparing actual rows rather than using SearchDirection,
-/// because wraparound can cause the scroll direction to be opposite to the search direction.
-fn compute_scroll_overlap(old_rows: &[Row], new_rows: &[Row]) -> Option<(usize, Direction)> {
-    if old_rows.is_empty() || new_rows.is_empty() {
-        return None;
-    }
-    // Scroll down: new viewport starts partway into old viewport.
-    let new_first = &new_rows[0];
-    for (i, row) in old_rows.iter().enumerate().skip(1) {
-        if row == new_first {
-            return Some((i, Direction::Down));
-        }
-    }
-    // Scroll up: old viewport starts partway into new viewport.
-    let old_first = &old_rows[0];
-    for (i, row) in new_rows.iter().enumerate().skip(1) {
-        if row == old_first {
-            return Some((i, Direction::Up));
         }
     }
     None
