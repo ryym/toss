@@ -93,3 +93,113 @@ pub fn list_backward(doc: &mut Document, width: usize, start: DocPos, count: usi
     rows.reverse();
     rows
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::document::Document;
+
+    fn pos(rows: &[Row]) -> Vec<(usize, usize)> {
+        rows.iter()
+            .map(|r| (r.line_index(), r.wrap_index()))
+            .collect()
+    }
+
+    #[test]
+    fn from_lines_collects_rows_in_range() {
+        let mut doc = Document::from_string("a\nb\nc\nd\n".into());
+        let rows = from_lines(&mut doc, 80, 0..4, 10);
+        assert_eq!(pos(&rows), vec![(0, 0), (1, 0), (2, 0), (3, 0)]);
+    }
+
+    #[test]
+    fn from_lines_truncates_at_max_rows() {
+        let mut doc = Document::from_string("a\nb\nc\nd\n".into());
+        let rows = from_lines(&mut doc, 80, 0..4, 2);
+        assert_eq!(pos(&rows), vec![(0, 0), (1, 0)]);
+    }
+
+    #[test]
+    fn from_lines_includes_wrap_rows() {
+        // "abcde" wraps to (0,0)=ab, (0,1)=cd, (0,2)=e at width 2.
+        let mut doc = Document::from_string("abcde\nf\n".into());
+        let rows = from_lines(&mut doc, 2, 0..2, 10);
+        assert_eq!(pos(&rows), vec![(0, 0), (0, 1), (0, 2), (1, 0)]);
+    }
+
+    #[test]
+    fn from_lines_truncation_can_cut_mid_line() {
+        let mut doc = Document::from_string("abcde\nf\n".into());
+        // Only the first two wrap rows of line 0 fit.
+        let rows = from_lines(&mut doc, 2, 0..2, 2);
+        assert_eq!(pos(&rows), vec![(0, 0), (0, 1)]);
+    }
+
+    #[test]
+    fn from_lines_returns_empty_for_out_of_range() {
+        let mut doc = Document::from_string("a\nb\n".into());
+        let rows = from_lines(&mut doc, 80, 5..10, 10);
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn list_forward_returns_rows_starting_at_position() {
+        let mut doc = Document::from_string("a\nb\nc\nd\n".into());
+        let rows = list_forward(&mut doc, 80, (1, 0), 2);
+        assert_eq!(pos(&rows), vec![(1, 0), (2, 0)]);
+    }
+
+    #[test]
+    fn list_forward_starts_from_mid_wrap() {
+        // "abcde" wraps to (0,0), (0,1), (0,2) at width 2.
+        let mut doc = Document::from_string("abcde\nf\n".into());
+        let rows = list_forward(&mut doc, 2, (0, 1), 3);
+        assert_eq!(pos(&rows), vec![(0, 1), (0, 2), (1, 0)]);
+    }
+
+    #[test]
+    fn list_forward_stops_at_end_of_doc() {
+        let mut doc = Document::from_string("a\nb\n".into());
+        let rows = list_forward(&mut doc, 80, (0, 0), 10);
+        assert_eq!(pos(&rows), vec![(0, 0), (1, 0)]);
+    }
+
+    #[test]
+    fn list_backward_from_doc_end() {
+        let mut doc = Document::from_string("a\nb\nc\n".into());
+        let rows = list_backward(&mut doc, 80, DocPos::End, 2);
+        assert_eq!(pos(&rows), vec![(1, 0), (2, 0)]);
+    }
+
+    #[test]
+    fn list_backward_from_before_row() {
+        let mut doc = Document::from_string("a\nb\nc\nd\n".into());
+        let pivot = doc.line(2).unwrap().wrap(80)[0].clone();
+        let rows = list_backward(&mut doc, 80, DocPos::Before(&pivot), 2);
+        assert_eq!(pos(&rows), vec![(0, 0), (1, 0)]);
+    }
+
+    #[test]
+    fn list_backward_from_before_wrapped_row() {
+        // "abcde" wraps to (0,0), (0,1), (0,2) at width 2.
+        let mut doc = Document::from_string("abcde\nf\n".into());
+        let pivot = doc.line(0).unwrap().wrap(2)[2].clone();
+        let rows = list_backward(&mut doc, 2, DocPos::Before(&pivot), 2);
+        assert_eq!(pos(&rows), vec![(0, 0), (0, 1)]);
+    }
+
+    #[test]
+    fn list_backward_returns_empty_at_doc_start() {
+        let mut doc = Document::from_string("a\nb\n".into());
+        let pivot = doc.line(0).unwrap().wrap(80)[0].clone();
+        let rows = list_backward(&mut doc, 80, DocPos::Before(&pivot), 5);
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn list_backward_stops_at_doc_start_when_count_too_large() {
+        let mut doc = Document::from_string("a\nb\nc\n".into());
+        let rows = list_backward(&mut doc, 80, DocPos::End, 10);
+        assert_eq!(pos(&rows), vec![(0, 0), (1, 0), (2, 0)]);
+    }
+}

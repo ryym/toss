@@ -345,3 +345,206 @@ impl Pager {
         self.section_header.push_up(push_up);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::options::{Options, SectionOptions};
+    use regex::Regex;
+
+    fn doc_lines(n: usize) -> Document {
+        let s = (0..n)
+            .map(|i| format!("line{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        Document::from_string(s)
+    }
+
+    fn section_opts(pattern: &str, header_lines: usize) -> SectionOptions {
+        SectionOptions {
+            pattern: Regex::new(pattern).unwrap(),
+            header_lines,
+        }
+    }
+
+    fn line_indices(rows: &[Row]) -> Vec<usize> {
+        rows.iter().map(|r| r.line_index()).collect()
+    }
+
+    #[test]
+    fn snapshot_starts_at_top_of_doc() {
+        let mut pager = Pager::new(doc_lines(10), Options::default(), 20, 5);
+        let (snap, _doc) = pager.snapshot();
+        assert!(snap.global_header.is_empty());
+        assert!(snap.section_header.is_empty());
+        // viewport height = screen_height - 1 = 4.
+        assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn snapshot_pins_global_header_above_content() {
+        let opts = Options {
+            header: 2,
+            ..Default::default()
+        };
+        let mut pager = Pager::new(doc_lines(10), opts, 20, 6);
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.global_header), vec![0, 1]);
+        assert_eq!(line_indices(snap.content), vec![2, 3, 4]);
+    }
+
+    #[test]
+    fn scroll_down_shifts_content_forward() {
+        let mut pager = Pager::new(doc_lines(20), Options::default(), 20, 5);
+        let n = pager.scroll(2);
+        assert_eq!(n, 2);
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.content), vec![2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn scroll_up_brings_back_upper_rows() {
+        let mut pager = Pager::new(doc_lines(20), Options::default(), 20, 5);
+        pager.scroll(3);
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![3, 4, 5, 6]);
+        let n = pager.scroll(-1);
+        assert_eq!(n, 1);
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn scroll_keeps_global_header_pinned() {
+        let opts = Options {
+            header: 2,
+            ..Default::default()
+        };
+        let mut pager = Pager::new(doc_lines(20), opts, 20, 6);
+        pager.scroll(3);
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.global_header), vec![0, 1]);
+        assert_eq!(line_indices(snap.content), vec![5, 6, 7]);
+    }
+
+    #[test]
+    fn jump_to_places_target_line_at_top_of_content() {
+        let mut pager = Pager::new(doc_lines(20), Options::default(), 20, 5);
+        pager.jump_to(10);
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.content), vec![10, 11, 12, 13]);
+    }
+
+    #[test]
+    fn jump_to_end_places_last_line_at_bottom() {
+        let mut pager = Pager::new(doc_lines(20), Options::default(), 20, 5);
+        pager.jump_to_end();
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.content), vec![16, 17, 18, 19]);
+    }
+
+    #[test]
+    fn jump_to_within_global_header_jumps_to_top() {
+        let opts = Options {
+            header: 2,
+            ..Default::default()
+        };
+        let mut pager = Pager::new(doc_lines(20), opts, 20, 8);
+        pager.scroll(5);
+        pager.jump_to(1);
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.global_header), vec![0, 1]);
+        assert_eq!(line_indices(snap.content), vec![2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn resize_rebuilds_content_at_new_height() {
+        let mut pager = Pager::new(doc_lines(10), Options::default(), 20, 5);
+        pager.resize(20, 10);
+        let (snap, _doc) = pager.snapshot();
+        // New viewport height = 9.
+        assert_eq!(line_indices(snap.content), (0..9).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn section_header_becomes_sticky_when_scrolled_past() {
+        let content = "# A\nx\ny\nz\nw\nv\n";
+        let opts = Options {
+            section: Some(section_opts("^# ", 1)),
+            ..Default::default()
+        };
+        let mut pager = Pager::new(Document::from_string(content.into()), opts, 20, 5);
+        pager.scroll(2);
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.section_header), vec![0]);
+        assert_eq!(line_indices(snap.content), vec![3, 4, 5]);
+    }
+
+    #[test]
+    fn fits_within_returns_true_for_short_doc() {
+        let mut pager = Pager::new(doc_lines(5), Options::default(), 20, 10);
+        assert!(pager.fits_within(5));
+    }
+
+    #[test]
+    fn fits_within_returns_false_when_doc_exceeds_height() {
+        let mut pager = Pager::new(doc_lines(6), Options::default(), 20, 10);
+        assert!(!pager.fits_within(5));
+    }
+
+    #[test]
+    fn content_height_excludes_header_rows() {
+        let opts = Options {
+            header: 1,
+            ..Default::default()
+        };
+        let pager = Pager::new(doc_lines(10), opts, 20, 6);
+        // viewport height = 5, header = 1 -> content = 4.
+        assert_eq!(pager.content_height(), 4);
+        assert_eq!(pager.total_header_height(), 1);
+    }
+
+    #[test]
+    fn contiguous_rows_includes_global_header_when_adjacent() {
+        let opts = Options {
+            header: 2,
+            ..Default::default()
+        };
+        let pager = Pager::new(doc_lines(10), opts, 20, 6);
+        assert_eq!(line_indices(pager.contiguous_rows()), vec![0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn contiguous_rows_excludes_global_header_when_far() {
+        let opts = Options {
+            header: 2,
+            ..Default::default()
+        };
+        let mut pager = Pager::new(doc_lines(20), opts, 20, 6);
+        pager.scroll(5);
+        assert_eq!(line_indices(pager.contiguous_rows()), vec![7, 8, 9]);
+    }
+
+    #[test]
+    fn contiguous_rows_includes_section_header_when_adjacent() {
+        let content = "# A\nline0\nline1\nline2\nline3\n";
+        let opts = Options {
+            section: Some(section_opts("^# ", 1)),
+            ..Default::default()
+        };
+        let pager = Pager::new(Document::from_string(content.into()), opts, 20, 5);
+        assert_eq!(line_indices(pager.contiguous_rows()), vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn contiguous_rows_excludes_section_header_when_far() {
+        let content = "# A\nline0\nline1\nline2\nline3\nline4\n";
+        let opts = Options {
+            section: Some(section_opts("^# ", 1)),
+            ..Default::default()
+        };
+        let mut pager = Pager::new(Document::from_string(content.into()), opts, 20, 4);
+        pager.scroll(2);
+        let rows = pager.contiguous_rows();
+        // Section header (line 0) is no longer adjacent to content.
+        assert_ne!(rows[0].line_index(), 0);
+    }
+}

@@ -222,3 +222,147 @@ struct HeaderState {
     /// and is replaced row by row by the new header.
     offset: usize,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::document::Document;
+    use regex::Regex;
+
+    fn opts(pattern: &str, header_lines: usize) -> SectionOptions {
+        SectionOptions {
+            pattern: Regex::new(pattern).unwrap(),
+            header_lines,
+        }
+    }
+
+    fn size(width: usize, height: usize) -> ViewportSize {
+        ViewportSize { width, height }
+    }
+
+    #[test]
+    fn no_options_means_no_header_ever_resolved() {
+        let mut doc = Document::from_string("# h\nfoo\n".into());
+        let mut h = SectionHeader::new(None, &size(10, 5), 0);
+        h.resolve(&mut doc, 1);
+        assert!(h.start_line_index().is_none());
+        assert!(h.rows().is_empty());
+        assert_eq!(h.height(), 0);
+        assert_eq!(h.full_height(), 0);
+        assert!(!h.is_header(&mut doc, 0));
+    }
+
+    #[test]
+    fn is_header_matches_lone_pattern_line() {
+        let mut doc = Document::from_string("# h\nfoo\n".into());
+        let h = SectionHeader::new(Some(opts("^# ", 1)), &size(10, 5), 0);
+        assert!(h.is_header(&mut doc, 0));
+        assert!(!h.is_header(&mut doc, 1));
+    }
+
+    #[test]
+    fn is_header_with_multi_line_window_takes_last_match() {
+        // header_lines = 2: only the last match within a 2-line window is the header.
+        let mut doc = Document::from_string("# A\n# B\nfoo\nbar\n".into());
+        let h = SectionHeader::new(Some(opts("^# ", 2)), &size(10, 5), 0);
+        // Line 0 has another match (line 1) within the next header_lines-1 lines, so not a header.
+        assert!(!h.is_header(&mut doc, 0));
+        // Line 1 has no further matches within its window, so it counts as a header.
+        assert!(h.is_header(&mut doc, 1));
+    }
+
+    #[test]
+    fn resolve_finds_nearest_header_above() {
+        let mut doc = Document::from_string("# A\nx\ny\n# B\nz\n".into());
+        let mut h = SectionHeader::new(Some(opts("^# ", 1)), &size(10, 8), 0);
+
+        h.resolve(&mut doc, 4);
+        assert_eq!(h.start_line_index(), Some(3));
+
+        h.resolve(&mut doc, 2);
+        assert_eq!(h.start_line_index(), Some(0));
+    }
+
+    #[test]
+    fn resolve_unsets_when_no_header_found() {
+        let mut doc = Document::from_string("a\nb\n# C\nd\n".into());
+        let mut h = SectionHeader::new(Some(opts("^# ", 1)), &size(10, 8), 0);
+
+        h.resolve(&mut doc, 2);
+        assert_eq!(h.start_line_index(), Some(2));
+
+        h.resolve(&mut doc, 1);
+        assert!(h.start_line_index().is_none());
+        assert!(h.rows().is_empty());
+    }
+
+    #[test]
+    fn resolve_if_found_keeps_current_when_none_in_range() {
+        let mut doc = Document::from_string("# A\nx\ny\n".into());
+        let mut h = SectionHeader::new(Some(opts("^# ", 1)), &size(10, 8), 0);
+
+        h.resolve(&mut doc, 0);
+        assert_eq!(h.start_line_index(), Some(0));
+
+        h.resolve_if_found(&mut doc, 1..3);
+        assert_eq!(h.start_line_index(), Some(0));
+    }
+
+    #[test]
+    fn resolve_if_found_replaces_when_match_in_range() {
+        let mut doc = Document::from_string("# A\nx\n# B\ny\n".into());
+        let mut h = SectionHeader::new(Some(opts("^# ", 1)), &size(10, 8), 0);
+
+        h.resolve(&mut doc, 0);
+        assert_eq!(h.start_line_index(), Some(0));
+
+        h.resolve_if_found(&mut doc, 1..3);
+        assert_eq!(h.start_line_index(), Some(2));
+    }
+
+    #[test]
+    fn push_up_offsets_visible_rows() {
+        let mut doc = Document::from_string("# A\nsub\nfoo\nbar\n".into());
+        let mut h = SectionHeader::new(Some(opts("^# ", 2)), &size(10, 8), 0);
+        h.resolve(&mut doc, 1);
+        assert_eq!(h.full_height(), 2);
+        assert_eq!(h.height(), 2);
+
+        h.push_up(1);
+        assert_eq!(h.full_height(), 2);
+        assert_eq!(h.height(), 1);
+    }
+
+    #[test]
+    fn contains_returns_true_within_header_lines() {
+        let mut doc = Document::from_string("# A\nsub\nfoo\n".into());
+        let mut h = SectionHeader::new(Some(opts("^# ", 2)), &size(10, 8), 0);
+        h.resolve(&mut doc, 1);
+
+        assert!(h.contains(0));
+        assert!(h.contains(1));
+        assert!(!h.contains(2));
+    }
+
+    #[test]
+    fn min_line_index_excludes_global_header_area() {
+        let mut doc = Document::from_string("# A\n# B\n# C\nx\ny\n".into());
+        // global_header_height = 2: lines 0, 1 are excluded as section header candidates.
+        let mut h = SectionHeader::new(Some(opts("^# ", 1)), &size(10, 10), 2);
+
+        h.resolve(&mut doc, 4);
+        assert_eq!(h.start_line_index(), Some(2));
+    }
+
+    #[test]
+    fn resize_rebuilds_rows_at_new_width() {
+        let mut doc = Document::from_string("# Long header line\nsub\nfoo\n".into());
+        let mut h = SectionHeader::new(Some(opts("^# ", 1)), &size(80, 5), 0);
+        h.resolve(&mut doc, 0);
+        assert_eq!(h.rows().len(), 1);
+
+        h.resize(&mut doc, &size(5, 5), 0);
+        // "# Long header line" wraps into multiple rows at width 5.
+        assert!(h.rows().len() > 1);
+    }
+}
