@@ -1,37 +1,10 @@
-use std::fmt;
 use std::io::{self, IsTerminal};
-use std::path::PathBuf;
 use std::process;
 
-use toss::app::App;
-use toss::cli;
-use toss::document::Document;
-use toss::logger;
-use toss::pager::Pager;
-use toss::screen::TermScreen;
-
-struct AppError {
-    message: String,
-    exit_code: i32,
-}
-
-impl AppError {
-    fn new(message: impl Into<String>, exit_code: i32) -> Self {
-        Self {
-            message: message.into(),
-            exit_code,
-        }
-    }
-}
-
-impl fmt::Display for AppError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
+use toss::{AppError, RunConfig, TermScreen, run};
 
 fn main() {
-    match run() {
+    match run_main() {
         Ok(()) => {}
         Err(e) => {
             eprintln!("{e}");
@@ -50,56 +23,26 @@ fn shell_lines() -> usize {
         .unwrap_or(1)
 }
 
-fn run() -> Result<(), AppError> {
-    let _log_guard = logger::setup_file_logger()
-        .map_err(|e| AppError::new(format!("Error setting up logger: {e}"), 1))?;
-
-    let args = match cli::parse_args() {
-        Ok(cli::Action::Run(args)) => args,
-        Ok(cli::Action::Print(msg)) => {
-            println!("{msg}");
-            return Ok(());
-        }
-        Err(e) => return Err(AppError::new(format!("Error: {e}"), 1)),
-    };
-
-    let doc = build_document(args.file)?;
-
-    let (w, h) = crossterm::terminal::size()
+fn run_main() -> Result<(), AppError> {
+    let terminal_size = crossterm::terminal::size()
         .map_err(|e| AppError::new(format!("Error getting terminal size: {e}"), 1))?;
 
-    let quit_if_one_screen = args.options.quit_if_one_screen;
-    let mut pager = Pager::new(doc, args.options, w as usize, h as usize);
+    let stdin = io::stdin();
+    let stdin_is_terminal = stdin.is_terminal();
 
-    if quit_if_one_screen && pager.fits_within((h as usize).saturating_sub(shell_lines())) {
-        for i in 0..pager.doc_mut().line_count() {
-            if let Some(line) = pager.doc_mut().line(i) {
-                println!("{}", line.raw());
-            }
-        }
-        return Ok(());
-    }
-
-    let screen = TermScreen::new()
-        .map_err(|e| AppError::new(format!("Error initializing terminal: {e}"), 1))?;
-
-    let mut app = App::new(screen, pager).map_err(|e| AppError::new(format!("{e}"), 1))?;
-    app.run().map_err(|e| AppError::new(format!("{e}"), 1))?;
+    let _ = run(RunConfig {
+        args: std::env::args_os().collect(),
+        terminal_size,
+        shell_lines: shell_lines(),
+        instant_scroll: false,
+        stdin: stdin.lock(),
+        stdin_is_terminal,
+        stdout: io::stdout(),
+        make_screen: || {
+            TermScreen::new()
+                .map_err(|e| AppError::new(format!("Error initializing terminal: {e}"), 1))
+        },
+    })?;
 
     Ok(())
-}
-
-fn build_document(path: Option<PathBuf>) -> Result<Document, AppError> {
-    let doc = if let Some(path) = &path {
-        log::debug!("Read file: {}", path.display());
-        Document::from_file(path)
-            .map_err(|e| AppError::new(format!("Error reading {}: {e}", path.display()), 1))?
-    } else if !io::stdin().is_terminal() {
-        log::debug!("Read from stdin");
-        Document::from_reader(&mut io::stdin().lock())
-            .map_err(|e| AppError::new(format!("Error reading stdin: {e}"), 1))?
-    } else {
-        return Err(AppError::new("Usage: toss <file> OR command | toss", 1));
-    };
-    Ok(doc)
 }

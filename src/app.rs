@@ -55,12 +55,10 @@ impl<S: Screen> App<S> {
         })
     }
 
-    #[cfg(test)]
     pub fn set_instant_scroll(&mut self) {
         self.instant_scroll = true;
     }
 
-    #[cfg(test)]
     pub fn into_screen(self) -> S {
         self.renderer.into_screen()
     }

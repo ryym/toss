@@ -46,7 +46,6 @@ pub fn parse_args() -> Result<Action, lexopt::Error> {
 }
 
 /// Parse command-line arguments from the given argument list.
-#[cfg(test)]
 pub fn parse_from_args<I>(args: I) -> Result<Action, lexopt::Error>
 where
     I: IntoIterator,

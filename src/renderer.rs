@@ -49,7 +49,6 @@ impl<S: Screen> Renderer<S> {
         }
     }
 
-    #[cfg(test)]
     pub fn into_screen(self) -> S {
         self.screen
     }

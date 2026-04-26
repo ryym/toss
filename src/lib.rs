@@ -1,16 +1,152 @@
-pub mod ansi;
-pub mod app;
-pub mod cli;
-pub mod document;
-pub mod line;
-pub mod line_editor;
-pub mod logger;
-pub mod options;
-pub mod pager;
-pub mod renderer;
-pub mod screen;
-pub mod scroll;
-pub mod search;
+mod ansi;
+mod app;
+mod cli;
+mod document;
+mod line;
+mod line_editor;
+mod logger;
+mod options;
+mod pager;
+mod renderer;
+mod screen;
+mod scroll;
+mod search;
 
 #[cfg(test)]
-pub mod tests;
+mod tests;
+
+use std::ffi::OsString;
+use std::fmt;
+use std::io::{Read, Write};
+
+use app::App;
+use document::Document;
+use pager::Pager;
+use screen::Screen;
+
+pub use screen::TermScreen;
+
+pub struct AppError {
+    pub message: String,
+    pub exit_code: i32,
+}
+
+impl AppError {
+    pub fn new(message: impl Into<String>, exit_code: i32) -> Self {
+        Self {
+            message: message.into(),
+            exit_code,
+        }
+    }
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+/// Outcome of [`run`].
+pub enum RunOutcome<S> {
+    /// The interactive pager exited normally. The screen is returned so callers
+    /// (typically tests) can inspect what was rendered.
+    Exited(S),
+    /// `-F` was set and the entire content fit on one screen, so it was
+    /// printed inline and the pager was skipped. No screen was created.
+    PrintedInline,
+    /// CLI requested a one-shot message (e.g. `--help` / `--version`).
+    Printed,
+}
+
+/// Inputs required to run the toss pager pipeline.
+///
+/// `make_screen` is a factory rather than a value so the screen is only
+/// constructed when actually needed — the `-F` short-circuit and the
+/// help/version paths skip it, which lets the binary avoid acquiring raw
+/// terminal mode in those cases.
+pub struct RunConfig<R, W, S, MS>
+where
+    R: Read,
+    W: Write,
+    S: Screen,
+    MS: FnOnce() -> Result<S, AppError>,
+{
+    pub args: Vec<OsString>,
+    pub terminal_size: (u16, u16),
+    pub shell_lines: usize,
+    pub instant_scroll: bool,
+    pub stdin: R,
+    pub stdin_is_terminal: bool,
+    pub stdout: W,
+    pub make_screen: MS,
+}
+
+/// Run the toss pipeline: parse CLI args, load the document, render the page.
+///
+/// This is the single entry function shared between the binary and (eventually)
+/// integration tests.
+pub fn run<R, W, S, MS>(cfg: RunConfig<R, W, S, MS>) -> Result<RunOutcome<S>, AppError>
+where
+    R: Read,
+    W: Write,
+    S: Screen,
+    MS: FnOnce() -> Result<S, AppError>,
+{
+    let RunConfig {
+        args,
+        terminal_size: (w, h),
+        shell_lines,
+        instant_scroll,
+        mut stdin,
+        stdin_is_terminal,
+        mut stdout,
+        make_screen,
+    } = cfg;
+
+    let _log_guard = logger::setup_file_logger()
+        .map_err(|e| AppError::new(format!("Error setting up logger: {e}"), 1))?;
+
+    let parsed = match cli::parse_from_args(args) {
+        Ok(cli::Action::Run(args)) => args,
+        Ok(cli::Action::Print(msg)) => {
+            writeln!(stdout, "{msg}")
+                .map_err(|e| AppError::new(format!("Error writing to stdout: {e}"), 1))?;
+            return Ok(RunOutcome::Printed);
+        }
+        Err(e) => return Err(AppError::new(format!("Error: {e}"), 1)),
+    };
+
+    let doc = if let Some(path) = parsed.file.as_ref() {
+        log::debug!("Read file: {}", path.display());
+        Document::from_file(path)
+            .map_err(|e| AppError::new(format!("Error reading {}: {e}", path.display()), 1))?
+    } else if !stdin_is_terminal {
+        log::debug!("Read from stdin");
+        Document::from_reader(&mut stdin)
+            .map_err(|e| AppError::new(format!("Error reading stdin: {e}"), 1))?
+    } else {
+        return Err(AppError::new("Usage: toss <file> OR command | toss", 1));
+    };
+
+    let quit_if_one_screen = parsed.options.quit_if_one_screen;
+    let mut pager = Pager::new(doc, parsed.options, w as usize, h as usize);
+
+    if quit_if_one_screen && pager.fits_within((h as usize).saturating_sub(shell_lines)) {
+        for i in 0..pager.doc_mut().line_count() {
+            if let Some(line) = pager.doc_mut().line(i) {
+                writeln!(stdout, "{}", line.raw())
+                    .map_err(|e| AppError::new(format!("Error writing to stdout: {e}"), 1))?;
+            }
+        }
+        return Ok(RunOutcome::PrintedInline);
+    }
+
+    let screen = make_screen()?;
+    let mut app = App::new(screen, pager).map_err(|e| AppError::new(format!("{e}"), 1))?;
+    if instant_scroll {
+        app.set_instant_scroll();
+    }
+    app.run().map_err(|e| AppError::new(format!("{e}"), 1))?;
+
+    Ok(RunOutcome::Exited(app.into_screen()))
+}
