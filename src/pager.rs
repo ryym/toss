@@ -334,7 +334,10 @@ impl Pager {
             if row.wrap_index() != 0 || row.line_index() == current_start_line {
                 continue;
             }
-            if self.heading.is_heading(&mut self.doc, row.line_index()) {
+            if self
+                .heading
+                .is_heading_start(&mut self.doc, row.line_index())
+            {
                 other_section_start = i;
                 break;
             }

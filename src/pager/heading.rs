@@ -37,9 +37,9 @@ impl Heading {
     ///
     /// Example: with `toss --heading '^#' --heading-lines 2`
     /// ```text
-    /// # title     => is_heading: true
-    /// sub title   => is_heading: false (it's a part of the heading but not a start line)
-    /// other line  => is_heading: false
+    /// # title     => is_heading_start: true
+    /// sub title   => is_heading_start: false (not a start line)
+    /// other line  => is_heading_start: false
     /// ```
     ///
     /// Even when a line matches the heading pattern,
@@ -50,13 +50,13 @@ impl Heading {
     /// ```text
     /// # title 1    => Not a heading as there is `## title 2`
     /// ## title 2   => Not a heading as there is `### title 3`
-    /// ### title 3  => A heading and is_heading is true
-    /// sentence 1   => A part of the heading but not a start line (is_heading is false)
+    /// ### title 3  => A heading and is_heading_start is true
+    /// sentence 1   => A part of the heading but not a start line (is_heading_start is false)
     /// sentence 2   => Not a heading
     /// ```
-    pub fn is_heading(&self, doc: &mut Document, line_index: usize) -> bool {
+    pub fn is_heading_start(&self, doc: &mut Document, line_index: usize) -> bool {
         match &self.options {
-            Some(options) => is_heading(doc, line_index, options),
+            Some(options) => is_heading_start(doc, line_index, options),
             None => false,
         }
     }
@@ -141,7 +141,7 @@ impl Heading {
         let mut nearest = None;
         if range.end > range.start {
             for i in (range.start..range.end).rev() {
-                if is_heading(doc, i, options) {
+                if is_heading_start(doc, i, options) {
                     nearest = Some(i);
                     break;
                 }
@@ -165,8 +165,8 @@ impl Heading {
     }
 }
 
-/// See [`Heading::is_heading`].
-fn is_heading(doc: &mut Document, line_index: usize, options: &HeadingOptions) -> bool {
+/// See [`Heading::is_heading_start`].
+fn is_heading_start(doc: &mut Document, line_index: usize, options: &HeadingOptions) -> bool {
     match doc.line(line_index) {
         Some(line) if line.has_match(&options.pattern) => {}
         _ => return false,
@@ -249,26 +249,26 @@ mod tests {
         assert!(h.rows().is_empty());
         assert_eq!(h.height(), 0);
         assert_eq!(h.full_height(), 0);
-        assert!(!h.is_heading(&mut doc, 0));
+        assert!(!h.is_heading_start(&mut doc, 0));
     }
 
     #[test]
-    fn is_heading_matches_lone_pattern_line() {
+    fn is_heading_start_matches_lone_pattern_line() {
         let mut doc = Document::from_string("# h\nfoo\n".into());
         let h = Heading::new(Some(opts("^# ", 1)), &size(10, 5), 0);
-        assert!(h.is_heading(&mut doc, 0));
-        assert!(!h.is_heading(&mut doc, 1));
+        assert!(h.is_heading_start(&mut doc, 0));
+        assert!(!h.is_heading_start(&mut doc, 1));
     }
 
     #[test]
-    fn is_heading_with_multi_line_window_takes_last_match() {
+    fn is_heading_start_with_multi_line_window_takes_last_match() {
         // num_lines = 2: only the last match within a 2-line window is the heading.
         let mut doc = Document::from_string("# A\n# B\nfoo\nbar\n".into());
         let h = Heading::new(Some(opts("^# ", 2)), &size(10, 5), 0);
         // Line 0 has another match (line 1) within the next num_lines-1 lines, so not a heading.
-        assert!(!h.is_heading(&mut doc, 0));
+        assert!(!h.is_heading_start(&mut doc, 0));
         // Line 1 has no further matches within its window, so it counts as a heading.
-        assert!(h.is_heading(&mut doc, 1));
+        assert!(h.is_heading_start(&mut doc, 1));
     }
 
     #[test]
