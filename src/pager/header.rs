@@ -38,7 +38,7 @@ impl Header {
 
 fn build_rows(doc: &mut Document, size: &ViewportSize, num_lines: usize) -> Vec<Row> {
     // Reserve at least one non-header row so the header does not cover the entire viewport.
-    let max_height = size.height() - 1;
+    let max_height = size.height().saturating_sub(1);
     rows::from_lines(doc, size.width(), 0..num_lines, max_height)
 }
 
