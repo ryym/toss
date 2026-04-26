@@ -69,13 +69,14 @@ impl<'pager> PageSnapshot<'pager> {
 /// Depending on the configuration, a global header and a heading may be pinned at
 /// the top of the viewport.
 ///
-/// Internally the following structs manage the content displayed in the headers and viewport:
-/// - Global header: [`Header`]
-/// - Sticky heading: [`Heading`]
+/// Internally the following structs manage rows displayed in sticky area and viewport:
+/// - Sticky area
+///     - Global header: [`Header`]
+///     - Heading: [`Heading`]
 /// - Viewport: [`Viewport`]
 ///
-/// [`Viewport`] is unaware of headers and just holds a specific range of [`Document`] as
-/// directed by [`Pager`]. The header rows managed by [`Header`] and [`Heading`]
+/// [`Viewport`] is unaware of sticky rows and just holds a specific range of [`Document`]
+/// as directed by [`Pager`]. The header rows managed by [`Header`] and [`Heading`]
 /// are rendered as if overlaid on top of [`Viewport`].
 /// With this overlay approach, [`Viewport`] can manage its rows independently,
 /// without being affected by header content or height.
@@ -137,7 +138,7 @@ impl Pager {
     }
 
     /// Returns the rows that form a contiguous range within the viewport.
-    /// When headers exist, they are included only if the header region and the content region
+    /// When sticky area exists, it is included only if its region and the content region
     /// are adjacent in the document; otherwise they are excluded.
     /// For example, if the heading shows lines 3-5 of [`Document`] and the content
     /// shows lines 6-30, the rows for lines 3-30 are returned.
@@ -284,7 +285,7 @@ impl Pager {
         // Check the heading status to update it as needed.
         let heading_start = match self.heading.start_line_index() {
             Some(idx) => idx,
-            // If there is no current section, scrolling upward cannot newly reveal one, so do nothing.
+            // If there is no current heading, scrolling upward cannot newly reveal one, so do nothing.
             None => return rows_scrolled,
         };
 
