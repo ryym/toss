@@ -40,11 +40,6 @@ pub struct Args {
     pub options: Options,
 }
 
-/// Parse command-line arguments from the environment.
-pub fn parse_args() -> Result<Action, lexopt::Error> {
-    parse_from(lexopt::Parser::from_env())
-}
-
 /// Parse command-line arguments from the given argument list.
 pub fn parse_from_args<I>(args: I) -> Result<Action, lexopt::Error>
 where
