@@ -27,6 +27,12 @@ pub struct ScrollPhysics {
     air_drag: f64,
 }
 
+impl Default for ScrollPhysics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScrollPhysics {
     pub fn new() -> Self {
         Self {

@@ -4,6 +4,12 @@ pub struct LineEditor {
     cursor: usize,
 }
 
+impl Default for LineEditor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LineEditor {
     pub fn new() -> Self {
         Self {
