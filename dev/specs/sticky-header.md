@@ -14,21 +14,21 @@ psql ... | toss --header 2
 ps aux   | toss --header 1
 ```
 
-### `--section REGEX`
+### `--heading REGEX`
 
-Regex pattern to identify section start lines. When a section scrolls above the viewport, its header is pinned at the top.
+Regex pattern matching section heading lines. When a section scrolls above the viewport, its heading is pinned at the top.
 
 ```bash
-cat README.md | toss --section '^#{1,6} '
+cat README.md | toss --heading '^#{1,6} '
 ```
 
-### `--section-header N` (default: 1)
+### `--heading-lines N` (default: 1)
 
-Number of lines per section header block, starting from the matched line. Used with `--section`.
+Number of lines per section heading block, starting from the matched line. Used with `--heading`.
 
 ```bash
-git diff | toss --section '^diff --git' --section-header 4
-git log  | toss --section '^commit [0-9a-f]' --section-header 3
+git diff | toss --heading '^diff --git' --heading-lines 4
+git log  | toss --heading '^commit [0-9a-f]' --heading-lines 3
 ```
 
 ## Behavior
@@ -39,29 +39,29 @@ git log  | toss --section '^commit [0-9a-f]' --section-header 3
 - The viewport starts below these lines; the user cannot scroll above them.
 - The visible content area shrinks by the number of screen rows the header occupies (accounting for line wrapping).
 
-### Section header (`--section`)
+### Section heading (`--heading`)
 
-A section starts at a line matching the `--section` pattern.
-The section header block is the N lines starting from that match (where N = `--section-header`, default 1).
-Only the most recent section header is shown at the top; there is no stacking or nesting of multiple sections.
+A section starts at a line matching the `--heading` pattern.
+The section heading block is the N lines starting from that match (where N = `--heading-lines`, default 1).
+Only the most recent section heading is shown at the top; there is no stacking or nesting of multiple sections.
 
-#### Pattern matches within a header block
+#### Pattern matches within a heading block
 
-When `--section-header` is greater than 1, lines within the header block may also match the `--section` pattern. These intra-block matches are **not** treated as new section starts.
+When `--heading-lines` is greater than 1, lines within the heading block may also match the `--heading` pattern. These intra-block matches are **not** treated as new section starts.
 
-For example, with `--section '^#'` and `--section-header 3`:
+For example, with `--heading '^#'` and `--heading-lines 3`:
 
 ```
 # Changelog          ← section start (line 0)
-                     ← part of header block (line 1)
+                     ← part of heading block (line 1)
 ## 1.0.23            ← matches '^#' but is part of line 0's block (line 2)
                      ← first content line (line 3)
 ```
 
-Line 2 (`## 1.0.23`) matches the pattern but falls within the 3-line header block of line 0. It is treated as part of that block, not as a separate section. The next section can only start at line 3 or later.
+Line 2 (`## 1.0.23`) matches the pattern but falls within the 3-line heading block of line 0. It is treated as part of that block, not as a separate section. The next section can only start at line 3 or later.
 
-### Combining `--header` and `--section`
+### Combining `--header` and `--heading`
 
-Fixed header and section header can be used together. The fixed header is always shown at the top, with the section header displayed below it.
+Fixed header and section heading can be used together. The fixed header is always shown at the top, with the section heading displayed below it.
 
-If a section header block overlaps with the fixed header lines, only the non-overlapping portion of the section header is shown (the fixed header takes priority).
+If a section heading block overlaps with the fixed header lines, only the non-overlapping portion of the section heading is shown (the fixed header takes priority).
