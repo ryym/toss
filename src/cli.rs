@@ -15,7 +15,7 @@ A terminal pager.
 Options:
   -F, --quit-if-one-screen   Quit if the entire content fits on one screen
       --header <N>           Fix the top N lines of the input as a global header
-      --heading <REGEX>      Regex matching section heading lines (sticky per-section header)
+      --heading <REGEX>      Regex matching section heading lines (sticky per section)
       --heading-lines <N>    Number of lines per section heading (default 1)
   -h, --help                 Print help
   -v, --version              Print version

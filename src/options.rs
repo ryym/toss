@@ -3,7 +3,7 @@
 pub struct Options {
     /// Number of lines to pin as a fixed header (0 means no header).
     pub header: usize,
-    /// Heading configuration for sticky per-section headers, if enabled.
+    /// Sticky heading configuration, if enabled.
     pub heading: Option<HeadingOptions>,
     /// Quit automatically if the entire content fits on one screen.
     pub quit_if_one_screen: bool,

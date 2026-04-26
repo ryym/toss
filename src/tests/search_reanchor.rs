@@ -8,7 +8,7 @@ fn enter() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
 }
 
-fn section_opts(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
+fn heading_opts(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
     Some(HeadingOptions {
         pattern: regex::Regex::new(pattern).unwrap(),
         num_lines,
@@ -312,10 +312,10 @@ line 5
     assert_eq!(screen.out(), want);
 }
 
-// When a section header overlay hides a match, re-anchor should skip it
+// When a heading overlay hides a match, re-anchor should skip it
 // and find the first truly visible match (not one behind the overlay).
 #[test]
-fn reanchor_skips_match_hidden_by_section_header() {
+fn reanchor_skips_match_hidden_by_heading() {
     // Section header "# Sec" is sticky (1 line).
     // After scrolling, the overlay hides the first viewport row.
     let content = "\
@@ -334,7 +334,7 @@ line 8
         screen_height: 5,
         content,
         options: Options {
-            heading: section_opts("^# ", 1),
+            heading: heading_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![

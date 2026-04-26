@@ -7,56 +7,56 @@ use crate::{
     pager::{ViewportSize, rows},
 };
 
-/// Manages the section header. Unlike the global header which always shows fixed lines,
+/// Manages the heading. Unlike the global header which always shows fixed lines,
 /// a line matching the given pattern dynamically becomes the header and is shown pinned
 /// below the global header. The behavior is similar to CSS `position: sticky`;
 /// the displayed header changes as the user scrolls.
 /// The nearest line matching the pattern among the lines above the first line of the viewport
-/// becomes the start line of the section header.
+/// becomes the start line of the heading.
 #[derive(Debug)]
-pub(super) struct SectionHeader {
-    config: SectionConfig,
+pub(super) struct Heading {
+    config: HeadingConfig,
     options: Option<HeadingOptions>,
-    current: Option<HeaderState>,
+    current: Option<HeadingState>,
 }
 
-impl SectionHeader {
+impl Heading {
     pub fn new(
         options: Option<HeadingOptions>,
         size: &ViewportSize,
         global_header_height: usize,
     ) -> Self {
         Self {
-            config: SectionConfig::new(size, global_header_height),
+            config: HeadingConfig::new(size, global_header_height),
             options,
             current: None,
         }
     }
 
-    /// Determine if the line at `line_index` is the start line of a section header.
+    /// Determine if the line at `line_index` is the start line of a heading.
     ///
-    /// Example: with `toss --section '^#' --section-header 2`
+    /// Example: with `toss --heading '^#' --heading-lines 2`
     /// ```text
-    /// # title     => is_header: true
-    /// sub title   => is_header: false (it's a part of the header but not a start line)
-    /// other line  => is_header: false
+    /// # title     => is_heading: true
+    /// sub title   => is_heading: false (it's a part of the header but not a start line)
+    /// other line  => is_heading: false
     /// ```
     ///
-    /// Even when a line matches the section header pattern,
-    /// if there is another line that also matches the pattern within the `--section-header` lines,
-    /// the first line is NOT treated as a section header.
+    /// Even when a line matches the heading pattern,
+    /// if there is another line that also matches the pattern within the `--heading-lines` lines,
+    /// the first line is NOT treated as a heading.
     ///
-    /// Example: with `toss --section '^#' --section-header 2`
+    /// Example: with `toss --heading '^#' --heading-lines 2`
     /// ```text
     /// # title 1    => Not a header as there is `## title 2`
     /// ## title 2   => Not a header as there is `### title 3`
-    /// ### title 3  => A header and is_header is true
-    /// sentence 1   => A part of the header but not a start line (is_header is false)
+    /// ### title 3  => A header and is_heading is true
+    /// sentence 1   => A part of the header but not a start line (is_heading is false)
     /// sentence 2   => Not a header
     /// ```
-    pub fn is_header(&self, doc: &mut Document, line_index: usize) -> bool {
+    pub fn is_heading(&self, doc: &mut Document, line_index: usize) -> bool {
         match &self.options {
-            Some(options) => is_header(doc, line_index, options),
+            Some(options) => is_heading(doc, line_index, options),
             None => false,
         }
     }
@@ -73,12 +73,12 @@ impl SectionHeader {
         }
     }
 
-    /// The section header height visible in the page.
+    /// The heading height visible in the page.
     pub fn height(&self) -> usize {
         self.rows().len()
     }
 
-    /// The section header height without accounting for the offset set by [`Self::push_up`].
+    /// The heading height without accounting for the offset set by [`Self::push_up`].
     pub fn full_height(&self) -> usize {
         match &self.current {
             None => 0,
@@ -94,7 +94,7 @@ impl SectionHeader {
     }
 
     pub fn resize(&mut self, doc: &mut Document, size: &ViewportSize, global_header_height: usize) {
-        self.config = SectionConfig::new(size, global_header_height);
+        self.config = HeadingConfig::new(size, global_header_height);
         if let Some(h) = &mut self.current {
             h.rows = rows::from_lines(
                 doc,
@@ -105,7 +105,7 @@ impl SectionHeader {
         }
     }
 
-    /// Shift the section header by `num_rows` upward and hide the top portion.
+    /// Shift the heading by `num_rows` upward and hide the top portion.
     pub fn push_up(&mut self, num_rows: usize) {
         if let Some(h) = &mut self.current {
             assert!(
@@ -117,31 +117,31 @@ impl SectionHeader {
         }
     }
 
-    /// Find and set the section header nearest to the given `line_index`.
+    /// Find and set the heading nearest to the given `line_index`.
     /// If the line of `line_index` itself is a part of the header, that header is set.
-    /// If no section header is found above `line_index`, the current header is unset.
+    /// If no heading is found above `line_index`, the current header is unset.
     pub fn resolve(&mut self, doc: &mut Document, line_index: usize) {
         self.current = self.find_header(doc, self.config.min_line_index..(line_index + 1));
     }
 
-    /// Same as [`Self::resolve`] but keep the current section header when no header is found.
+    /// Same as [`Self::resolve`] but keep the current heading when no header is found.
     pub fn resolve_if_found(&mut self, doc: &mut Document, line_index_range: Range<usize>) {
         if let Some(header) = self.find_header(doc, line_index_range) {
             self.current = Some(header);
         }
     }
 
-    fn find_header(&self, doc: &mut Document, range: Range<usize>) -> Option<HeaderState> {
+    fn find_header(&self, doc: &mut Document, range: Range<usize>) -> Option<HeadingState> {
         let options = self.options.as_ref()?;
         if self.config.max_header_height == 0 {
             return None;
         }
 
-        // Search for the section header nearest to `range.end` within the range.
+        // Search for the heading nearest to `range.end` within the range.
         let mut nearest = None;
         if range.end > range.start {
             for i in (range.start..range.end).rev() {
-                if is_header(doc, i, options) {
+                if is_heading(doc, i, options) {
                     nearest = Some(i);
                     break;
                 }
@@ -157,7 +157,7 @@ impl SectionHeader {
             line_range.clone(),
             self.config.max_header_height,
         );
-        Some(HeaderState {
+        Some(HeadingState {
             rows,
             line_range,
             offset: 0,
@@ -165,8 +165,8 @@ impl SectionHeader {
     }
 }
 
-/// See [`SectionHeader::is_header`].
-fn is_header(doc: &mut Document, line_index: usize, options: &HeadingOptions) -> bool {
+/// See [`Heading::is_heading`].
+fn is_heading(doc: &mut Document, line_index: usize, options: &HeadingOptions) -> bool {
     match doc.line(line_index) {
         Some(line) if line.has_match(&options.pattern) => {}
         _ => return false,
@@ -187,15 +187,15 @@ fn is_header(doc: &mut Document, line_index: usize, options: &HeadingOptions) ->
 }
 
 #[derive(Debug)]
-struct SectionConfig {
-    /// The minimum line index that can be a section header.
-    /// Lines below this index are never treated as section headers, regardless of pattern matching.
+struct HeadingConfig {
+    /// The minimum line index that can be a heading.
+    /// Lines below this index are never treated as headings, regardless of pattern matching.
     min_line_index: usize,
     max_header_height: usize,
     width: usize,
 }
 
-impl SectionConfig {
+impl HeadingConfig {
     fn new(size: &ViewportSize, global_header_height: usize) -> Self {
         // Reserve at least one non-header row so the header does not cover the entire viewport.
         let max_header_height = size
@@ -210,14 +210,14 @@ impl SectionConfig {
     }
 }
 
-/// State representing a section header.
+/// State representing a heading.
 #[derive(Debug)]
-struct HeaderState {
+struct HeadingState {
     line_range: Range<usize>,
     rows: Vec<Row>,
     /// Display `rows` starting from index `offset` in the viewport.
-    /// Used when the section header transitions during scrolling.
-    /// For example, when scrolling down and approaching the next section header,
+    /// Used when the heading transitions during scrolling.
+    /// For example, when scrolling down and approaching the next heading,
     /// the current header gradually increases its `offset` to disappear upward,
     /// and is replaced row by row by the new header.
     offset: usize,
@@ -243,38 +243,38 @@ mod tests {
     #[test]
     fn no_options_means_no_header_ever_resolved() {
         let mut doc = Document::from_string("# h\nfoo\n".into());
-        let mut h = SectionHeader::new(None, &size(10, 5), 0);
+        let mut h = Heading::new(None, &size(10, 5), 0);
         h.resolve(&mut doc, 1);
         assert!(h.start_line_index().is_none());
         assert!(h.rows().is_empty());
         assert_eq!(h.height(), 0);
         assert_eq!(h.full_height(), 0);
-        assert!(!h.is_header(&mut doc, 0));
+        assert!(!h.is_heading(&mut doc, 0));
     }
 
     #[test]
     fn is_header_matches_lone_pattern_line() {
         let mut doc = Document::from_string("# h\nfoo\n".into());
-        let h = SectionHeader::new(Some(opts("^# ", 1)), &size(10, 5), 0);
-        assert!(h.is_header(&mut doc, 0));
-        assert!(!h.is_header(&mut doc, 1));
+        let h = Heading::new(Some(opts("^# ", 1)), &size(10, 5), 0);
+        assert!(h.is_heading(&mut doc, 0));
+        assert!(!h.is_heading(&mut doc, 1));
     }
 
     #[test]
     fn is_header_with_multi_line_window_takes_last_match() {
         // num_lines = 2: only the last match within a 2-line window is the header.
         let mut doc = Document::from_string("# A\n# B\nfoo\nbar\n".into());
-        let h = SectionHeader::new(Some(opts("^# ", 2)), &size(10, 5), 0);
+        let h = Heading::new(Some(opts("^# ", 2)), &size(10, 5), 0);
         // Line 0 has another match (line 1) within the next num_lines-1 lines, so not a header.
-        assert!(!h.is_header(&mut doc, 0));
+        assert!(!h.is_heading(&mut doc, 0));
         // Line 1 has no further matches within its window, so it counts as a header.
-        assert!(h.is_header(&mut doc, 1));
+        assert!(h.is_heading(&mut doc, 1));
     }
 
     #[test]
     fn resolve_finds_nearest_header_above() {
         let mut doc = Document::from_string("# A\nx\ny\n# B\nz\n".into());
-        let mut h = SectionHeader::new(Some(opts("^# ", 1)), &size(10, 8), 0);
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 8), 0);
 
         h.resolve(&mut doc, 4);
         assert_eq!(h.start_line_index(), Some(3));
@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn resolve_unsets_when_no_header_found() {
         let mut doc = Document::from_string("a\nb\n# C\nd\n".into());
-        let mut h = SectionHeader::new(Some(opts("^# ", 1)), &size(10, 8), 0);
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 8), 0);
 
         h.resolve(&mut doc, 2);
         assert_eq!(h.start_line_index(), Some(2));
@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn resolve_if_found_keeps_current_when_none_in_range() {
         let mut doc = Document::from_string("# A\nx\ny\n".into());
-        let mut h = SectionHeader::new(Some(opts("^# ", 1)), &size(10, 8), 0);
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 8), 0);
 
         h.resolve(&mut doc, 0);
         assert_eq!(h.start_line_index(), Some(0));
@@ -311,7 +311,7 @@ mod tests {
     #[test]
     fn resolve_if_found_replaces_when_match_in_range() {
         let mut doc = Document::from_string("# A\nx\n# B\ny\n".into());
-        let mut h = SectionHeader::new(Some(opts("^# ", 1)), &size(10, 8), 0);
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 8), 0);
 
         h.resolve(&mut doc, 0);
         assert_eq!(h.start_line_index(), Some(0));
@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn push_up_offsets_visible_rows() {
         let mut doc = Document::from_string("# A\nsub\nfoo\nbar\n".into());
-        let mut h = SectionHeader::new(Some(opts("^# ", 2)), &size(10, 8), 0);
+        let mut h = Heading::new(Some(opts("^# ", 2)), &size(10, 8), 0);
         h.resolve(&mut doc, 1);
         assert_eq!(h.full_height(), 2);
         assert_eq!(h.height(), 2);
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn contains_returns_true_within_header_lines() {
         let mut doc = Document::from_string("# A\nsub\nfoo\n".into());
-        let mut h = SectionHeader::new(Some(opts("^# ", 2)), &size(10, 8), 0);
+        let mut h = Heading::new(Some(opts("^# ", 2)), &size(10, 8), 0);
         h.resolve(&mut doc, 1);
 
         assert!(h.contains(0));
@@ -347,8 +347,8 @@ mod tests {
     #[test]
     fn min_line_index_excludes_global_header_area() {
         let mut doc = Document::from_string("# A\n# B\n# C\nx\ny\n".into());
-        // global_header_height = 2: lines 0, 1 are excluded as section header candidates.
-        let mut h = SectionHeader::new(Some(opts("^# ", 1)), &size(10, 10), 2);
+        // global_header_height = 2: lines 0, 1 are excluded as heading candidates.
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 10), 2);
 
         h.resolve(&mut doc, 4);
         assert_eq!(h.start_line_index(), Some(2));
@@ -357,7 +357,7 @@ mod tests {
     #[test]
     fn resize_rebuilds_rows_at_new_width() {
         let mut doc = Document::from_string("# Long header line\nsub\nfoo\n".into());
-        let mut h = SectionHeader::new(Some(opts("^# ", 1)), &size(80, 5), 0);
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(80, 5), 0);
         h.resolve(&mut doc, 0);
         assert_eq!(h.rows().len(), 1);
 

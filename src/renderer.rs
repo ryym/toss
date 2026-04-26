@@ -114,7 +114,7 @@ impl<S: Screen> Renderer<S> {
         self.screen.begin_sync()?;
 
         self.draw_rows(doc, page.global_header, search, 0)?;
-        self.draw_rows(doc, page.section_header, search, page.global_header.len())?;
+        self.draw_rows(doc, page.heading, search, page.global_header.len())?;
         self.draw_rows(doc, page.content, search, page.total_header_height())?;
         self.clear_row_range(0, page.viewport_height()..page.height)?;
         self.redraw_status_line(page, status_text)?;
@@ -157,7 +157,7 @@ impl<S: Screen> Renderer<S> {
 
         // Refresh headers and the status line.
         self.draw_rows(doc, page.global_header, search, 0)?;
-        self.draw_rows(doc, page.section_header, search, page.global_header.len())?;
+        self.draw_rows(doc, page.heading, search, page.global_header.len())?;
         self.redraw_status_line(page, status_text)?;
 
         self.screen.end_sync()?;
