@@ -1,12 +1,12 @@
 use pretty_assertions::assert_eq;
 
 use super::{TestCase, key, run_test_screen};
-use crate::options::{Options, SectionOptions};
+use crate::options::{HeadingOptions, Options};
 
-fn section_opts(pattern: &str) -> Option<SectionOptions> {
-    Some(SectionOptions {
+fn section_opts(pattern: &str) -> Option<HeadingOptions> {
+    Some(HeadingOptions {
         pattern: regex::Regex::new(pattern).unwrap(),
-        header_lines: 1,
+        num_lines: 1,
     })
 }
 
@@ -26,7 +26,7 @@ line 4
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# "),
+            heading: section_opts("^# "),
             ..Default::default()
         },
         events: vec![key('j'), key('k'), key('q')],
@@ -75,7 +75,7 @@ line 4
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# "),
+            heading: section_opts("^# "),
             ..Default::default()
         },
         events: vec![key('j'), key('j'), key('q')],
@@ -125,7 +125,7 @@ line 4
         content,
         options: Options {
             header: 1,
-            section: section_opts("^# "),
+            heading: section_opts("^# "),
             ..Default::default()
         },
         events: vec![key('j'), key('j'), key('q')],
@@ -178,7 +178,7 @@ line 5
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# "),
+            heading: section_opts("^# "),
             ..Default::default()
         },
         events: vec![key('G'), key('q')],
@@ -218,7 +218,7 @@ line 4
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# "),
+            heading: section_opts("^# "),
             ..Default::default()
         },
         events: vec![key('j'), key('q')],
@@ -261,7 +261,7 @@ line 5
         content,
         options: Options {
             header: 1,
-            section: section_opts("^# "),
+            heading: section_opts("^# "),
             ..Default::default()
         },
         events: vec![key('j'), key('q')],
@@ -307,7 +307,7 @@ line 5
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# "),
+            heading: section_opts("^# "),
             ..Default::default()
         },
         events: vec![key('j'), key('j'), key('j'), key('k'), key('k'), key('q')],

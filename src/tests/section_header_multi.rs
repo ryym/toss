@@ -1,12 +1,12 @@
 use pretty_assertions::assert_eq;
 
 use super::{TestCase, key, run_test_screen};
-use crate::options::{Options, SectionOptions};
+use crate::options::{HeadingOptions, Options};
 
-fn section_opts_n(pattern: &str, header_lines: usize) -> Option<SectionOptions> {
-    Some(SectionOptions {
+fn section_opts_n(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
+    Some(HeadingOptions {
         pattern: regex::Regex::new(pattern).unwrap(),
-        header_lines,
+        num_lines,
     })
 }
 
@@ -26,7 +26,7 @@ line 5
         screen_height: 6,
         content,
         options: Options {
-            section: section_opts_n("^# ", 2),
+            heading: section_opts_n("^# ", 2),
             ..Default::default()
         },
         events: vec![key('j'), key('j'), key('q')],
@@ -83,7 +83,7 @@ line 10
         screen_height: 6,
         content,
         options: Options {
-            section: section_opts_n("^# ", 2),
+            heading: section_opts_n("^# ", 2),
             ..Default::default()
         },
         events: vec![
@@ -177,7 +177,7 @@ line 6
         screen_height: 6,
         content,
         options: Options {
-            section: section_opts_n("^# ", 2),
+            heading: section_opts_n("^# ", 2),
             ..Default::default()
         },
         events: vec![
@@ -271,7 +271,7 @@ fn pattern_match_within_header_block() {
         screen_height: 6,
         content,
         options: Options {
-            section: section_opts_n("^#", 3),
+            heading: section_opts_n("^#", 3),
             ..Default::default()
         },
         events: vec![key('j'), key('j'), key('j'), key('q')],
@@ -335,7 +335,7 @@ fn regression_wrapped_header_switching() {
         screen_height: 7,
         content,
         options: Options {
-            section: section_opts_n("^##", 3),
+            heading: section_opts_n("^##", 3),
             ..Default::default()
         },
         events: vec![
@@ -469,7 +469,7 @@ body 5
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts_n("^# ", 4),
+            heading: section_opts_n("^# ", 4),
             ..Default::default()
         },
         events: vec![
@@ -577,7 +577,7 @@ body 4
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts_n("^# ", 6),
+            heading: section_opts_n("^# ", 6),
             ..Default::default()
         },
         events: vec![

@@ -99,7 +99,7 @@ impl Pager {
     ) -> Self {
         let size = ViewportSize::new(screen_width, screen_height);
         let global_header = GlobalHeader::new(&mut doc, &size, options.header);
-        let mut section_header = SectionHeader::new(options.section, &size, global_header.height());
+        let mut section_header = SectionHeader::new(options.heading, &size, global_header.height());
         section_header.resolve(&mut doc, 0);
         let viewport = Viewport::new(&mut doc, size);
         Self {
@@ -349,7 +349,7 @@ impl Pager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::options::{Options, SectionOptions};
+    use crate::options::{HeadingOptions, Options};
     use regex::Regex;
 
     fn doc_lines(n: usize) -> Document {
@@ -360,10 +360,10 @@ mod tests {
         Document::from_string(s)
     }
 
-    fn section_opts(pattern: &str, header_lines: usize) -> SectionOptions {
-        SectionOptions {
+    fn section_opts(pattern: &str, num_lines: usize) -> HeadingOptions {
+        HeadingOptions {
             pattern: Regex::new(pattern).unwrap(),
-            header_lines,
+            num_lines,
         }
     }
 
@@ -468,7 +468,7 @@ mod tests {
     fn section_header_becomes_sticky_when_scrolled_past() {
         let content = "# A\nx\ny\nz\nw\nv\n";
         let opts = Options {
-            section: Some(section_opts("^# ", 1)),
+            heading: Some(section_opts("^# ", 1)),
             ..Default::default()
         };
         let mut pager = Pager::new(Document::from_string(content.into()), opts, 20, 5);
@@ -527,7 +527,7 @@ mod tests {
     fn contiguous_rows_includes_section_header_when_adjacent() {
         let content = "# A\nline0\nline1\nline2\nline3\n";
         let opts = Options {
-            section: Some(section_opts("^# ", 1)),
+            heading: Some(section_opts("^# ", 1)),
             ..Default::default()
         };
         let pager = Pager::new(Document::from_string(content.into()), opts, 20, 5);
@@ -538,7 +538,7 @@ mod tests {
     fn contiguous_rows_excludes_section_header_when_far() {
         let content = "# A\nline0\nline1\nline2\nline3\nline4\n";
         let opts = Options {
-            section: Some(section_opts("^# ", 1)),
+            heading: Some(section_opts("^# ", 1)),
             ..Default::default()
         };
         let mut pager = Pager::new(Document::from_string(content.into()), opts, 20, 4);

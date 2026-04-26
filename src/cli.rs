@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::options::{Options, SectionOptions};
+use crate::options::{HeadingOptions, Options};
 
 const VERSION: &str = "0.0.0";
 
@@ -97,13 +97,13 @@ fn parse_from(mut parser: lexopt::Parser) -> Result<Action, lexopt::Error> {
         return Err("--heading-lines requires --heading".into());
     }
 
-    let section = heading_pattern
+    let heading = heading_pattern
         .map(|pat| {
             let pattern =
                 regex::Regex::new(&pat).map_err(|e| format!("invalid --heading regex: {e}"))?;
-            Ok::<_, String>(SectionOptions {
+            Ok::<_, String>(HeadingOptions {
                 pattern,
-                header_lines: heading_lines.unwrap_or(1),
+                num_lines: heading_lines.unwrap_or(1),
             })
         })
         .transpose()
@@ -114,7 +114,7 @@ fn parse_from(mut parser: lexopt::Parser) -> Result<Action, lexopt::Error> {
         options: Options {
             quit_if_one_screen,
             header,
-            section,
+            heading,
         },
     }))
 }
@@ -159,7 +159,7 @@ mod tests {
         assert!(args.file.is_none());
         assert!(!args.options.quit_if_one_screen);
         assert_eq!(args.options.header, 0);
-        assert!(args.options.section.is_none());
+        assert!(args.options.heading.is_none());
     }
 
     #[test]
@@ -189,16 +189,16 @@ mod tests {
     #[test]
     fn heading_option() {
         let args = unwrap_run(parse(&["--heading", "^##"]));
-        let section = args.options.section.unwrap();
-        assert_eq!(section.pattern.as_str(), "^##");
-        assert_eq!(section.header_lines, 1);
+        let heading = args.options.heading.unwrap();
+        assert_eq!(heading.pattern.as_str(), "^##");
+        assert_eq!(heading.num_lines, 1);
     }
 
     #[test]
     fn heading_with_lines() {
         let args = unwrap_run(parse(&["--heading", "^##", "--heading-lines", "2"]));
-        let section = args.options.section.unwrap();
-        assert_eq!(section.header_lines, 2);
+        let heading = args.options.heading.unwrap();
+        assert_eq!(heading.num_lines, 2);
     }
 
     #[test]

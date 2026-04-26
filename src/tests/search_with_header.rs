@@ -2,16 +2,16 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
 use super::{TestCase, key, run_test_screen};
-use crate::options::{Options, SectionOptions};
+use crate::options::{HeadingOptions, Options};
 
 fn enter() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
 }
 
-fn section_opts(pattern: &str, header_lines: usize) -> Option<SectionOptions> {
-    Some(SectionOptions {
+fn section_opts(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
+    Some(HeadingOptions {
         pattern: regex::Regex::new(pattern).unwrap(),
-        header_lines,
+        num_lines,
     })
 }
 
@@ -172,7 +172,7 @@ line 6
         screen_height: 4,
         content,
         options: Options {
-            section: section_opts("^# ", 1),
+            heading: section_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![key('/'), key('3'), enter()],
@@ -228,7 +228,7 @@ line 6
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# ", 1),
+            heading: section_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![
@@ -323,7 +323,7 @@ fn search_with_section_header_jump_back_one_line() {
         screen_height: 4,
         content,
         options: Options {
-            section: section_opts("^# ", 1),
+            heading: section_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![
@@ -425,7 +425,7 @@ line 8
         screen_height: 6,
         content,
         options: Options {
-            section: section_opts("^# ", 3),
+            heading: section_opts("^# ", 3),
             ..Default::default()
         },
         events: vec![
@@ -512,7 +512,7 @@ line 7
         screen_height: 4,
         content,
         options: Options {
-            section: section_opts("^# ", 1),
+            heading: section_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![

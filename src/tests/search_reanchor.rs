@@ -2,16 +2,16 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
 use super::{TestCase, key, run_test_screen};
-use crate::options::{Options, SectionOptions};
+use crate::options::{HeadingOptions, Options};
 
 fn enter() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
 }
 
-fn section_opts(pattern: &str, header_lines: usize) -> Option<SectionOptions> {
-    Some(SectionOptions {
+fn section_opts(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
+    Some(HeadingOptions {
         pattern: regex::Regex::new(pattern).unwrap(),
-        header_lines,
+        num_lines,
     })
 }
 
@@ -334,7 +334,7 @@ line 8
         screen_height: 5,
         content,
         options: Options {
-            section: section_opts("^# ", 1),
+            heading: section_opts("^# ", 1),
             ..Default::default()
         },
         events: vec![

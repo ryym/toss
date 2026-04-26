@@ -3,17 +3,17 @@
 pub struct Options {
     /// Number of lines to pin as a fixed header (0 means no header).
     pub header: usize,
-    /// Section header configuration, if enabled.
-    pub section: Option<SectionOptions>,
+    /// Heading configuration for sticky per-section headers, if enabled.
+    pub heading: Option<HeadingOptions>,
     /// Quit automatically if the entire content fits on one screen.
     pub quit_if_one_screen: bool,
 }
 
-/// Configuration for section-based sticky headers.
+/// Configuration for sticky per-section headings.
 #[derive(Debug, Clone)]
-pub struct SectionOptions {
-    /// Regex pattern to identify section start lines.
+pub struct HeadingOptions {
+    /// Regex pattern matching section heading lines.
     pub pattern: regex::Regex,
-    /// Number of lines to display as a section header (default 1).
-    pub header_lines: usize,
+    /// Number of lines per heading block (default 1).
+    pub num_lines: usize,
 }

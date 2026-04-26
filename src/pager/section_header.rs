@@ -3,7 +3,7 @@ use std::ops::Range;
 use crate::{
     document::Document,
     line::Row,
-    options::SectionOptions,
+    options::HeadingOptions,
     pager::{ViewportSize, rows},
 };
 
@@ -16,13 +16,13 @@ use crate::{
 #[derive(Debug)]
 pub(super) struct SectionHeader {
     config: SectionConfig,
-    options: Option<SectionOptions>,
+    options: Option<HeadingOptions>,
     current: Option<HeaderState>,
 }
 
 impl SectionHeader {
     pub fn new(
-        options: Option<SectionOptions>,
+        options: Option<HeadingOptions>,
         size: &ViewportSize,
         global_header_height: usize,
     ) -> Self {
@@ -149,7 +149,7 @@ impl SectionHeader {
         }
         let nearest = nearest?;
 
-        let height = options.header_lines.min(self.config.max_header_height);
+        let height = options.num_lines.min(self.config.max_header_height);
         let line_range = nearest..(nearest + height);
         let rows = rows::from_lines(
             doc,
@@ -166,14 +166,14 @@ impl SectionHeader {
 }
 
 /// See [`SectionHeader::is_header`].
-fn is_header(doc: &mut Document, line_index: usize, options: &SectionOptions) -> bool {
+fn is_header(doc: &mut Document, line_index: usize, options: &HeadingOptions) -> bool {
     match doc.line(line_index) {
         Some(line) if line.has_match(&options.pattern) => {}
         _ => return false,
     }
     // A line is treated as a header if it matches the pattern and no other line within the
-    // following `header_lines` lines also matches the pattern.
-    for i in 1..options.header_lines {
+    // following `num_lines` lines also matches the pattern.
+    for i in 1..options.num_lines {
         match doc.line(line_index + i) {
             Some(line) => {
                 if line.has_match(&options.pattern) {
@@ -229,10 +229,10 @@ mod tests {
     use crate::document::Document;
     use regex::Regex;
 
-    fn opts(pattern: &str, header_lines: usize) -> SectionOptions {
-        SectionOptions {
+    fn opts(pattern: &str, num_lines: usize) -> HeadingOptions {
+        HeadingOptions {
             pattern: Regex::new(pattern).unwrap(),
-            header_lines,
+            num_lines,
         }
     }
 
@@ -262,10 +262,10 @@ mod tests {
 
     #[test]
     fn is_header_with_multi_line_window_takes_last_match() {
-        // header_lines = 2: only the last match within a 2-line window is the header.
+        // num_lines = 2: only the last match within a 2-line window is the header.
         let mut doc = Document::from_string("# A\n# B\nfoo\nbar\n".into());
         let h = SectionHeader::new(Some(opts("^# ", 2)), &size(10, 5), 0);
-        // Line 0 has another match (line 1) within the next header_lines-1 lines, so not a header.
+        // Line 0 has another match (line 1) within the next num_lines-1 lines, so not a header.
         assert!(!h.is_header(&mut doc, 0));
         // Line 1 has no further matches within its window, so it counts as a header.
         assert!(h.is_header(&mut doc, 1));
