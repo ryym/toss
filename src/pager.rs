@@ -541,7 +541,7 @@ mod tests {
         let mut pager = Pager::new(Document::from_string(content.into()), opts, 20, 4);
         pager.scroll(2);
         let rows = pager.contiguous_rows();
-        // Section header (line 0) is no longer adjacent to content.
+        // Heading (line 0) is no longer adjacent to content.
         assert_ne!(rows[0].line_index(), 0);
     }
 }

@@ -11,7 +11,7 @@ fn heading_opts_n(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
 }
 
 #[test]
-fn sticky_header() {
+fn sticky_heading() {
     let content = "\
 # Section A
 description A
@@ -62,7 +62,7 @@ line 5
 }
 
 #[test]
-fn header_switching() {
+fn heading_switching() {
     let content = "\
 # Section A
 description A
@@ -159,7 +159,7 @@ line 7
 }
 
 #[test]
-fn wrapped_header_switching() {
+fn wrapped_heading_switching() {
     let content = "\
 # abcde
 012345678
@@ -252,7 +252,7 @@ line 5
     assert_eq!(screen.out(), want);
 }
 
-/// When a line within the header block also matches the section pattern,
+/// When a line within the heading block also matches the section pattern,
 /// it should be treated as part of the current section's block, not as
 /// a new section start.
 #[test]
@@ -315,7 +315,7 @@ atures like go-to-definition, find references, and hover documentati
 }
 
 #[test]
-fn regression_wrapped_header_switching() {
+fn regression_wrapped_heading_switching() {
     let content = "\
 # Changelog
 
@@ -555,7 +555,7 @@ desc 1
 
 /// When heading-lines N exceeds the viewport content rows, only the first
 /// viewport-height lines of the heading are visible (the rest are
-/// truncated). The display freezes on the header while scrolling down.
+/// truncated). The display freezes on the heading while scrolling down.
 #[test]
 fn heading_exceeds_viewport() {
     let content = "\

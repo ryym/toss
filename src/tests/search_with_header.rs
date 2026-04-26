@@ -155,7 +155,7 @@ line 5
 }
 
 /// When searching with a heading,
-/// the matched line is visible below the sticky header, not hidden behind it.
+/// the matched line is visible below the sticky heading, not hidden behind it.
 #[test]
 fn search_with_heading() {
     let content = "\
@@ -207,7 +207,7 @@ line 4
 }
 
 /// When searching and jumping with a heading,
-/// the matched line is visible below the sticky header, not hidden behind it.
+/// the matched line is visible below the sticky heading, not hidden behind it.
 #[test]
 fn search_jump_with_heading() {
     let content = "\

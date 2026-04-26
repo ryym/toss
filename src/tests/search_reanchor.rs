@@ -316,7 +316,7 @@ line 5
 // and find the first truly visible match (not one behind the overlay).
 #[test]
 fn reanchor_skips_match_hidden_by_heading() {
-    // Section header "# Sec" is sticky (1 line).
+    // Heading "# Sec" is sticky (1 line).
     // After scrolling, the overlay hides the first viewport row.
     let content = "\
 # Sec
@@ -342,7 +342,7 @@ line 8
             key('A'),
             enter(),
             // Jump to end — cursor ("A 1") goes off-screen.
-            // The sticky header "# Sec" overlays the first viewport row.
+            // The sticky heading "# Sec" overlays the first viewport row.
             key('G'),
             // n: re-anchor. "A 5" is in the viewport rows but hidden by overlay.
             // Should re-anchor to "A 7" (first actually visible match).

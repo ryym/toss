@@ -10,7 +10,7 @@ fn heading_opts(pattern: &str) -> Option<HeadingOptions> {
     })
 }
 
-/// Section line is visible in the viewport at the top, so no sticky header.
+/// Section line is visible in the viewport at the top, so no sticky heading.
 /// Scrolling down 1 makes it sticky. Scrolling back up removes the sticky.
 #[test]
 fn sticky_appears_and_disappears_on_scroll() {
@@ -161,7 +161,7 @@ line 4
 }
 
 /// Jump to end with headings. Section B is at the top of
-/// the viewport, so section A's sticky header is pushed off.
+/// the viewport, so section A's sticky heading is pushed off.
 #[test]
 fn jump_end_with_heading() {
     let content = "\
@@ -203,7 +203,7 @@ line 5
     assert_eq!(screen.out(), want);
 }
 
-/// No section above viewport means no sticky header.
+/// No section above viewport means no sticky heading.
 #[test]
 fn no_heading_above_viewport() {
     let content = "\
@@ -243,7 +243,7 @@ line 4
     assert_eq!(screen.out(), want);
 }
 
-/// Section header with fixed header where section line is within the
+/// Heading with fixed header where section line is within the
 /// fixed header range. The heading should not duplicate.
 #[test]
 fn heading_overlaps_fixed_header() {
