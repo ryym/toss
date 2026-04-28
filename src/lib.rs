@@ -17,7 +17,7 @@ mod tests;
 
 use std::ffi::OsString;
 use std::fmt;
-use std::io::{Read, Write};
+use std::io::{self, IsTerminal, Read, Write};
 
 use app::App;
 use document::Document;
@@ -46,25 +46,13 @@ impl fmt::Display for AppError {
     }
 }
 
-/// Outcome of [`run`].
-pub enum RunOutcome<S> {
-    /// The interactive pager exited normally. The screen is returned so callers
-    /// (typically tests) can inspect what was rendered.
-    Exited(S),
-    /// `-F` was set and the entire content fit on one screen, so it was
-    /// printed inline and the pager was skipped. No screen was created.
-    PrintedInline,
-    /// CLI requested a one-shot message (e.g. `--help` / `--version`).
-    Printed,
-}
-
 /// Inputs required to run the toss pager pipeline.
 ///
 /// `make_screen` is a factory rather than a value so the screen is only
 /// constructed when actually needed — the `-F` short-circuit and the
 /// help/version paths skip it, which lets the binary avoid acquiring raw
 /// terminal mode in those cases.
-pub struct RunConfig<R, W, S, MS>
+struct RunConfig<R, W, S, MS>
 where
     R: Read,
     W: Write,
@@ -82,36 +70,61 @@ where
 }
 
 /// Run the toss pipeline: parse CLI args, load the document, render the page.
-///
-/// This is the single entry function shared between the binary and (eventually)
-/// integration tests.
-pub fn run<R, W, S, MS>(cfg: RunConfig<R, W, S, MS>) -> Result<RunOutcome<S>, AppError>
+pub fn run() -> Result<(), AppError> {
+    let terminal_size = crossterm::terminal::size()
+        .map_err(|e| AppError::new(format!("Error getting terminal size: {e}"), 1))?;
+
+    let stdin = io::stdin();
+    let stdin_is_terminal = stdin.is_terminal();
+
+    let _ = run_inner(RunConfig {
+        args: std::env::args_os().collect(),
+        terminal_size,
+        shell_lines: shell_lines(),
+        instant_scroll: false,
+        stdin: stdin.lock(),
+        stdin_is_terminal,
+        stdout: io::stdout(),
+        make_screen: || {
+            TermScreen::new()
+                .map_err(|e| AppError::new(format!("Error initializing terminal: {e}"), 1))
+        },
+    })?;
+
+    Ok(())
+}
+
+/// Read the number of shell prompt lines to reserve from environment variables.
+/// Checks TOSS_SHELL_LINES first, then LESS_SHELL_LINES, defaulting to 1.
+fn shell_lines() -> usize {
+    std::env::var("TOSS_SHELL_LINES")
+        .or_else(|_| std::env::var("LESS_SHELL_LINES"))
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1)
+}
+
+/// Run the app. Return the screen only if it actually rendered a interactive pager.
+/// For example, it doesn't render a pager for `--help`.
+fn run_inner<R, W, S, MS>(cfg: RunConfig<R, W, S, MS>) -> Result<Option<S>, AppError>
 where
     R: Read,
     W: Write,
     S: Screen,
     MS: FnOnce() -> Result<S, AppError>,
 {
-    let RunConfig {
-        args,
-        terminal_size: (w, h),
-        shell_lines,
-        instant_scroll,
-        mut stdin,
-        stdin_is_terminal,
-        mut stdout,
-        make_screen,
-    } = cfg;
+    let mut stdin = cfg.stdin;
+    let mut stdout = cfg.stdout;
 
     let _log_guard = logger::setup_file_logger()
         .map_err(|e| AppError::new(format!("Error setting up logger: {e}"), 1))?;
 
-    let parsed = match cli::parse_from_args(args) {
+    let parsed = match cli::parse_from_args(cfg.args) {
         Ok(cli::Action::Run(args)) => args,
         Ok(cli::Action::Print(msg)) => {
             writeln!(stdout, "{msg}")
                 .map_err(|e| AppError::new(format!("Error writing to stdout: {e}"), 1))?;
-            return Ok(RunOutcome::Printed);
+            return Ok(None);
         }
         Err(e) => return Err(AppError::new(format!("Error: {e}"), 1)),
     };
@@ -120,7 +133,7 @@ where
         log::debug!("Read file: {}", path.display());
         Document::from_file(path)
             .map_err(|e| AppError::new(format!("Error reading {}: {e}", path.display()), 1))?
-    } else if !stdin_is_terminal {
+    } else if !cfg.stdin_is_terminal {
         log::debug!("Read from stdin");
         Document::from_reader(&mut stdin)
             .map_err(|e| AppError::new(format!("Error reading stdin: {e}"), 1))?
@@ -128,25 +141,26 @@ where
         return Err(AppError::new("Usage: toss <file> OR command | toss", 1));
     };
 
+    let (w, h) = cfg.terminal_size;
     let quit_if_one_screen = parsed.options.quit_if_one_screen;
     let mut pager = Pager::new(doc, parsed.options, w as usize, h as usize);
 
-    if quit_if_one_screen && pager.fits_within((h as usize).saturating_sub(shell_lines)) {
+    if quit_if_one_screen && pager.fits_within((h as usize).saturating_sub(cfg.shell_lines)) {
         for i in 0..pager.doc_mut().line_count() {
             if let Some(line) = pager.doc_mut().line(i) {
                 writeln!(stdout, "{}", line.raw())
                     .map_err(|e| AppError::new(format!("Error writing to stdout: {e}"), 1))?;
             }
         }
-        return Ok(RunOutcome::PrintedInline);
+        return Ok(None);
     }
 
-    let screen = make_screen()?;
+    let screen = (cfg.make_screen)()?;
     let mut app = App::new(screen, pager).map_err(|e| AppError::new(format!("{e}"), 1))?;
-    if instant_scroll {
+    if cfg.instant_scroll {
         app.set_instant_scroll();
     }
     app.run().map_err(|e| AppError::new(format!("{e}"), 1))?;
 
-    Ok(RunOutcome::Exited(app.into_screen()))
+    Ok(Some(app.into_screen()))
 }
