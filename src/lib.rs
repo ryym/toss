@@ -22,7 +22,7 @@ use std::io::{self, IsTerminal, Read, Write};
 use app::App;
 use document::Document;
 use pager::Pager;
-use screen::Screen;
+use screen::{Screen, ScreenSize};
 
 pub use screen::TermScreen;
 
@@ -60,7 +60,7 @@ where
     MS: FnOnce() -> Result<S, AppError>,
 {
     pub args: Vec<OsString>,
-    pub terminal_size: (u16, u16),
+    pub terminal_size: ScreenSize,
     pub shell_lines: usize,
     pub instant_scroll: bool,
     pub stdin: R,
@@ -71,8 +71,9 @@ where
 
 /// Run the toss pipeline: parse CLI args, load the document, render the page.
 pub fn run() -> Result<(), AppError> {
-    let terminal_size = crossterm::terminal::size()
+    let (w, h) = crossterm::terminal::size()
         .map_err(|e| AppError::new(format!("Error getting terminal size: {e}"), 1))?;
+    let terminal_size = ScreenSize::new(w, h);
 
     let stdin = io::stdin();
     let stdin_is_terminal = stdin.is_terminal();
@@ -141,11 +142,11 @@ where
         return Err(AppError::new("Usage: toss <file> OR command | toss", 1));
     };
 
-    let (w, h) = cfg.terminal_size;
+    let size = cfg.terminal_size;
     let quit_if_one_screen = parsed.options.quit_if_one_screen;
-    let mut pager = Pager::new(doc, parsed.options, w as usize, h as usize);
+    let mut pager = Pager::new(doc, parsed.options, size);
 
-    if quit_if_one_screen && pager.fits_within((h as usize).saturating_sub(cfg.shell_lines)) {
+    if quit_if_one_screen && pager.fits_within((size.height()).saturating_sub(cfg.shell_lines)) {
         for i in 0..pager.doc_mut().line_count() {
             if let Some(line) = pager.doc_mut().line(i) {
                 writeln!(stdout, "{}", line.raw())

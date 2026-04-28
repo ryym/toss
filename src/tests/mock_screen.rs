@@ -4,7 +4,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use unicode_width::UnicodeWidthChar;
 
 use crate::ansi;
-use crate::screen::{Direction, Screen, Scroll};
+use crate::screen::{Direction, Screen, ScreenSize, Scroll};
 
 #[derive(Debug, Clone)]
 struct GridRow {
@@ -163,8 +163,8 @@ fn escape_to_label(seq: &str) -> String {
 }
 
 impl Screen for MockScreen {
-    fn size(&self) -> io::Result<(u16, u16)> {
-        Ok((self.width, self.height))
+    fn size(&self) -> io::Result<ScreenSize> {
+        Ok(ScreenSize::new(self.width, self.height))
     }
 
     fn poll_event(&mut self, _timeout: std::time::Duration) -> io::Result<Option<Event>> {

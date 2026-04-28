@@ -8,7 +8,7 @@ use crossterm::{
     terminal::{self, BeginSynchronizedUpdate, ClearType, EndSynchronizedUpdate},
 };
 
-use super::{Direction, Screen, Scroll};
+use super::{Direction, Screen, ScreenSize, Scroll};
 
 /// crossterm-based terminal screen.
 pub struct TermScreen {
@@ -38,8 +38,9 @@ impl Drop for TermScreen {
 }
 
 impl Screen for TermScreen {
-    fn size(&self) -> io::Result<(u16, u16)> {
-        terminal::size()
+    fn size(&self) -> io::Result<ScreenSize> {
+        let (w, h) = terminal::size()?;
+        Ok(ScreenSize::new(w, h))
     }
 
     fn poll_event(&mut self, timeout: std::time::Duration) -> io::Result<Option<Event>> {

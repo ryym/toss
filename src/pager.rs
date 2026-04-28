@@ -3,7 +3,7 @@ use crate::{
     line::Row,
     options::Options,
     pager::{header::Header, heading::Heading, viewport::Viewport},
-    screen::{Direction, Scroll},
+    screen::{Direction, ScreenSize, Scroll},
 };
 
 mod header;
@@ -92,13 +92,8 @@ pub struct Pager {
 }
 
 impl Pager {
-    pub fn new(
-        mut doc: Document,
-        options: Options,
-        screen_width: usize,
-        screen_height: usize,
-    ) -> Self {
-        let size = ViewportSize::new(screen_width, screen_height);
+    pub fn new(mut doc: Document, options: Options, screen_size: ScreenSize) -> Self {
+        let size = ViewportSize::new(screen_size.width(), screen_size.height());
         let header = Header::new(&mut doc, &size, options.header);
         let mut heading = Heading::new(options.heading, &size, header.height());
         heading.resolve(&mut doc, 0);
@@ -374,7 +369,7 @@ mod tests {
 
     #[test]
     fn snapshot_starts_at_top_of_doc() {
-        let mut pager = Pager::new(doc_lines(10), Options::default(), 20, 5);
+        let mut pager = Pager::new(doc_lines(10), Options::default(), ScreenSize::new(20, 5));
         let (snap, _doc) = pager.snapshot();
         assert!(snap.header.is_empty());
         assert!(snap.heading.is_empty());
@@ -388,7 +383,7 @@ mod tests {
             header: 2,
             ..Default::default()
         };
-        let mut pager = Pager::new(doc_lines(10), opts, 20, 6);
+        let mut pager = Pager::new(doc_lines(10), opts, ScreenSize::new(20, 6));
         let (snap, _doc) = pager.snapshot();
         assert_eq!(line_indices(snap.header), vec![0, 1]);
         assert_eq!(line_indices(snap.content), vec![2, 3, 4]);
@@ -396,7 +391,7 @@ mod tests {
 
     #[test]
     fn scroll_down_shifts_content_forward() {
-        let mut pager = Pager::new(doc_lines(20), Options::default(), 20, 5);
+        let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
         let n = pager.scroll(2);
         assert_eq!(n, 2);
         let (snap, _doc) = pager.snapshot();
@@ -405,7 +400,7 @@ mod tests {
 
     #[test]
     fn scroll_up_brings_back_upper_rows() {
-        let mut pager = Pager::new(doc_lines(20), Options::default(), 20, 5);
+        let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
         pager.scroll(3);
         assert_eq!(line_indices(pager.snapshot().0.content), vec![3, 4, 5, 6]);
         let n = pager.scroll(-1);
@@ -419,7 +414,7 @@ mod tests {
             header: 2,
             ..Default::default()
         };
-        let mut pager = Pager::new(doc_lines(20), opts, 20, 6);
+        let mut pager = Pager::new(doc_lines(20), opts, ScreenSize::new(20, 6));
         pager.scroll(3);
         let (snap, _doc) = pager.snapshot();
         assert_eq!(line_indices(snap.header), vec![0, 1]);
@@ -428,7 +423,7 @@ mod tests {
 
     #[test]
     fn jump_to_places_target_line_at_top_of_content() {
-        let mut pager = Pager::new(doc_lines(20), Options::default(), 20, 5);
+        let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
         pager.jump_to(10);
         let (snap, _doc) = pager.snapshot();
         assert_eq!(line_indices(snap.content), vec![10, 11, 12, 13]);
@@ -436,7 +431,7 @@ mod tests {
 
     #[test]
     fn jump_to_end_places_last_line_at_bottom() {
-        let mut pager = Pager::new(doc_lines(20), Options::default(), 20, 5);
+        let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
         pager.jump_to_end();
         let (snap, _doc) = pager.snapshot();
         assert_eq!(line_indices(snap.content), vec![16, 17, 18, 19]);
@@ -448,7 +443,7 @@ mod tests {
             header: 2,
             ..Default::default()
         };
-        let mut pager = Pager::new(doc_lines(20), opts, 20, 8);
+        let mut pager = Pager::new(doc_lines(20), opts, ScreenSize::new(20, 8));
         pager.scroll(5);
         pager.jump_to(1);
         let (snap, _doc) = pager.snapshot();
@@ -458,7 +453,7 @@ mod tests {
 
     #[test]
     fn resize_rebuilds_content_at_new_height() {
-        let mut pager = Pager::new(doc_lines(10), Options::default(), 20, 5);
+        let mut pager = Pager::new(doc_lines(10), Options::default(), ScreenSize::new(20, 5));
         pager.resize(20, 10);
         let (snap, _doc) = pager.snapshot();
         // New viewport height = 9.
@@ -472,7 +467,11 @@ mod tests {
             heading: Some(heading_opts("^# ", 1)),
             ..Default::default()
         };
-        let mut pager = Pager::new(Document::from_string(content.into()), opts, 20, 5);
+        let mut pager = Pager::new(
+            Document::from_string(content.into()),
+            opts,
+            ScreenSize::new(20, 5),
+        );
         pager.scroll(2);
         let (snap, _doc) = pager.snapshot();
         assert_eq!(line_indices(snap.heading), vec![0]);
@@ -481,13 +480,13 @@ mod tests {
 
     #[test]
     fn fits_within_returns_true_for_short_doc() {
-        let mut pager = Pager::new(doc_lines(5), Options::default(), 20, 10);
+        let mut pager = Pager::new(doc_lines(5), Options::default(), ScreenSize::new(20, 10));
         assert!(pager.fits_within(5));
     }
 
     #[test]
     fn fits_within_returns_false_when_doc_exceeds_height() {
-        let mut pager = Pager::new(doc_lines(6), Options::default(), 20, 10);
+        let mut pager = Pager::new(doc_lines(6), Options::default(), ScreenSize::new(20, 10));
         assert!(!pager.fits_within(5));
     }
 
@@ -497,7 +496,7 @@ mod tests {
             header: 1,
             ..Default::default()
         };
-        let pager = Pager::new(doc_lines(10), opts, 20, 6);
+        let pager = Pager::new(doc_lines(10), opts, ScreenSize::new(20, 6));
         // viewport height = 5, header = 1 -> content = 4.
         assert_eq!(pager.content_height(), 4);
         assert_eq!(pager.total_header_height(), 1);
@@ -509,7 +508,7 @@ mod tests {
             header: 2,
             ..Default::default()
         };
-        let pager = Pager::new(doc_lines(10), opts, 20, 6);
+        let pager = Pager::new(doc_lines(10), opts, ScreenSize::new(20, 6));
         assert_eq!(line_indices(pager.contiguous_rows()), vec![0, 1, 2, 3, 4]);
     }
 
@@ -519,7 +518,7 @@ mod tests {
             header: 2,
             ..Default::default()
         };
-        let mut pager = Pager::new(doc_lines(20), opts, 20, 6);
+        let mut pager = Pager::new(doc_lines(20), opts, ScreenSize::new(20, 6));
         pager.scroll(5);
         assert_eq!(line_indices(pager.contiguous_rows()), vec![7, 8, 9]);
     }
@@ -531,7 +530,11 @@ mod tests {
             heading: Some(heading_opts("^# ", 1)),
             ..Default::default()
         };
-        let pager = Pager::new(Document::from_string(content.into()), opts, 20, 5);
+        let pager = Pager::new(
+            Document::from_string(content.into()),
+            opts,
+            ScreenSize::new(20, 5),
+        );
         assert_eq!(line_indices(pager.contiguous_rows()), vec![0, 1, 2, 3]);
     }
 
@@ -542,7 +545,11 @@ mod tests {
             heading: Some(heading_opts("^# ", 1)),
             ..Default::default()
         };
-        let mut pager = Pager::new(Document::from_string(content.into()), opts, 20, 4);
+        let mut pager = Pager::new(
+            Document::from_string(content.into()),
+            opts,
+            ScreenSize::new(20, 4),
+        );
         pager.scroll(2);
         let rows = pager.contiguous_rows();
         // Heading (line 0) is no longer adjacent to content.

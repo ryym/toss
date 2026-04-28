@@ -19,6 +19,7 @@ use crate::document::Document;
 use crate::logger;
 use crate::options::Options;
 use crate::pager::Pager;
+use crate::screen::ScreenSize;
 use mock_screen::MockScreen;
 
 pub fn key(ch: char) -> Event {
@@ -54,8 +55,7 @@ pub fn run_test_screen(tc: TestCase) -> MockScreen {
     let pager = Pager::new(
         doc,
         tc.options,
-        tc.screen_width as usize,
-        tc.screen_height as usize,
+        ScreenSize::new(tc.screen_width, tc.screen_height),
     );
     let mut screen = MockScreen::new(tc.screen_width, tc.screen_height);
     screen.set_events(tc.events);

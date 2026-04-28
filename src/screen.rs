@@ -7,6 +7,31 @@ mod term_screen;
 pub use term_screen::TermScreen;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScreenSize {
+    width: usize,
+    height: usize,
+}
+
+impl ScreenSize {
+    pub fn new(width: u16, height: u16) -> Self {
+        Self {
+            width: width as usize,
+            height: height as usize,
+        }
+    }
+
+    #[inline]
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
+    #[inline]
+    pub fn height(&self) -> usize {
+        self.height
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     Down,
     Up,
@@ -20,7 +45,7 @@ pub struct Scroll {
 
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {
-    fn size(&self) -> io::Result<(u16, u16)>;
+    fn size(&self) -> io::Result<ScreenSize>;
     fn poll_event(&mut self, timeout: std::time::Duration) -> io::Result<Option<Event>>;
 
     /// Clear a single row.

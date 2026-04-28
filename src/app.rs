@@ -40,10 +40,10 @@ pub struct App<S: Screen> {
 
 impl<S: Screen> App<S> {
     pub fn new(screen: S, pager: Pager) -> io::Result<Self> {
-        let (_, h) = screen.size()?;
+        let size = screen.size()?;
         let renderer = Renderer::new(screen);
         let mut scroll_physics = ScrollPhysics::new();
-        scroll_physics.configure(h as usize);
+        scroll_physics.configure(size.height());
         Ok(Self {
             renderer,
             pager,
