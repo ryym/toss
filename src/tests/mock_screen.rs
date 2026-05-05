@@ -77,18 +77,6 @@ impl MockScreen {
         out
     }
 
-    /// Returns the last grid snapshot taken on flush.
-    pub fn last_snapshot(&self) -> &str {
-        self.entries
-            .iter()
-            .rev()
-            .find_map(|e| match e {
-                OutputEntry::Snapshot(s) => Some(s.as_str()),
-                _ => None,
-            })
-            .unwrap_or("")
-    }
-
     fn log_key(&mut self, key: &KeyEvent) {
         let text = match key.code {
             KeyCode::Char(ch) => {
