@@ -25,12 +25,37 @@ line 3
         ..Default::default()
     });
     let want = "\
+line 1
+01234a>
+bcde
+:
+-----
+[EVENT]:char:/
+line 1
+01234a>
+bcde
+/█
+-----
+[EVENT]:char:a
+01234{reverse}a{/reverse}>
+bcde
+line 3
+/a█
+-----
+[EVENT]:char:b
+01234{reverse}a>
+b{/reverse}cde
+line 3
+/ab█
+-----
+[EVENT]:enter
 01234{reverse}a>
 b{/reverse}cde
 line 3
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Search match in the second row of a wrapped line (after the wrap boundary).
@@ -49,12 +74,43 @@ line 3
         ..Default::default()
     });
     let want = "\
+line 1
+01234a>
+bcde
+:
+-----
+[EVENT]:char:/
+line 1
+01234a>
+bcde
+/█
+-----
+[EVENT]:char:c
+01234a>
+b{reverse}c{/reverse}de
+line 3
+/c█
+-----
+[EVENT]:char:d
+01234a>
+b{reverse}cd{/reverse}e
+line 3
+/cd█
+-----
+[EVENT]:char:e
+01234a>
+b{reverse}cde{/reverse}
+line 3
+/cde█
+-----
+[EVENT]:enter
 01234a>
 b{reverse}cde{/reverse}
 line 3
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Search match in the first row of a wrapped line.
@@ -73,10 +129,35 @@ abcde_XX_fghij
         ..Default::default()
     });
     let want = "\
+abcde_XX_f>
+ghij
+:
+
+-----
+[EVENT]:char:/
+abcde_XX_f>
+ghij
+/█
+
+-----
+[EVENT]:char:X
+abcde_{reverse}X{/reverse}{dim}{reverse}X{/reverse}{/dim}_f>
+ghij
+/X█
+
+-----
+[EVENT]:char:X
+abcde_{reverse}XX{/reverse}_f>
+ghij
+/XX█
+
+-----
+[EVENT]:enter
 abcde_{reverse}XX{/reverse}_f>
 ghij
 :
 
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }

@@ -26,12 +26,43 @@ line 5
         ..Default::default()
     });
     let want = "\
+line 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:/
+line 1
+line 2
+line 3
+/█
+-----
+[EVENT]:char:f
+line 3
+target {reverse}f{/reverse}oo here
+line 5
+/f█
+-----
+[EVENT]:char:o
+line 3
+target {reverse}fo{/reverse}o here
+line 5
+/fo█
+-----
+[EVENT]:char:o
+line 3
+target {reverse}foo{/reverse} here
+line 5
+/foo█
+-----
+[EVENT]:enter
 line 3
 target {reverse}foo{/reverse} here
 line 5
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Backward search: ?top + Enter from the bottom jumps back to match.
@@ -132,12 +163,49 @@ foo 3
         ..Default::default()
     });
     let want = "\
+foo 1
+bar
+foo 2
+:
+-----
+[EVENT]:char:/
+foo 1
+bar
+foo 2
+/█
+-----
+[EVENT]:char:f
+{reverse}f{/reverse}oo 1
+bar
+{dim}{reverse}f{/reverse}{/dim}oo 2
+/f█
+-----
+[EVENT]:char:o
+{reverse}fo{/reverse}o 1
+bar
+{dim}{reverse}fo{/reverse}{/dim}o 2
+/fo█
+-----
+[EVENT]:char:o
+{reverse}foo{/reverse} 1
+bar
+{dim}{reverse}foo{/reverse}{/dim} 2
+/foo█
+-----
+[EVENT]:enter
+{reverse}foo{/reverse} 1
+bar
+{dim}{reverse}foo{/reverse}{/dim} 2
+:
+-----
+[EVENT]:char:n
 {reverse}foo{/reverse} 2
 baz
 {dim}{reverse}foo{/reverse}{/dim} 3
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // N key: jump to previous match (reverse direction).
@@ -165,12 +233,49 @@ foo 3
         ..Default::default()
     });
     let want = "\
+foo 1
+bar
+foo 2
+:
+-----
+[EVENT]:char:/
+foo 1
+bar
+foo 2
+/█
+-----
+[EVENT]:char:f
+{reverse}f{/reverse}oo 1
+bar
+{dim}{reverse}f{/reverse}{/dim}oo 2
+/f█
+-----
+[EVENT]:char:o
+{reverse}fo{/reverse}o 1
+bar
+{dim}{reverse}fo{/reverse}{/dim}o 2
+/fo█
+-----
+[EVENT]:char:o
+{reverse}foo{/reverse} 1
+bar
+{dim}{reverse}foo{/reverse}{/dim} 2
+/foo█
+-----
+[EVENT]:enter
+{reverse}foo{/reverse} 1
+bar
+{dim}{reverse}foo{/reverse}{/dim} 2
+:
+-----
+[EVENT]:char:N
 {dim}{reverse}foo{/reverse}{/dim} 2
 baz
 {reverse}foo{/reverse} 3
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // No match: position stays the same.
@@ -194,8 +299,39 @@ line 1
 line 2
 line 3
 :
+-----
+[EVENT]:char:/
+line 1
+line 2
+line 3
+/█
+-----
+[EVENT]:char:z
+line 1
+line 2
+line 3
+/z█
+-----
+[EVENT]:char:z
+line 1
+line 2
+line 3
+/zz█
+-----
+[EVENT]:char:z
+line 1
+line 2
+line 3
+/zzz█
+-----
+[EVENT]:enter
+line 1
+line 2
+line 3
+:
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Wrap around: search wraps from end to beginning.
@@ -226,12 +362,67 @@ line 5
         ..Default::default()
     });
     let want = "\
+target here
+line 2
+line 3
+:
+-----
+[EVENT]:char:j
+line 2
+line 3
+line 4
+:
+-----
+[EVENT]:char:/
+line 2
+line 3
+line 4
+/█
+-----
+[EVENT]:char:t
+{reverse}t{/reverse}arge{dim}{reverse}t{/reverse}{/dim} here
+line 2
+line 3
+/t█
+-----
+[EVENT]:char:a
+{reverse}ta{/reverse}rget here
+line 2
+line 3
+/ta█
+-----
+[EVENT]:char:r
+{reverse}tar{/reverse}get here
+line 2
+line 3
+/tar█
+-----
+[EVENT]:char:g
+{reverse}targ{/reverse}et here
+line 2
+line 3
+/targ█
+-----
+[EVENT]:char:e
+{reverse}targe{/reverse}t here
+line 2
+line 3
+/targe█
+-----
+[EVENT]:char:t
+{reverse}target{/reverse} here
+line 2
+line 3
+/target█
+-----
+[EVENT]:enter
 {reverse}target{/reverse} here
 line 2
 line 3
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Highlighting with ANSI escape sequences: match spans across escape sequences.
@@ -262,12 +453,55 @@ line 4
     // reset (\x1b[0m) follows it. The match end position in raw text
     // falls after the reset, so the reset appears inside the highlighted span.
     let want = "\
+line 1
+This is {bold}Cargo{reset}.toml
+line 3
+:
+-----
+[EVENT]:char:/
+line 1
+This is {bold}Cargo{reset}.toml
+line 3
+/█
+-----
+[EVENT]:char:C
+This is {bold}{reverse}C{/reverse}argo{reset}.toml
+line 3
+line 4
+/C█
+-----
+[EVENT]:char:a
+This is {bold}{reverse}Ca{/reverse}rgo{reset}.toml
+line 3
+line 4
+/Ca█
+-----
+[EVENT]:char:r
+This is {bold}{reverse}Car{/reverse}go{reset}.toml
+line 3
+line 4
+/Car█
+-----
+[EVENT]:char:g
+This is {bold}{reverse}Carg{/reverse}o{reset}.toml
+line 3
+line 4
+/Carg█
+-----
+[EVENT]:char:o
+This is {bold}{reverse}Cargo{reset}{/reverse}.toml
+line 3
+line 4
+/Cargo█
+-----
+[EVENT]:enter
 This is {bold}{reverse}Cargo{reset}{/reverse}.toml
 line 3
 line 4
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Re-searching with a different keyword replaces the highlights.
@@ -406,12 +640,43 @@ line 4
         ..Default::default()
     });
     let want = "\
+foo bar foo baz foo
+line 2
+line 3
+:
+-----
+[EVENT]:char:/
+foo bar foo baz foo
+line 2
+line 3
+/█
+-----
+[EVENT]:char:f
+{reverse}f{/reverse}oo bar {dim}{reverse}f{/reverse}{/dim}oo baz {dim}{reverse}f{/reverse}{/dim}oo
+line 2
+line 3
+/f█
+-----
+[EVENT]:char:o
+{reverse}fo{/reverse}o bar {dim}{reverse}fo{/reverse}{/dim}o baz {dim}{reverse}fo{/reverse}{/dim}o
+line 2
+line 3
+/fo█
+-----
+[EVENT]:char:o
+{reverse}foo{/reverse} bar {dim}{reverse}foo{/reverse}{/dim} baz {dim}{reverse}foo{/reverse}{/dim}
+line 2
+line 3
+/foo█
+-----
+[EVENT]:enter
 {reverse}foo{/reverse} bar {dim}{reverse}foo{/reverse}{/dim} baz {dim}{reverse}foo{/reverse}{/dim}
 line 2
 line 3
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // When jumping to a match near the end of the document, the status line
@@ -450,13 +715,70 @@ line 6
     // The matched line should be visible and the status line must be on
     // the last row (row 4), not immediately after the last content line.
     let want = "\
+line 1
+line 2
+line 3
+line 4
+:
+-----
+[EVENT]:char:/
+line 1
+line 2
+line 3
+line 4
+/█
+-----
+[EVENT]:char:t
+line 3
+line 4
+{reverse}t{/reverse}arge{dim}{reverse}t{/reverse}{/dim} foo here
+line 6
+/t█
+-----
+[EVENT]:char:a
+line 3
+line 4
+{reverse}ta{/reverse}rget foo here
+line 6
+/ta█
+-----
+[EVENT]:char:r
+line 3
+line 4
+{reverse}tar{/reverse}get foo here
+line 6
+/tar█
+-----
+[EVENT]:char:g
+line 3
+line 4
+{reverse}targ{/reverse}et foo here
+line 6
+/targ█
+-----
+[EVENT]:char:e
+line 3
+line 4
+{reverse}targe{/reverse}t foo here
+line 6
+/targe█
+-----
+[EVENT]:char:t
+line 3
+line 4
+{reverse}target{/reverse} foo here
+line 6
+/target█
+-----
+[EVENT]:enter
 line 3
 line 4
 {reverse}target{/reverse} foo here
 line 6
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // When search jumps to a match near the end, downward scrolling should be
@@ -571,11 +893,54 @@ line 10
         ..Default::default()
     });
     let want = "\
+line 1
+line 2
+line 3
+line 4
+:
+-----
+[EVENT]:char:/
+line 1
+line 2
+line 3
+line 4
+/█
+-----
+[EVENT]:char:9
+line 7
+line 8
+line {reverse}9{/reverse}
+line 10
+/9█
+-----
+[EVENT]:enter
+line 7
+line 8
+line {reverse}9{/reverse}
+line 10
+:
+-----
+[EVENT]:char:k
 line 6
 line 7
 line 8
 line {reverse}9{/reverse}
 :
+-----
+[EVENT]:char:k
+line 5
+line 6
+line 7
+line 8
+:
+-----
+[EVENT]:char:j
+line 6
+line 7
+line 8
+line {reverse}9{/reverse}
+:
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }

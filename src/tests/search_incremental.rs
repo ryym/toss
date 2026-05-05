@@ -101,12 +101,61 @@ line 6
         ..Default::default()
     });
     let want = "\
+line 1
+line 2
+target here
+:
+-----
+[EVENT]:char:/
+line 1
+line 2
+target here
+/█
+-----
+[EVENT]:char:t
+{reverse}t{/reverse}arge{dim}{reverse}t{/reverse}{/dim} here
+line 4
+line 5
+/t█
+-----
+[EVENT]:char:a
+{reverse}ta{/reverse}rget here
+line 4
+line 5
+/ta█
+-----
+[EVENT]:char:r
+{reverse}tar{/reverse}get here
+line 4
+line 5
+/tar█
+-----
+[EVENT]:char:g
+{reverse}targ{/reverse}et here
+line 4
+line 5
+/targ█
+-----
+[EVENT]:char:e
+{reverse}targe{/reverse}t here
+line 4
+line 5
+/targe█
+-----
+[EVENT]:char:t
+{reverse}target{/reverse} here
+line 4
+line 5
+/target█
+-----
+[EVENT]:enter
 {reverse}target{/reverse} here
 line 4
 line 5
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // After committing, n/N navigate between matches.
@@ -134,12 +183,49 @@ foo 3
         ..Default::default()
     });
     let want = "\
+foo 1
+bar
+foo 2
+:
+-----
+[EVENT]:char:/
+foo 1
+bar
+foo 2
+/█
+-----
+[EVENT]:char:f
+{reverse}f{/reverse}oo 1
+bar
+{dim}{reverse}f{/reverse}{/dim}oo 2
+/f█
+-----
+[EVENT]:char:o
+{reverse}fo{/reverse}o 1
+bar
+{dim}{reverse}fo{/reverse}{/dim}o 2
+/fo█
+-----
+[EVENT]:char:o
+{reverse}foo{/reverse} 1
+bar
+{dim}{reverse}foo{/reverse}{/dim} 2
+/foo█
+-----
+[EVENT]:enter
+{reverse}foo{/reverse} 1
+bar
+{dim}{reverse}foo{/reverse}{/dim} 2
+:
+-----
+[EVENT]:char:n
 {reverse}foo{/reverse} 2
 baz
 {dim}{reverse}foo{/reverse}{/dim} 3
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Esc cancels the search and restores the original scroll position.
@@ -174,8 +260,57 @@ line 1
 line 2
 line 3
 :
+-----
+[EVENT]:char:/
+line 1
+line 2
+line 3
+/█
+-----
+[EVENT]:char:t
+line 3
+line 4
+{reverse}t{/reverse}arge{dim}{reverse}t{/reverse}{/dim} here
+/t█
+-----
+[EVENT]:char:a
+line 3
+line 4
+{reverse}ta{/reverse}rget here
+/ta█
+-----
+[EVENT]:char:r
+line 3
+line 4
+{reverse}tar{/reverse}get here
+/tar█
+-----
+[EVENT]:char:g
+line 3
+line 4
+{reverse}targ{/reverse}et here
+/targ█
+-----
+[EVENT]:char:e
+line 3
+line 4
+{reverse}targe{/reverse}t here
+/targe█
+-----
+[EVENT]:char:t
+line 3
+line 4
+{reverse}target{/reverse} here
+/target█
+-----
+[EVENT]:esc
+line 1
+line 2
+line 3
+:
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Esc after scrolling restores the pre-search scroll position, not the top.
@@ -207,12 +342,67 @@ target here
     });
     // Should restore to the position after scrolling (line 2 at top).
     let want = "\
+line 1
+line 2
+line 3
+:
+-----
+[EVENT]:char:j
 line 2
 line 3
 line 4
 :
+-----
+[EVENT]:char:/
+line 2
+line 3
+line 4
+/█
+-----
+[EVENT]:char:t
+line 3
+line 4
+{reverse}t{/reverse}arge{dim}{reverse}t{/reverse}{/dim} here
+/t█
+-----
+[EVENT]:char:a
+line 3
+line 4
+{reverse}ta{/reverse}rget here
+/ta█
+-----
+[EVENT]:char:r
+line 3
+line 4
+{reverse}tar{/reverse}get here
+/tar█
+-----
+[EVENT]:char:g
+line 3
+line 4
+{reverse}targ{/reverse}et here
+/targ█
+-----
+[EVENT]:char:e
+line 3
+line 4
+{reverse}targe{/reverse}t here
+/targe█
+-----
+[EVENT]:char:t
+line 3
+line 4
+{reverse}target{/reverse} here
+/target█
+-----
+[EVENT]:esc
+line 2
+line 3
+line 4
+:
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Backspace on empty input cancels search like Esc.
@@ -236,8 +426,21 @@ line 1
 line 2
 line 3
 :
+-----
+[EVENT]:char:/
+line 1
+line 2
+line 3
+/█
+-----
+[EVENT]:backspace
+line 1
+line 2
+line 3
+:
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Backspace updates the preview to match the shorter query.
@@ -334,12 +537,55 @@ line 4
         ..Default::default()
     });
     let want = "\
+foo here
+line 2
+line 3
+:
+-----
+[EVENT]:char:/
+foo here
+line 2
+line 3
+/█
+-----
+[EVENT]:char:f
+{reverse}f{/reverse}oo here
+line 2
+line 3
+/f█
+-----
+[EVENT]:char:o
+{reverse}fo{/reverse}o here
+line 2
+line 3
+/fo█
+-----
+[EVENT]:char:o
+{reverse}foo{/reverse} here
+line 2
+line 3
+/foo█
+-----
+[EVENT]:enter
 {reverse}foo{/reverse} here
 line 2
 line 3
 :
+-----
+[EVENT]:char:/
+{reverse}foo{/reverse} here
+line 2
+line 3
+/█
+-----
+[EVENT]:enter
+{reverse}foo{/reverse} here
+line 2
+line 3
+:
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Esc discards preview without affecting previous committed search.
@@ -371,12 +617,73 @@ line 4
     });
     // Previous "foo" search should still be active.
     let want = "\
+foo here
+bar there
+line 3
+:
+-----
+[EVENT]:char:/
+foo here
+bar there
+line 3
+/█
+-----
+[EVENT]:char:f
+{reverse}f{/reverse}oo here
+bar there
+line 3
+/f█
+-----
+[EVENT]:char:o
+{reverse}fo{/reverse}o here
+bar there
+line 3
+/fo█
+-----
+[EVENT]:char:o
+{reverse}foo{/reverse} here
+bar there
+line 3
+/foo█
+-----
+[EVENT]:enter
 {reverse}foo{/reverse} here
 bar there
 line 3
 :
+-----
+[EVENT]:char:/
+{reverse}foo{/reverse} here
+bar there
+line 3
+/█
+-----
+[EVENT]:char:b
+{reverse}b{/reverse}ar there
+line 3
+line 4
+/b█
+-----
+[EVENT]:char:a
+{reverse}ba{/reverse}r there
+line 3
+line 4
+/ba█
+-----
+[EVENT]:char:r
+{reverse}bar{/reverse} there
+line 3
+line 4
+/bar█
+-----
+[EVENT]:esc
+{reverse}foo{/reverse} here
+bar there
+line 3
+:
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 // Preview shows all matches on screen, not just the current one.
@@ -399,10 +706,41 @@ line 6
         ..Default::default()
     });
     let want = "\
+foo first
+foo second
+foo third
+:
+-----
+[EVENT]:char:/
+foo first
+foo second
+foo third
+/█
+-----
+[EVENT]:char:f
+{reverse}f{/reverse}oo {dim}{reverse}f{/reverse}{/dim}irst
+{dim}{reverse}f{/reverse}{/dim}oo second
+{dim}{reverse}f{/reverse}{/dim}oo third
+/f█
+-----
+[EVENT]:char:o
+{reverse}fo{/reverse}o first
+{dim}{reverse}fo{/reverse}{/dim}o second
+{dim}{reverse}fo{/reverse}{/dim}o third
+/fo█
+-----
+[EVENT]:char:o
+{reverse}foo{/reverse} first
+{dim}{reverse}foo{/reverse}{/dim} second
+{dim}{reverse}foo{/reverse}{/dim} third
+/foo█
+-----
+[EVENT]:enter
 {reverse}foo{/reverse} first
 {dim}{reverse}foo{/reverse}{/dim} second
 {dim}{reverse}foo{/reverse}{/dim} third
 :
+-----
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }

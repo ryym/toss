@@ -30,8 +30,10 @@ HEADER 2
 line 3
 line 4
 :
+-----
+[EVENT]:char:q
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 #[test]
@@ -58,11 +60,27 @@ line 6
     let want = "\
 HEADER 1
 HEADER 2
+line 3
+line 4
+:
+-----
+[EVENT]:char:j
+HEADER 1
+HEADER 2
+line 4
+line 5
+:
+-----
+[EVENT]:char:j
+HEADER 1
+HEADER 2
 line 5
 line 6
 :
+-----
+[EVENT]:char:q
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 #[test]
@@ -89,11 +107,34 @@ line 6
     let want = "\
 HEADER 1
 HEADER 2
+line 3
+line 4
+:
+-----
+[EVENT]:char:j
+HEADER 1
+HEADER 2
 line 4
 line 5
 :
+-----
+[EVENT]:char:j
+HEADER 1
+HEADER 2
+line 5
+line 6
+:
+-----
+[EVENT]:char:k
+HEADER 1
+HEADER 2
+line 4
+line 5
+:
+-----
+[EVENT]:char:q
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 /// Scrolling up should not go above the header lines.
@@ -123,8 +164,12 @@ HEADER 2
 line 3
 line 4
 :
+-----
+[EVENT]:char:k
+[EVENT]:char:k
+[EVENT]:char:q
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 /// 'g' should jump to the first non-header line.
@@ -155,8 +200,24 @@ line 2
 line 3
 line 4
 :
+-----
+[EVENT]:char:G
+HEADER
+line 4
+line 5
+line 6
+:
+-----
+[EVENT]:char:g
+HEADER
+line 2
+line 3
+line 4
+:
+-----
+[EVENT]:char:q
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 /// 'G' should jump to the end while keeping the header.
@@ -183,12 +244,21 @@ line 6
     });
     let want = "\
 HEADER
+line 2
+line 3
+line 4
+:
+-----
+[EVENT]:char:G
+HEADER
 line 4
 line 5
 line 6
 :
+-----
+[EVENT]:char:q
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
 
 /// header=0 should behave identically to no header.
@@ -217,6 +287,8 @@ line 1
 line 2
 line 3
 :
+-----
+[EVENT]:char:q
 ";
-    assert_eq!(screen.last_snapshot(), want);
+    assert_eq!(screen.out(), want);
 }
