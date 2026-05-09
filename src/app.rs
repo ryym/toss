@@ -412,7 +412,7 @@ fn find_next_match_position(
     // If the current cursor is outside the visible area, re-anchor it
     // to the first visible match instead of jumping from the old position.
     let needs_reanchor = match current {
-        Some(c) => !is_match_visible(pager.doc_mut(), query, c, &visible_rows),
+        Some(c) => !is_match_visible(pager.doc_mut(), c, &visible_rows),
         None => false,
     };
 
@@ -428,12 +428,11 @@ fn find_next_match_position(
     // Try to move to the next match within the same line first.
     if !needs_reanchor
         && let Some(current) = current
-        && let Some((next_mi, (start, end))) =
+        && let Some((start, end)) =
             search::find_next_match_in_line(pager.doc_mut(), query, current, direction)
     {
         return Some(MatchPosition {
             line_index: current.line_index,
-            match_index: next_mi,
             plain_range: start..end,
         });
     }
@@ -462,20 +461,11 @@ fn find_next_match_position(
 }
 
 /// Check if a match is on a wrap row that is actually visible on screen.
-fn is_match_visible(
-    doc: &mut Document,
-    query: &Regex,
-    pos: &MatchPosition,
-    visible_rows: &[Row],
-) -> bool {
+fn is_match_visible(doc: &mut Document, pos: &MatchPosition, visible_rows: &[Row]) -> bool {
     let Some(line) = doc.line(pos.line_index) else {
         return false;
     };
-    let matches = line.find_matches(query);
-    let Some(&(start, _)) = matches.get(pos.match_index) else {
-        return false;
-    };
-    let raw_offset = line.plain_to_raw()[start];
+    let raw_offset = line.plain_to_raw()[pos.plain_range.start];
     visible_rows
         .iter()
         .any(|r| r.line_index() == pos.line_index && r.raw_range().contains(&raw_offset))
@@ -490,12 +480,11 @@ fn find_first_match_in_viewport(
     for row in visible_rows {
         let line = doc.line(row.line_index())?;
         let matches = line.find_matches(query);
-        for (mi, &(start, end)) in matches.iter().enumerate() {
+        for &(start, end) in matches.iter() {
             let raw_offset = line.plain_to_raw()[start];
             if row.raw_range().contains(&raw_offset) {
                 return Some(MatchPosition {
                     line_index: row.line_index(),
-                    match_index: mi,
                     plain_range: start..end,
                 });
             }

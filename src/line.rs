@@ -12,7 +12,11 @@
 //! how wrapping and search highlighting work correctly in the presence of escape sequences.
 //! See the `plain_to_raw` field documentation for a concrete example.
 
-use std::{cmp::Ordering, ops::Range};
+use std::{
+    cmp::Ordering,
+    ops::{Bound, Range, RangeBounds},
+    slice::SliceIndex,
+};
 
 use regex::Regex;
 use unicode_width::UnicodeWidthChar;
@@ -209,9 +213,24 @@ impl Line {
     /// Find all matches of a regex in the plain text.
     /// Returns a list of (start, end) byte ranges in the plain text.
     pub fn find_matches(&self, query: &Regex) -> Vec<(usize, usize)> {
+        self.find_matches_within(query, ..)
+    }
+
+    /// Find all matches of a regex in the plain text.
+    /// Returns a list of (start, end) byte ranges in the plain text.
+    pub fn find_matches_within(
+        &self,
+        query: &Regex,
+        range: impl RangeBounds<usize> + SliceIndex<str, Output = str>,
+    ) -> Vec<(usize, usize)> {
+        let padding = match range.start_bound() {
+            Bound::Unbounded => 0,
+            Bound::Included(n) => *n,
+            Bound::Excluded(_) => panic!("unsupported operation"),
+        };
         query
-            .find_iter(&self.plain)
-            .map(|m| (m.start(), m.end()))
+            .find_iter(&self.plain[range])
+            .map(|m| (padding + m.start(), padding + m.end()))
             .collect()
     }
 }

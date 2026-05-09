@@ -35,7 +35,6 @@ impl SearchDirection {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchPosition {
     pub line_index: usize,
-    pub match_index: usize,
     /// A match range in the line's plain text.
     pub plain_range: Range<usize>,
 }
@@ -100,25 +99,16 @@ pub fn find_next_match_in_line(
     query: &Regex,
     current: &MatchPosition,
     direction: SearchDirection,
-) -> Option<(usize, (usize, usize))> {
+) -> Option<(usize, usize)> {
     let line = doc.line(current.line_index)?;
-    let matches = line.find_matches(query);
     match direction {
         SearchDirection::Forward => {
-            let next = current.match_index + 1;
-            if next < matches.len() - 1 {
-                Some((next, matches[next]))
-            } else {
-                None
-            }
+            let matches = line.find_matches_within(query, current.plain_range.end..);
+            matches.first().copied()
         }
         SearchDirection::Backward => {
-            if current.match_index > 0 {
-                let idx = current.match_index - 1;
-                Some((idx, matches[idx]))
-            } else {
-                None
-            }
+            let matches = line.find_matches_within(query, ..current.plain_range.start);
+            matches.last().copied()
         }
     }
 }
@@ -143,7 +133,6 @@ pub(crate) fn first_match(
     let m = matches[match_index];
     Some(MatchPosition {
         line_index,
-        match_index,
         plain_range: m.0..m.1,
     })
 }
@@ -160,14 +149,9 @@ mod tests {
         Regex::new(&regex::escape(pattern)).unwrap()
     }
 
-    fn pos(
-        line_index: usize,
-        match_index: usize,
-        plain_range: Range<usize>,
-    ) -> Option<MatchPosition> {
+    fn pos(line_index: usize, plain_range: Range<usize>) -> Option<MatchPosition> {
         Some(MatchPosition {
             line_index,
-            match_index,
             plain_range,
         })
     }
@@ -178,7 +162,7 @@ mod tests {
         let query = make_query("bbb");
         assert_eq!(
             find_next_match(&mut doc, &query, 0, SearchDirection::Forward),
-            pos(1, 0, 0..3)
+            pos(1, 0..3)
         );
     }
 
@@ -189,7 +173,7 @@ mod tests {
         // Starting from line 2, should wrap to line 0
         assert_eq!(
             find_next_match(&mut doc, &query, 2, SearchDirection::Forward),
-            pos(0, 0, 0..3)
+            pos(0, 0..3)
         );
     }
 
@@ -199,7 +183,7 @@ mod tests {
         let query = make_query("bbb");
         assert_eq!(
             find_next_match(&mut doc, &query, 3, SearchDirection::Backward),
-            pos(3, 0, 0..3)
+            pos(3, 0..3)
         );
     }
 
@@ -210,7 +194,7 @@ mod tests {
         // Starting from line 0, should wrap to line 2
         assert_eq!(
             find_next_match(&mut doc, &query, 0, SearchDirection::Backward),
-            pos(2, 0, 0..3)
+            pos(2, 0..3)
         );
     }
 
@@ -241,7 +225,7 @@ mod tests {
         // Start from line 2, forward: checks 2, then wraps to 0, 1 -> finds 1
         assert_eq!(
             find_next_match(&mut doc, &query, 2, SearchDirection::Forward),
-            pos(1, 0, 0..3)
+            pos(1, 0..3)
         );
     }
 }
