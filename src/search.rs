@@ -2,7 +2,10 @@
 
 use regex::Regex;
 
-use crate::{document::Document, line::MatchPosition};
+use crate::{
+    document::Document,
+    line::{MatchPosition, Row, SearchLineFrom},
+};
 
 /// Direction of search.
 #[derive(Debug, Clone, Copy)]
@@ -37,90 +40,100 @@ pub struct SearchState {
     pub current: Option<MatchPosition>,
 }
 
-/// Find the next match from `from_line` in the given direction.
+/// Specifies the starting position when searching across a [`Document`].
+/// The direction is specified separately via [`SearchDirection`].
+pub enum SearchFrom<'a> {
+    /// Search from the line at the given index onward.
+    Line(usize),
+    /// Search from the given [`Row`] onward. Only [`SearchDirection::Forward`] is supported.
+    Row(&'a Row),
+    /// Search after the given match. The match itself is excluded.
+    NextOf(&'a MatchPosition),
+}
+
+/// Find the next match from `from` in the given direction.
 /// Wraps around the document if no match is found before the end/start.
-pub fn find_next_match(
+pub fn search_document(
+    doc: &mut Document,
+    query: &Regex,
+    from: SearchFrom,
+    direction: SearchDirection,
+) -> Option<MatchPosition> {
+    match from {
+        SearchFrom::Line(line_index) => match direction {
+            SearchDirection::Forward => {
+                search_forward(doc, query, line_index, SearchLineFrom::Start)
+            }
+            SearchDirection::Backward => {
+                search_backward(doc, query, line_index, SearchLineFrom::Start)
+            }
+        },
+        SearchFrom::Row(row) => match direction {
+            SearchDirection::Forward => {
+                search_forward(doc, query, row.line_index(), SearchLineFrom::Row(row))
+            }
+            SearchDirection::Backward => {
+                panic!("Searching document backwards from row is not supported")
+            }
+        },
+        SearchFrom::NextOf(m) => match direction {
+            SearchDirection::Forward => {
+                search_forward(doc, query, m.line_index, SearchLineFrom::NextOf(m))
+            }
+            SearchDirection::Backward => {
+                search_backward(doc, query, m.line_index, SearchLineFrom::PrevOf(m))
+            }
+        },
+    }
+}
+
+fn search_forward(
     doc: &mut Document,
     query: &Regex,
     from_line: usize,
-    direction: SearchDirection,
+    first_line_from: SearchLineFrom,
 ) -> Option<MatchPosition> {
+    // Search a next match in the same line.
+    let line = doc.line(from_line)?;
+    if let Some(m) = line.find_first_match_from(query, first_line_from) {
+        return Some(m);
+    }
+    // Search from_line+1 to bottom, then top to from_line (wrap around).
+    let next_line = from_line + 1;
     let line_count = doc.line_count();
-    if line_count == 0 {
-        return None;
-    }
-
-    match direction {
-        SearchDirection::Forward => {
-            // Search from_line..end, then 0..from_line (wrap around)
-            for i in from_line..line_count {
-                if let Some(pos) = first_match(doc, query, i, direction) {
-                    return Some(pos);
-                }
-            }
-            for i in 0..from_line {
-                if let Some(pos) = first_match(doc, query, i, direction) {
-                    return Some(pos);
-                }
-            }
-        }
-        SearchDirection::Backward => {
-            // Search from_line..0 (reverse), then end..from_line (reverse, wrap around)
-            for i in (0..=from_line).rev() {
-                if let Some(pos) = first_match(doc, query, i, direction) {
-                    return Some(pos);
-                }
-            }
-            for i in (from_line + 1..line_count).rev() {
-                if let Some(pos) = first_match(doc, query, i, direction) {
-                    return Some(pos);
-                }
-            }
+    for i in (next_line..line_count).chain(0..next_line) {
+        if let Some(m) = doc
+            .line(i)?
+            .find_first_match_from(query, SearchLineFrom::Start)
+        {
+            return Some(m);
         }
     }
-
     None
 }
 
-/// Find the next match within the same line after `match_index`.
-/// Returns None if there are no more matches on this line in the given direction.
-pub fn find_next_match_in_line(
+fn search_backward(
     doc: &mut Document,
     query: &Regex,
-    current: &MatchPosition,
-    direction: SearchDirection,
+    from_line: usize,
+    first_line_from: SearchLineFrom,
 ) -> Option<MatchPosition> {
-    let line = doc.line(current.line_index)?;
-    match direction {
-        SearchDirection::Forward => {
-            let matches = line.find_matches_within(query, current.plain_range.end..);
-            matches.first().cloned()
-        }
-        SearchDirection::Backward => {
-            let matches = line.find_matches_within(query, ..current.plain_range.start);
-            matches.last().cloned()
+    // Search a next match in the same line.
+    let line = doc.line(from_line)?;
+    if let Some(m) = line.find_last_match_from(query, first_line_from) {
+        return Some(m);
+    }
+    // Search from_line-1 to top, then bottom to from_line (wrap around).
+    let line_count = doc.line_count();
+    for i in (0..from_line).rev().chain((from_line..line_count).rev()) {
+        if let Some(m) = doc
+            .line(i)?
+            .find_last_match_from(query, SearchLineFrom::Start)
+        {
+            return Some(m);
         }
     }
-}
-
-/// Return the first match position on a line (first for forward, last for backward).
-pub(crate) fn first_match(
-    doc: &mut Document,
-    query: &Regex,
-    line_index: usize,
-    direction: SearchDirection,
-) -> Option<MatchPosition> {
-    let line = doc.line(line_index)?;
-    let matches = line.find_matches(query);
-    // let match_count = line.find_matches(query).len();
-    if matches.is_empty() {
-        return None;
-    }
-    let match_index = match direction {
-        SearchDirection::Forward => 0,
-        SearchDirection::Backward => matches.len() - 1,
-    };
-    Some(matches[match_index].clone())
+    None
 }
 
 #[cfg(test)]
@@ -144,76 +157,219 @@ mod tests {
         })
     }
 
+    // --- search_document tests ---
+
     #[test]
-    fn forward_finds_first_match() {
-        let mut doc = make_doc(&["aaa", "bbb", "ccc", "bbb"]);
+    fn document_line_forward_finds_match() {
+        let mut doc = make_doc(&["aaa", "bbb cc bbb", "ddd"]);
         let query = make_query("bbb");
+        // Starts from line 1, picks the first match on it.
         assert_eq!(
-            find_next_match(&mut doc, &query, 0, SearchDirection::Forward),
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::Line(1),
+                SearchDirection::Forward
+            ),
             pos(1, 0..3)
         );
     }
 
     #[test]
-    fn forward_wraps_around() {
+    fn document_line_forward_wraps_around() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc"]);
         let query = make_query("aaa");
-        // Starting from line 2, should wrap to line 0
+        // From line 2 there is no match; wraps to line 0.
         assert_eq!(
-            find_next_match(&mut doc, &query, 2, SearchDirection::Forward),
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::Line(2),
+                SearchDirection::Forward
+            ),
             pos(0, 0..3)
         );
     }
 
     #[test]
-    fn backward_finds_match() {
-        let mut doc = make_doc(&["aaa", "bbb", "ccc", "bbb"]);
+    fn document_line_backward_finds_last_match_in_line() {
+        let mut doc = make_doc(&["aaa", "bbb cc bbb", "ddd"]);
         let query = make_query("bbb");
+        // Starts from line 1; picks the last match on that line.
         assert_eq!(
-            find_next_match(&mut doc, &query, 3, SearchDirection::Backward),
-            pos(3, 0..3)
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::Line(1),
+                SearchDirection::Backward
+            ),
+            pos(1, 7..10)
         );
     }
 
     #[test]
-    fn backward_wraps_around() {
+    fn document_line_backward_wraps_around() {
         let mut doc = make_doc(&["aaa", "bbb", "ccc"]);
         let query = make_query("ccc");
-        // Starting from line 0, should wrap to line 2
+        // From line 0 there is no match; wraps to line 2.
         assert_eq!(
-            find_next_match(&mut doc, &query, 0, SearchDirection::Backward),
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::Line(0),
+                SearchDirection::Backward
+            ),
             pos(2, 0..3)
         );
     }
 
     #[test]
-    fn no_match_returns_none() {
-        let mut doc = make_doc(&["aaa", "bbb", "ccc"]);
+    fn document_next_of_forward_same_line() {
+        let mut doc = make_doc(&["xx", "ab cd ab ef ab", "yy"]);
+        let query = make_query("ab");
+        let border = MatchPosition {
+            line_index: 1,
+            plain_range: 0..2,
+        };
+        assert_eq!(
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::NextOf(&border),
+                SearchDirection::Forward,
+            ),
+            pos(1, 6..8)
+        );
+    }
+
+    #[test]
+    fn document_next_of_forward_advances_to_next_line() {
+        let mut doc = make_doc(&["xx", "ab cd", "yy ab"]);
+        let query = make_query("ab");
+        let border = MatchPosition {
+            line_index: 1,
+            plain_range: 0..2,
+        };
+        // No further match on line 1; advances to line 2.
+        assert_eq!(
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::NextOf(&border),
+                SearchDirection::Forward,
+            ),
+            pos(2, 3..5)
+        );
+    }
+
+    #[test]
+    fn document_next_of_forward_wraps_to_earlier_match_on_same_line() {
+        // Only line 1 has matches. After exhausting forward search wraps around
+        // and picks up the match before border on the same line.
+        let mut doc = make_doc(&["xx", "ab cd ab", "yy"]);
+        let query = make_query("ab");
+        let border = MatchPosition {
+            line_index: 1,
+            plain_range: 6..8,
+        };
+        assert_eq!(
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::NextOf(&border),
+                SearchDirection::Forward,
+            ),
+            pos(1, 0..2)
+        );
+    }
+
+    #[test]
+    fn document_next_of_backward_same_line() {
+        let mut doc = make_doc(&["xx", "ab cd ab ef ab", "yy"]);
+        let query = make_query("ab");
+        let border = MatchPosition {
+            line_index: 1,
+            plain_range: 12..14,
+        };
+        assert_eq!(
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::NextOf(&border),
+                SearchDirection::Backward,
+            ),
+            pos(1, 6..8)
+        );
+    }
+
+    #[test]
+    fn document_next_of_backward_wraps_to_later_match_on_same_line() {
+        // Only line 1 has matches. After exhausting backward search wraps around
+        // and picks up the match after border on the same line.
+        let mut doc = make_doc(&["xx", "ab cd ab", "yy"]);
+        let query = make_query("ab");
+        let border = MatchPosition {
+            line_index: 1,
+            plain_range: 0..2,
+        };
+        assert_eq!(
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::NextOf(&border),
+                SearchDirection::Backward,
+            ),
+            pos(1, 6..8)
+        );
+    }
+
+    #[test]
+    fn document_row_forward_skips_matches_before_row() {
+        let mut doc = make_doc(&["abcdefghij"]);
+        let query = make_query("cd");
+        // Wrap line 0 at width 5: row 0 = "abcde", row 1 = "fghij".
+        let rows = doc.line(0).unwrap().wrap(5);
+        // Searching from row 1 skips the "cd" match in row 0; no match remains
+        // on the line, so wraps around the document and returns "cd" again
+        // via the wrap-around revisit of line 0.
+        assert_eq!(
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::Row(&rows[1]),
+                SearchDirection::Forward,
+            ),
+            pos(0, 2..4)
+        );
+    }
+
+    #[test]
+    fn document_no_match_returns_none() {
+        let mut doc = make_doc(&["aaa", "bbb"]);
         let query = make_query("zzz");
         assert_eq!(
-            find_next_match(&mut doc, &query, 0, SearchDirection::Forward),
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::Line(0),
+                SearchDirection::Forward
+            ),
             None
         );
     }
 
     #[test]
-    fn empty_document() {
+    fn document_empty_returns_none() {
         let mut doc = make_doc(&[]);
         let query = make_query("foo");
         assert_eq!(
-            find_next_match(&mut doc, &query, 0, SearchDirection::Forward),
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::Line(0),
+                SearchDirection::Forward
+            ),
             None
-        );
-    }
-
-    #[test]
-    fn forward_skips_current_line_on_wrap() {
-        let mut doc = make_doc(&["aaa", "bbb", "ccc"]);
-        let query = make_query("bbb");
-        // Start from line 2, forward: checks 2, then wraps to 0, 1 -> finds 1
-        assert_eq!(
-            find_next_match(&mut doc, &query, 2, SearchDirection::Forward),
-            pos(1, 0..3)
         );
     }
 }
