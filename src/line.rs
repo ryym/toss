@@ -78,7 +78,7 @@ impl Row {
 }
 
 /// Position of a specific search match: line index and a text range in the line.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MatchPosition {
     pub line_index: usize,
     /// A match range in the line's plain text.
@@ -165,6 +165,7 @@ impl Line {
     }
 
     /// Returns the position of this line in the document.
+    #[cfg(test)]
     #[inline]
     pub fn index(&self) -> usize {
         self.index

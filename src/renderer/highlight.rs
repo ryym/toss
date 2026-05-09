@@ -70,17 +70,9 @@ pub fn apply_highlight_if_matches<'line>(
     if matches.is_empty() {
         return Cow::Borrowed(&line.raw()[raw_range]);
     }
-
-    let current_match_start = search.current.as_ref().and_then(|current| {
-        if current.line_index == line.index() {
-            Some(current.plain_range.start)
-        } else {
-            None
-        }
-    });
     let positions = build_highlight_positions(
         &matches,
-        current_match_start,
+        &search.current,
         line.plain_to_raw(),
         line.raw().len(),
     );
@@ -89,7 +81,7 @@ pub fn apply_highlight_if_matches<'line>(
 }
 
 /// Build highlight positions from plain-text match ranges.
-/// The different highlight style is used for the current match specified by `current_match_start`.
+/// The different highlight style is used for the current match specified by `current_match`.
 ///
 /// Uses `plain_to_raw` mapping to convert plain-text byte ranges to raw-text
 /// positions. Detects escape sequences within matches by checking for gaps in
@@ -97,7 +89,7 @@ pub fn apply_highlight_if_matches<'line>(
 /// re-applied after each internal escape sequence.
 fn build_highlight_positions(
     matches: &[MatchPosition],
-    current_match_start: Option<usize>,
+    current_match: &Option<MatchPosition>,
     plain_to_raw: &[usize],
     raw_len: usize,
 ) -> Vec<HighlightPos> {
@@ -109,8 +101,9 @@ fn build_highlight_positions(
             continue;
         }
 
-        let style = current_match_start
-            .filter(|&current| current == range.start)
+        let style = current_match
+            .as_ref()
+            .filter(|&current| current == m)
             .map(|_| HighlightStyle::Reverse)
             .unwrap_or(HighlightStyle::DimReverse);
 
@@ -229,7 +222,7 @@ mod tests {
             .collect::<Vec<_>>();
         build_highlight_positions(
             &matches,
-            ranges.get(0).map(|r| r.0),
+            &matches.get(0).cloned(),
             line.plain_to_raw(),
             line.raw().len(),
         )
