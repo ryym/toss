@@ -81,6 +81,14 @@ impl Row {
     }
 }
 
+/// Position of a specific search match: line index and a text range in the line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchPosition {
+    pub line_index: usize,
+    /// A match range in the line's plain text.
+    pub plain_range: Range<usize>,
+}
+
 /// A single line of text from the document.
 #[derive(Debug, Clone)]
 pub struct Line {
@@ -212,7 +220,7 @@ impl Line {
 
     /// Find all matches of a regex in the plain text.
     /// Returns a list of (start, end) byte ranges in the plain text.
-    pub fn find_matches(&self, query: &Regex) -> Vec<(usize, usize)> {
+    pub fn find_matches(&self, query: &Regex) -> Vec<MatchPosition> {
         self.find_matches_within(query, ..)
     }
 
@@ -222,7 +230,7 @@ impl Line {
         &self,
         query: &Regex,
         range: impl RangeBounds<usize> + SliceIndex<str, Output = str>,
-    ) -> Vec<(usize, usize)> {
+    ) -> Vec<MatchPosition> {
         let padding = match range.start_bound() {
             Bound::Unbounded => 0,
             Bound::Included(n) => *n,
@@ -230,7 +238,10 @@ impl Line {
         };
         query
             .find_iter(&self.plain[range])
-            .map(|m| (padding + m.start(), padding + m.end()))
+            .map(|m| MatchPosition {
+                line_index: self.index,
+                plain_range: (padding + m.start())..(padding + m.end()),
+            })
             .collect()
     }
 }

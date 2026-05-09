@@ -1,10 +1,8 @@
 //! Search state and navigation for finding matches in a document.
 
-use std::ops::Range;
-
 use regex::Regex;
 
-use crate::document::Document;
+use crate::{document::Document, line::MatchPosition};
 
 /// Direction of search.
 #[derive(Debug, Clone, Copy)]
@@ -29,14 +27,6 @@ impl SearchDirection {
             SearchDirection::Backward => SearchDirection::Forward,
         }
     }
-}
-
-/// Position of a specific match: line index and a text range in the line.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MatchPosition {
-    pub line_index: usize,
-    /// A match range in the line's plain text.
-    pub plain_range: Range<usize>,
 }
 
 /// Active search state, preserved across search submissions.
@@ -99,16 +89,16 @@ pub fn find_next_match_in_line(
     query: &Regex,
     current: &MatchPosition,
     direction: SearchDirection,
-) -> Option<(usize, usize)> {
+) -> Option<MatchPosition> {
     let line = doc.line(current.line_index)?;
     match direction {
         SearchDirection::Forward => {
             let matches = line.find_matches_within(query, current.plain_range.end..);
-            matches.first().copied()
+            matches.first().cloned()
         }
         SearchDirection::Backward => {
             let matches = line.find_matches_within(query, ..current.plain_range.start);
-            matches.last().copied()
+            matches.last().cloned()
         }
     }
 }
@@ -130,15 +120,13 @@ pub(crate) fn first_match(
         SearchDirection::Forward => 0,
         SearchDirection::Backward => matches.len() - 1,
     };
-    let m = matches[match_index];
-    Some(MatchPosition {
-        line_index,
-        plain_range: m.0..m.1,
-    })
+    Some(matches[match_index].clone())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Range;
+
     use super::*;
 
     fn make_doc(lines: &[&str]) -> Document {

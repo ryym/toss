@@ -5,13 +5,13 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use regex::Regex;
 
 use crate::document::Document;
-use crate::line::Row;
+use crate::line::{MatchPosition, Row};
 use crate::line_editor::LineEditor;
 use crate::pager::Pager;
 use crate::renderer::Renderer;
 use crate::screen::Screen;
 use crate::scroll::ScrollPhysics;
-use crate::search::{self, MatchPosition, SearchDirection, SearchState};
+use crate::search::{self, SearchDirection, SearchState};
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
@@ -428,13 +428,10 @@ fn find_next_match_position(
     // Try to move to the next match within the same line first.
     if !needs_reanchor
         && let Some(current) = current
-        && let Some((start, end)) =
+        && let Some(match_pos) =
             search::find_next_match_in_line(pager.doc_mut(), query, current, direction)
     {
-        return Some(MatchPosition {
-            line_index: current.line_index,
-            plain_range: start..end,
-        });
+        return Some(match_pos);
     }
 
     let line_count = pager.doc_mut().line_count();
@@ -480,13 +477,10 @@ fn find_first_match_in_viewport(
     for row in visible_rows {
         let line = doc.line(row.line_index())?;
         let matches = line.find_matches(query);
-        for &(start, end) in matches.iter() {
-            let raw_offset = line.plain_to_raw()[start];
+        for m in matches.into_iter() {
+            let raw_offset = line.plain_to_raw()[m.plain_range.start];
             if row.raw_range().contains(&raw_offset) {
-                return Some(MatchPosition {
-                    line_index: row.line_index(),
-                    plain_range: start..end,
-                });
+                return Some(m);
             }
         }
     }

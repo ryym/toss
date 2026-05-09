@@ -6,10 +6,10 @@ use crossterm::event::Event;
 
 use crate::{
     document::Document,
-    line::Row,
+    line::{MatchPosition, Row},
     pager::{PageSnapshot, PageUpdate},
     screen::{Direction, Screen, Scroll},
-    search::{MatchPosition, SearchState},
+    search::SearchState,
 };
 
 struct SearchStateRef {
