@@ -269,18 +269,22 @@ impl Line {
             SearchLineFrom::PrevOf(border) => {
                 Box::new(matches.take_while(|m| m.plain_range.end <= border.plain_range.start))
             }
-            SearchLineFrom::Row(row) => Box::new(matches.skip_while(|m| {
-                // Zero-width regex match at the end of plain text like `$` yields
-                // `m.plain_range.start == plain.len()`, which is out of bounds
-                // for `plain_to_raw`. Treat it as the end of raw text.
-                let raw_pos = self
-                    .plain_to_raw
-                    .get(m.plain_range.start)
-                    .copied()
-                    .unwrap_or(self.raw.len());
-                raw_pos < row.raw_range.start
-            })),
+            SearchLineFrom::Row(row) => {
+                Box::new(matches.skip_while(|m| {
+                    self.plain_to_raw_safe(m.plain_range.start) < row.raw_range.start
+                }))
+            }
         }
+    }
+
+    /// Zero-width regex match at the end of plain text like `$` yields
+    /// a plain text index of `plain.len()`, which is out of bounds for `plain_to_raw`.
+    /// This method treats it as the end of raw text.
+    fn plain_to_raw_safe(&self, plain_index: usize) -> usize {
+        self.plain_to_raw
+            .get(plain_index)
+            .copied()
+            .unwrap_or(self.raw.len())
     }
 }
 
