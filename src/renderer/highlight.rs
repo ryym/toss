@@ -69,7 +69,7 @@ pub fn apply_highlight_if_matches<'line>(
     }
 
     let current_match_index = search.current.and_then(|current| {
-        if current.line == line.index() {
+        if current.line_index == line.index() {
             Some(current.match_index)
         } else {
             None

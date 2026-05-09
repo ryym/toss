@@ -32,7 +32,7 @@ impl SearchDirection {
 /// Position of a specific match: line index and match index within that line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MatchPosition {
-    pub line: usize,
+    pub line_index: usize,
     pub match_index: usize,
 }
 
@@ -97,7 +97,7 @@ pub fn find_next_match_in_line(
     current: MatchPosition,
     direction: SearchDirection,
 ) -> Option<usize> {
-    let line = doc.line(current.line)?;
+    let line = doc.line(current.line_index)?;
     let match_count = line.find_matches(query).len();
     match direction {
         SearchDirection::Forward => {
@@ -131,7 +131,7 @@ pub(crate) fn first_match(
         SearchDirection::Backward => match_count - 1,
     };
     Some(MatchPosition {
-        line: line_index,
+        line_index,
         match_index,
     })
 }
@@ -148,8 +148,11 @@ mod tests {
         Regex::new(&regex::escape(pattern)).unwrap()
     }
 
-    fn pos(line: usize, match_index: usize) -> Option<MatchPosition> {
-        Some(MatchPosition { line, match_index })
+    fn pos(line_index: usize, match_index: usize) -> Option<MatchPosition> {
+        Some(MatchPosition {
+            line_index,
+            match_index,
+        })
     }
 
     #[test]

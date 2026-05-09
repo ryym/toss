@@ -252,7 +252,7 @@ impl<S: Screen> App<S> {
         log::debug!("Search preview: query={input:?}, result={matched:?}");
 
         if let Some(ref pos) = matched {
-            self.pager.jump_to(pos.line);
+            self.pager.jump_to(pos.line_index);
         }
 
         if let AppMode::Search { preview, .. } = &mut self.mode {
@@ -336,7 +336,7 @@ impl<S: Screen> App<S> {
         let next = find_next_match_position(&mut self.pager, &search.query, current, direction);
         log::debug!("Jump to next match: {next:?}");
         if let Some(pos) = next {
-            self.pager.jump_to(pos.line);
+            self.pager.jump_to(pos.line_index);
             if let Some(s) = self.search.as_mut() {
                 s.current = Some(pos);
             }
@@ -432,7 +432,7 @@ fn find_next_match_position(
             search::find_next_match_in_line(pager.doc_mut(), query, current, direction)
     {
         return Some(MatchPosition {
-            line: current.line,
+            line_index: current.line_index,
             match_index: next_mi,
         });
     }
@@ -441,15 +441,15 @@ fn find_next_match_position(
     let from = match current {
         Some(pos) if !needs_reanchor => match direction {
             SearchDirection::Forward => {
-                if pos.line + 1 < line_count {
-                    pos.line + 1
+                if pos.line_index + 1 < line_count {
+                    pos.line_index + 1
                 } else {
                     0
                 }
             }
             SearchDirection::Backward => {
-                if pos.line > 0 {
-                    pos.line - 1
+                if pos.line_index > 0 {
+                    pos.line_index - 1
                 } else {
                     line_count.saturating_sub(1)
                 }
@@ -467,7 +467,7 @@ fn is_match_visible(
     pos: MatchPosition,
     visible_rows: &[Row],
 ) -> bool {
-    let Some(line) = doc.line(pos.line) else {
+    let Some(line) = doc.line(pos.line_index) else {
         return false;
     };
     let matches = line.find_matches(query);
@@ -477,7 +477,7 @@ fn is_match_visible(
     let raw_offset = line.plain_to_raw()[start];
     visible_rows
         .iter()
-        .any(|r| r.line_index() == pos.line && r.raw_range().contains(&raw_offset))
+        .any(|r| r.line_index() == pos.line_index && r.raw_range().contains(&raw_offset))
 }
 
 /// Find the first match that falls on a visible wrap row in the viewport.
@@ -493,7 +493,7 @@ fn find_first_match_in_viewport(
             let raw_offset = line.plain_to_raw()[start];
             if row.raw_range().contains(&raw_offset) {
                 return Some(MatchPosition {
-                    line: row.line_index(),
+                    line_index: row.line_index(),
                     match_index: mi,
                 });
             }
