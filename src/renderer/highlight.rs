@@ -68,7 +68,7 @@ pub fn apply_highlight_if_matches<'line>(
         return Cow::Borrowed(&line.raw()[raw_range]);
     }
 
-    let current_match_index = search.current.and_then(|current| {
+    let current_match_index = search.current.as_ref().and_then(|current| {
         if current.line_index == line.index() {
             Some(current.match_index)
         } else {

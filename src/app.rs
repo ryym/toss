@@ -331,7 +331,7 @@ impl<S: Screen> App<S> {
         } else {
             search.direction
         };
-        let current = search.current;
+        let current = &search.current;
 
         let next = find_next_match_position(&mut self.pager, &search.query, current, direction);
         log::debug!("Jump to next match: {next:?}");
@@ -401,7 +401,7 @@ fn active_search<'a>(
 fn find_next_match_position(
     pager: &mut Pager,
     query: &Regex,
-    current: Option<MatchPosition>,
+    current: &Option<MatchPosition>,
     direction: SearchDirection,
 ) -> Option<MatchPosition> {
     let visible_rows = pager.contiguous_rows().to_vec();
@@ -428,12 +428,13 @@ fn find_next_match_position(
     // Try to move to the next match within the same line first.
     if !needs_reanchor
         && let Some(current) = current
-        && let Some(next_mi) =
+        && let Some((next_mi, (start, end))) =
             search::find_next_match_in_line(pager.doc_mut(), query, current, direction)
     {
         return Some(MatchPosition {
             line_index: current.line_index,
             match_index: next_mi,
+            plain_range: start..end,
         });
     }
 
@@ -464,7 +465,7 @@ fn find_next_match_position(
 fn is_match_visible(
     doc: &mut Document,
     query: &Regex,
-    pos: MatchPosition,
+    pos: &MatchPosition,
     visible_rows: &[Row],
 ) -> bool {
     let Some(line) = doc.line(pos.line_index) else {
@@ -489,12 +490,13 @@ fn find_first_match_in_viewport(
     for row in visible_rows {
         let line = doc.line(row.line_index())?;
         let matches = line.find_matches(query);
-        for (mi, &(start, _)) in matches.iter().enumerate() {
+        for (mi, &(start, end)) in matches.iter().enumerate() {
             let raw_offset = line.plain_to_raw()[start];
             if row.raw_range().contains(&raw_offset) {
                 return Some(MatchPosition {
                     line_index: row.line_index(),
                     match_index: mi,
+                    plain_range: start..end,
                 });
             }
         }
