@@ -6,7 +6,10 @@
 
 use std::{borrow::Cow, ops::Range};
 
-use crate::{line::Line, search::SearchState};
+use crate::{
+    line::{Line, MatchPosition},
+    search::SearchState,
+};
 
 /// Highlight style for search matches.
 #[derive(Debug, Clone, Copy)]
@@ -67,79 +70,45 @@ pub fn apply_highlight_if_matches<'line>(
     if matches.is_empty() {
         return Cow::Borrowed(&line.raw()[raw_range]);
     }
-
-    let current_match_index = search.current.and_then(|current| {
-        if current.line == line.index() {
-            Some(current.match_index)
-        } else {
-            None
-        }
-    });
-    let positions = build_highlight_positions(
-        &matches,
-        current_match_index,
-        line.plain_to_raw(),
-        line.raw().len(),
-    );
+    let positions = build_highlight_positions(&matches, &search.current, line);
     let text = apply_highlight_to_range(line.raw(), raw_range, &positions);
     Cow::Owned(text)
 }
 
 /// Build highlight positions from plain-text match ranges.
-/// The different highlight style is used for the current match specified by `current_match_index`.
+/// The different highlight style is used for the current match specified by `current_match`.
 ///
-/// Uses `plain_to_raw` mapping to convert plain-text byte ranges to raw-text
-/// positions. Detects escape sequences within matches by checking for gaps in
-/// the mapping and inserts `InnerControlEnd` markers so highlighting is
-/// re-applied after each internal escape sequence.
+/// `InnerControlEnd` markers are inserted at every embedded escape sequence
+/// inside a match so that the highlight is re-applied after each one.
 fn build_highlight_positions(
-    plain_ranges: &[(usize, usize)],
-    current_match_index: Option<usize>,
-    plain_to_raw: &[usize],
-    raw_len: usize,
+    matches: &[MatchPosition],
+    current_match: &Option<MatchPosition>,
+    line: &Line,
 ) -> Vec<HighlightPos> {
     let mut positions = Vec::new();
 
-    for (match_idx, &(start, end)) in plain_ranges.iter().enumerate() {
-        if start >= end {
-            continue;
-        }
-
-        let style = current_match_index
-            .filter(|&current| current == match_idx)
+    for m in matches.iter() {
+        let style = current_match
+            .as_ref()
+            .filter(|&current| current == m)
             .map(|_| HighlightStyle::Reverse)
             .unwrap_or(HighlightStyle::DimReverse);
 
-        let i_raw = plain_to_raw[start];
+        let raw_range = line.match_raw_range(m);
         positions.push(HighlightPos {
-            index: i_raw,
+            index: raw_range.start,
             kind: HighlightPosKind::Start,
             style,
         });
-
-        // Detect escape sequences within the match range by looking for gaps
-        // in the plain_to_raw mapping.
-        let mut prev_i_p = start;
-        for i_p in start..end {
-            let i_raw = plain_to_raw[i_p];
-            let prev_i_raw = plain_to_raw[prev_i_p];
-            if i_raw - prev_i_raw > 1 {
-                positions.push(HighlightPos {
-                    index: i_raw,
-                    kind: HighlightPosKind::InnerControlEnd,
-                    style,
-                });
-            }
-            prev_i_p = i_p;
+        for i_raw in line.match_inner_escape_boundaries(m) {
+            positions.push(HighlightPos {
+                index: i_raw,
+                kind: HighlightPosKind::InnerControlEnd,
+                style,
+            });
         }
-
-        let end_raw = if end < plain_to_raw.len() {
-            plain_to_raw[end]
-        } else {
-            raw_len
-        };
         positions.push(HighlightPos {
-            index: end_raw,
+            index: raw_range.end,
             kind: HighlightPosKind::End,
             style,
         });
@@ -216,7 +185,11 @@ mod tests {
 
     /// Helper to build positions from a line and plain-text ranges (all Reverse).
     fn build_from_line(line: &Line, ranges: &[(usize, usize)]) -> Vec<HighlightPos> {
-        build_highlight_positions(ranges, Some(0), line.plain_to_raw(), line.raw().len())
+        let matches = ranges
+            .iter()
+            .map(|r| MatchPosition::new(0, r.0..r.1))
+            .collect::<Vec<_>>();
+        build_highlight_positions(&matches, &matches.get(0).cloned(), line)
     }
 
     /// Helper to apply highlight to the full raw text.

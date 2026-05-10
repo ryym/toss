@@ -77,6 +77,46 @@ impl Row {
     }
 }
 
+/// Position of a specific search match: line index and a text range in the line.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchPosition {
+    line_index: usize,
+    /// A match range in the line's plain text.
+    /// `plain_range.start < plain_range.end` is always satisfied — zero-width
+    /// matches are excluded at the search layer because they have no visible
+    /// content to highlight or navigate to.
+    plain_range: Range<usize>,
+}
+
+impl MatchPosition {
+    #[cfg(test)]
+    pub fn new(line_index: usize, plain_range: Range<usize>) -> Self {
+        Self {
+            line_index,
+            plain_range,
+        }
+    }
+
+    #[inline]
+    pub fn line_index(&self) -> usize {
+        self.line_index
+    }
+}
+
+/// Specifies the starting position when searching within a [`Line`].
+/// Behavior is undefined if a [`Row`] or [`MatchPosition`] for a different
+/// line index is passed.
+#[derive(Debug)]
+pub enum SearchLineFrom<'a> {
+    Start,
+    /// Search from the given [`Row`] onward.
+    Row(&'a Row),
+    /// Search after the given match. The match itself is excluded.
+    NextOf(&'a MatchPosition),
+    /// Search backward before the given match. The match itself is excluded.
+    PrevOf(&'a MatchPosition),
+}
+
 /// A single line of text from the document.
 #[derive(Debug, Clone)]
 pub struct Line {
@@ -92,12 +132,14 @@ pub struct Line {
 
     /// Byte index mapping from each byte in `plain` to the corresponding byte
     /// position in `raw`. For multi-byte characters every byte of the character
-    /// is mapped individually.
+    /// is mapped individually. The vector also includes a sentinel entry at
+    /// `plain.len()` whose value is `raw.len()`, so `plain_to_raw[i]` is valid
+    /// for any `i` in `0..=plain.len()`.
     ///
     /// Example:
     /// - raw:   `\x1b[1mHi\x1b[0m, 😀` ("Hi" is bold)
     /// - plain: `Hi, 😀`
-    /// - plain_to_raw: [4, 5, 10, 11, 12, 13, 14, 15]
+    /// - plain_to_raw: [4, 5, 10, 11, 12, 13, 14, 15, 16]
     ///   ```text
     ///   (escape sequences: bold start)
     ///   0:  4 ──── H
@@ -109,6 +151,7 @@ pub struct Line {
     ///   5: 13 ──┤
     ///   6: 14 ──┤
     ///   7: 15 ──┘
+    ///   8: 16 ──── (sentinel: raw.len())
     ///   ```
     plain_to_raw: Vec<usize>,
 }
@@ -134,6 +177,7 @@ impl Line {
                 }
             }
         }
+        plain_to_raw.push(raw_line.len());
         Self {
             index,
             raw: raw_line,
@@ -142,22 +186,10 @@ impl Line {
         }
     }
 
-    /// Returns the position of this line in the document.
-    #[inline]
-    pub fn index(&self) -> usize {
-        self.index
-    }
-
     /// Returns the original raw text including ANSI escape sequences.
     #[inline]
     pub fn raw(&self) -> &str {
         &self.raw
-    }
-
-    /// Returns the byte index mapping from plain text to raw text.
-    #[inline]
-    pub fn plain_to_raw(&self) -> &[usize] {
-        &self.plain_to_raw
     }
 
     /// Compute the wrapped rows at the given width.
@@ -207,12 +239,74 @@ impl Line {
     }
 
     /// Find all matches of a regex in the plain text.
-    /// Returns a list of (start, end) byte ranges in the plain text.
-    pub fn find_matches(&self, query: &Regex) -> Vec<(usize, usize)> {
-        query
+    pub fn find_matches(&self, query: &Regex) -> Vec<MatchPosition> {
+        self.matches_iter(query, SearchLineFrom::Start).collect()
+    }
+
+    /// Find the first match in the plain text based on [`SearchLineFrom`].
+    pub fn find_first_match_from(
+        &self,
+        query: &Regex,
+        from: SearchLineFrom,
+    ) -> Option<MatchPosition> {
+        self.matches_iter(query, from).next()
+    }
+
+    /// Find the last match in the plain text based on [`SearchLineFrom`].
+    pub fn find_last_match_from(
+        &self,
+        query: &Regex,
+        from: SearchLineFrom,
+    ) -> Option<MatchPosition> {
+        self.matches_iter(query, from).last()
+    }
+
+    fn matches_iter<'a>(
+        &'a self,
+        query: &'a Regex,
+        from: SearchLineFrom<'a>,
+    ) -> Box<dyn Iterator<Item = MatchPosition> + 'a> {
+        let matches = query
             .find_iter(&self.plain)
-            .map(|m| (m.start(), m.end()))
-            .collect()
+            .filter(|m| m.start() < m.end())
+            .map(|m| MatchPosition {
+                line_index: self.index,
+                plain_range: m.start()..m.end(),
+            });
+        match from {
+            SearchLineFrom::Start => Box::new(matches),
+            SearchLineFrom::NextOf(border) => {
+                Box::new(matches.skip_while(|m| m.plain_range.start < border.plain_range.end))
+            }
+            SearchLineFrom::PrevOf(border) => {
+                Box::new(matches.take_while(|m| m.plain_range.end <= border.plain_range.start))
+            }
+            SearchLineFrom::Row(row) => Box::new(
+                matches
+                    .skip_while(|m| self.plain_to_raw[m.plain_range.start] < row.raw_range.start),
+            ),
+        }
+    }
+
+    /// Raw-text byte range corresponding to the match.
+    ///
+    /// Behavior is undefined if `m` was not produced from this line.
+    pub fn match_raw_range(&self, m: &MatchPosition) -> Range<usize> {
+        self.plain_to_raw[m.plain_range.start]..self.plain_to_raw[m.plain_range.end]
+    }
+
+    /// Iterate raw byte positions where ANSI escape sequences are embedded
+    /// inside the match. Each yielded index points to the raw byte where plain
+    /// text resumes immediately after such an embedded escape sequence.
+    ///
+    /// Behavior is undefined if `m` was not produced from this line.
+    pub fn match_inner_escape_boundaries<'a>(
+        &'a self,
+        m: &'a MatchPosition,
+    ) -> impl Iterator<Item = usize> + 'a {
+        self.plain_to_raw[m.plain_range.start..m.plain_range.end]
+            .windows(2)
+            .filter_map(|w| (w[1] - w[0] > 1).then_some(w[1]))
     }
 }
 
@@ -315,6 +409,7 @@ mod tests {
                 4, 5, // "Hi"
                 10, 11, // ", "
                 12, 13, 14, 15, // 😀
+                16, // sentinel: raw.len()
             ]
         );
     }
@@ -384,5 +479,164 @@ mod tests {
         assert_eq!(line.row_count(5), 2);
         assert_eq!(wrap_row_text(&line, 5, 0), "\x1b[31mあい");
         assert_eq!(wrap_row_text(&line, 5, 1), "う\x1b[0m");
+    }
+
+    // --- Match search tests ---
+
+    fn match_pos(line_index: usize, range: Range<usize>) -> MatchPosition {
+        MatchPosition {
+            line_index,
+            plain_range: range,
+        }
+    }
+
+    fn collect_from(line: &Line, query: &Regex, from: SearchLineFrom) -> Vec<MatchPosition> {
+        line.matches_iter(query, from).collect()
+    }
+
+    #[test]
+    fn matches_iter_start_returns_all_matches() {
+        let line = Line::new(0, "ab cd ab ef ab".into());
+        let query = Regex::new("ab").unwrap();
+        assert_eq!(
+            collect_from(&line, &query, SearchLineFrom::Start),
+            vec![match_pos(0, 0..2), match_pos(0, 6..8), match_pos(0, 12..14),]
+        );
+    }
+
+    #[test]
+    fn matches_iter_start_no_match() {
+        let line = Line::new(0, "hello world".into());
+        let query = Regex::new("xyz").unwrap();
+        assert!(collect_from(&line, &query, SearchLineFrom::Start).is_empty());
+    }
+
+    #[test]
+    fn matches_iter_next_of_excludes_border_and_earlier() {
+        let line = Line::new(0, "ab cd ab ef ab".into());
+        let query = Regex::new("ab").unwrap();
+        let border = match_pos(0, 6..8); // The middle "ab".
+        assert_eq!(
+            collect_from(&line, &query, SearchLineFrom::NextOf(&border)),
+            vec![match_pos(0, 12..14)]
+        );
+    }
+
+    #[test]
+    fn matches_iter_next_of_at_match_start_includes_self() {
+        // border ends exactly where another match starts. The starting match is included
+        // because the predicate uses `m.start < border.end`, not `<=`.
+        let line = Line::new(0, "abab".into());
+        let query = Regex::new("ab").unwrap();
+        let border = match_pos(0, 0..2);
+        assert_eq!(
+            collect_from(&line, &query, SearchLineFrom::NextOf(&border)),
+            vec![match_pos(0, 2..4)]
+        );
+    }
+
+    #[test]
+    fn matches_iter_prev_of_excludes_border_and_later() {
+        let line = Line::new(0, "ab cd ab ef ab".into());
+        let query = Regex::new("ab").unwrap();
+        let border = match_pos(0, 6..8);
+        assert_eq!(
+            collect_from(&line, &query, SearchLineFrom::PrevOf(&border)),
+            vec![match_pos(0, 0..2)]
+        );
+    }
+
+    #[test]
+    fn matches_iter_prev_of_at_match_end_includes_self() {
+        // border starts exactly where the previous match ends. Predicate uses
+        // `m.end <= border.start`, so the prior match is kept.
+        let line = Line::new(0, "abab".into());
+        let query = Regex::new("ab").unwrap();
+        let border = match_pos(0, 2..4);
+        assert_eq!(
+            collect_from(&line, &query, SearchLineFrom::PrevOf(&border)),
+            vec![match_pos(0, 0..2)]
+        );
+    }
+
+    #[test]
+    fn matches_iter_row_skips_matches_before_row_start() {
+        // Wrap "abcdefghij" at width 5: row 0 = "abcde", row 1 = "fghij".
+        let line = Line::new(0, "abcdefghij".into());
+        let query = Regex::new("[a-j]{2}").unwrap();
+        let rows = line.wrap(5);
+        // Row 0 starts at raw 0, so all matches are kept.
+        assert_eq!(
+            collect_from(&line, &query, SearchLineFrom::Row(&rows[0])),
+            vec![
+                match_pos(0, 0..2),
+                match_pos(0, 2..4),
+                match_pos(0, 4..6),
+                match_pos(0, 6..8),
+                match_pos(0, 8..10),
+            ]
+        );
+        // Row 1 starts at raw 5, so matches whose start maps to raw < 5 are skipped.
+        assert_eq!(
+            collect_from(&line, &query, SearchLineFrom::Row(&rows[1])),
+            vec![match_pos(0, 6..8), match_pos(0, 8..10)]
+        );
+    }
+
+    #[test]
+    fn matches_iter_row_with_escapes_uses_raw_position() {
+        // raw: "\x1b[1mabcde\x1b[0mfghij" — wrap at width 5.
+        // row 0 raw_range covers "\x1b[1mabcde\x1b[0m" (raw 0..13),
+        // row 1 starts at raw 13 ("fghij").
+        let line = Line::new(0, "\x1b[1mabcde\x1b[0mfghij".into());
+        let query = Regex::new("[a-j]{2}").unwrap();
+        let rows = line.wrap(5);
+        assert_eq!(rows[1].raw_range.start, 13);
+        // For row 1: matches whose plain start maps to raw < 13 are skipped.
+        // plain_range 0..2 → raw 4..6 (skipped), 4..6 → raw 8..13 (skipped at start=8),
+        // 6..8 → raw 13..15 (kept), 8..10 → raw 15..17 (kept).
+        assert_eq!(
+            collect_from(&line, &query, SearchLineFrom::Row(&rows[1])),
+            vec![match_pos(0, 6..8), match_pos(0, 8..10)]
+        );
+    }
+
+    #[test]
+    fn matches_iter_excludes_zero_width_matches() {
+        // Zero-width matches like `$` have no visible content to highlight or
+        // navigate to, so the search layer drops them.
+        let line = Line::new(0, "abc".into());
+        let query = Regex::new("$").unwrap();
+        assert!(collect_from(&line, &query, SearchLineFrom::Start).is_empty());
+    }
+
+    #[test]
+    fn find_first_match_from_returns_first() {
+        let line = Line::new(0, "ab cd ab ef ab".into());
+        let query = Regex::new("ab").unwrap();
+        let border = match_pos(0, 0..2);
+        assert_eq!(
+            line.find_first_match_from(&query, SearchLineFrom::NextOf(&border)),
+            Some(match_pos(0, 6..8))
+        );
+        assert_eq!(
+            line.find_first_match_from(&Regex::new("xyz").unwrap(), SearchLineFrom::Start),
+            None
+        );
+    }
+
+    #[test]
+    fn find_last_match_from_returns_last() {
+        let line = Line::new(0, "ab cd ab ef ab".into());
+        let query = Regex::new("ab").unwrap();
+        let border = match_pos(0, 12..14);
+        assert_eq!(
+            line.find_last_match_from(&query, SearchLineFrom::PrevOf(&border)),
+            Some(match_pos(0, 6..8))
+        );
+        assert_eq!(
+            line.find_last_match_from(&Regex::new("xyz").unwrap(), SearchLineFrom::Start),
+            None
+        );
     }
 }

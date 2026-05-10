@@ -6,10 +6,10 @@ use crossterm::event::Event;
 
 use crate::{
     document::Document,
-    line::Row,
+    line::{MatchPosition, Row},
     pager::{PageSnapshot, PageUpdate},
     screen::{Direction, Screen, Scroll},
-    search::{MatchPosition, SearchState},
+    search::SearchState,
 };
 
 struct SearchStateRef {
@@ -86,7 +86,7 @@ impl<S: Screen> Renderer<S> {
     fn store_page_state(&mut self, search: Option<&SearchState>) {
         self.last_search = search.map(|s| SearchStateRef {
             query: s.query.as_str().to_string(),
-            current: s.current,
+            current: s.current.clone(),
         });
         self.last_highlight_lines = mem::take(&mut self.current_highlight_lines);
     }

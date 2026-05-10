@@ -5,13 +5,13 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use regex::Regex;
 
 use crate::document::Document;
-use crate::line::Row;
+use crate::line::{MatchPosition, Row};
 use crate::line_editor::LineEditor;
 use crate::pager::Pager;
 use crate::renderer::Renderer;
 use crate::screen::Screen;
 use crate::scroll::ScrollPhysics;
-use crate::search::{self, MatchPosition, SearchDirection, SearchState};
+use crate::search::{self, SearchDirection, SearchFrom, SearchState};
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
@@ -248,11 +248,16 @@ impl<S: Screen> App<S> {
         }
 
         let re = Regex::new(&regex::escape(&input)).unwrap();
-        let matched = search::find_next_match(self.pager.doc_mut(), &re, saved_top_line, direction);
+        let matched = search::search_document(
+            self.pager.doc_mut(),
+            &re,
+            SearchFrom::Line(saved_top_line),
+            direction,
+        );
         log::debug!("Search preview: query={input:?}, result={matched:?}");
 
         if let Some(ref pos) = matched {
-            self.pager.jump_to(pos.line);
+            self.pager.jump_to(pos.line_index());
         }
 
         if let AppMode::Search { preview, .. } = &mut self.mode {
@@ -331,12 +336,12 @@ impl<S: Screen> App<S> {
         } else {
             search.direction
         };
-        let current = search.current;
+        let current = &search.current;
 
         let next = find_next_match_position(&mut self.pager, &search.query, current, direction);
         log::debug!("Jump to next match: {next:?}");
         if let Some(pos) = next {
-            self.pager.jump_to(pos.line);
+            self.pager.jump_to(pos.line_index());
             if let Some(s) = self.search.as_mut() {
                 s.current = Some(pos);
             }
@@ -397,107 +402,38 @@ fn active_search<'a>(
 }
 
 /// Find the next match to jump to. Handles re-anchoring when the current match
-/// is no longer visible (e.g., after g/G).
+/// is no longer visible (e.g., after jump by g/G).
 fn find_next_match_position(
     pager: &mut Pager,
     query: &Regex,
-    current: Option<MatchPosition>,
+    current: &Option<MatchPosition>,
     direction: SearchDirection,
 ) -> Option<MatchPosition> {
     let visible_rows = pager.contiguous_rows().to_vec();
     if visible_rows.is_empty() {
         return None;
     }
-
-    // If the current cursor is outside the visible area, re-anchor it
-    // to the first visible match instead of jumping from the old position.
-    let needs_reanchor = match current {
-        Some(c) => !is_match_visible(pager.doc_mut(), query, c, &visible_rows),
-        None => false,
-    };
-
-    if needs_reanchor {
-        let reanchored = find_first_match_in_viewport(pager.doc_mut(), query, &visible_rows);
-        log::debug!("Cursor outside viewport, re-anchor: {reanchored:?}");
-        if let Some(pos) = reanchored {
-            return Some(pos);
-        }
-        // No matches in viewport; fall through to search from viewport top.
-    }
-
-    // Try to move to the next match within the same line first.
-    if !needs_reanchor
-        && let Some(current) = current
-        && let Some(next_mi) =
-            search::find_next_match_in_line(pager.doc_mut(), query, current, direction)
+    let (search_from, direction) = if let Some(current) = current
+        && is_match_visible(pager.doc_mut(), current, &visible_rows)
     {
-        return Some(MatchPosition {
-            line: current.line,
-            match_index: next_mi,
-        });
-    }
-
-    let line_count = pager.doc_mut().line_count();
-    let from = match current {
-        Some(pos) if !needs_reanchor => match direction {
-            SearchDirection::Forward => {
-                if pos.line + 1 < line_count {
-                    pos.line + 1
-                } else {
-                    0
-                }
-            }
-            SearchDirection::Backward => {
-                if pos.line > 0 {
-                    pos.line - 1
-                } else {
-                    line_count.saturating_sub(1)
-                }
-            }
-        },
-        _ => visible_rows[0].line_index(),
+        log::debug!("search '{query}': match in viewport, search next match");
+        (SearchFrom::NextOf(current), direction)
+    } else {
+        // When the current match is not in the viewport,
+        // jump to the first match in the viewport regardless of direction.
+        log::debug!("search '{query}': match not in viewport, search the first match in viewport");
+        (SearchFrom::Row(&visible_rows[0]), SearchDirection::Forward)
     };
-    search::find_next_match(pager.doc_mut(), query, from, direction)
+    search::search_document(pager.doc_mut(), query, search_from, direction)
 }
 
 /// Check if a match is on a wrap row that is actually visible on screen.
-fn is_match_visible(
-    doc: &mut Document,
-    query: &Regex,
-    pos: MatchPosition,
-    visible_rows: &[Row],
-) -> bool {
-    let Some(line) = doc.line(pos.line) else {
+fn is_match_visible(doc: &mut Document, pos: &MatchPosition, visible_rows: &[Row]) -> bool {
+    let Some(line) = doc.line(pos.line_index()) else {
         return false;
     };
-    let matches = line.find_matches(query);
-    let Some(&(start, _)) = matches.get(pos.match_index) else {
-        return false;
-    };
-    let raw_offset = line.plain_to_raw()[start];
+    let raw_offset = line.match_raw_range(pos).start;
     visible_rows
         .iter()
-        .any(|r| r.line_index() == pos.line && r.raw_range().contains(&raw_offset))
-}
-
-/// Find the first match that falls on a visible wrap row in the viewport.
-fn find_first_match_in_viewport(
-    doc: &mut Document,
-    query: &Regex,
-    visible_rows: &[Row],
-) -> Option<MatchPosition> {
-    for row in visible_rows {
-        let line = doc.line(row.line_index())?;
-        let matches = line.find_matches(query);
-        for (mi, &(start, _)) in matches.iter().enumerate() {
-            let raw_offset = line.plain_to_raw()[start];
-            if row.raw_range().contains(&raw_offset) {
-                return Some(MatchPosition {
-                    line: row.line_index(),
-                    match_index: mi,
-                });
-            }
-        }
-    }
-    None
+        .any(|r| r.line_index() == pos.line_index() && r.raw_range().contains(&raw_offset))
 }
