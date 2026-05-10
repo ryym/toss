@@ -432,7 +432,7 @@ fn is_match_visible(doc: &mut Document, pos: &MatchPosition, visible_rows: &[Row
     let Some(line) = doc.line(pos.line_index) else {
         return false;
     };
-    let raw_offset = line.plain_to_raw()[pos.plain_range.start];
+    let raw_offset = line.match_raw_range(pos).start;
     visible_rows
         .iter()
         .any(|r| r.line_index() == pos.line_index && r.raw_range().contains(&raw_offset))

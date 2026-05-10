@@ -177,12 +177,6 @@ impl Line {
         &self.raw
     }
 
-    /// Returns the byte index mapping from plain text to raw text.
-    #[inline]
-    pub fn plain_to_raw(&self) -> &[usize] {
-        &self.plain_to_raw
-    }
-
     /// Compute the wrapped rows at the given width.
     ///
     /// Wrapping is computed on the plain text (visible characters only) but
@@ -275,6 +269,28 @@ impl Line {
                 }))
             }
         }
+    }
+
+    /// Raw-text byte range corresponding to the match.
+    /// The end falls back to `raw.len()` when `plain_range.end == plain.len()`.
+    ///
+    /// Behavior is undefined if `m` was not produced from this line.
+    pub fn match_raw_range(&self, m: &MatchPosition) -> Range<usize> {
+        self.plain_to_raw_safe(m.plain_range.start)..self.plain_to_raw_safe(m.plain_range.end)
+    }
+
+    /// Iterate raw byte positions where ANSI escape sequences are embedded
+    /// inside the match. Each yielded index points to the raw byte where plain
+    /// text resumes immediately after such an embedded escape sequence.
+    ///
+    /// Behavior is undefined if `m` was not produced from this line.
+    pub fn match_inner_escape_boundaries<'a>(
+        &'a self,
+        m: &'a MatchPosition,
+    ) -> impl Iterator<Item = usize> + 'a {
+        self.plain_to_raw[m.plain_range.start..m.plain_range.end]
+            .windows(2)
+            .filter_map(|w| (w[1] - w[0] > 1).then_some(w[1]))
     }
 
     /// Zero-width regex match at the end of plain text like `$` yields
