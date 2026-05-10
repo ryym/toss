@@ -257,7 +257,7 @@ impl<S: Screen> App<S> {
         log::debug!("Search preview: query={input:?}, result={matched:?}");
 
         if let Some(ref pos) = matched {
-            self.pager.jump_to(pos.line_index);
+            self.pager.jump_to(pos.line_index());
         }
 
         if let AppMode::Search { preview, .. } = &mut self.mode {
@@ -341,7 +341,7 @@ impl<S: Screen> App<S> {
         let next = find_next_match_position(&mut self.pager, &search.query, current, direction);
         log::debug!("Jump to next match: {next:?}");
         if let Some(pos) = next {
-            self.pager.jump_to(pos.line_index);
+            self.pager.jump_to(pos.line_index());
             if let Some(s) = self.search.as_mut() {
                 s.current = Some(pos);
             }
@@ -429,11 +429,11 @@ fn find_next_match_position(
 
 /// Check if a match is on a wrap row that is actually visible on screen.
 fn is_match_visible(doc: &mut Document, pos: &MatchPosition, visible_rows: &[Row]) -> bool {
-    let Some(line) = doc.line(pos.line_index) else {
+    let Some(line) = doc.line(pos.line_index()) else {
         return false;
     };
     let raw_offset = line.match_raw_range(pos).start;
     visible_rows
         .iter()
-        .any(|r| r.line_index() == pos.line_index && r.raw_range().contains(&raw_offset))
+        .any(|r| r.line_index() == pos.line_index() && r.raw_range().contains(&raw_offset))
 }

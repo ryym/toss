@@ -78,10 +78,10 @@ pub fn search_document(
         },
         SearchFrom::NextOf(m) => match direction {
             SearchDirection::Forward => {
-                search_forward(doc, query, m.line_index, SearchLineFrom::NextOf(m))
+                search_forward(doc, query, m.line_index(), SearchLineFrom::NextOf(m))
             }
             SearchDirection::Backward => {
-                search_backward(doc, query, m.line_index, SearchLineFrom::PrevOf(m))
+                search_backward(doc, query, m.line_index(), SearchLineFrom::PrevOf(m))
             }
         },
     }
@@ -151,10 +151,7 @@ mod tests {
     }
 
     fn pos(line_index: usize, plain_range: Range<usize>) -> Option<MatchPosition> {
-        Some(MatchPosition {
-            line_index,
-            plain_range,
-        })
+        Some(MatchPosition::new(line_index, plain_range))
     }
 
     // --- search_document tests ---
@@ -227,10 +224,7 @@ mod tests {
     fn document_next_of_forward_same_line() {
         let mut doc = make_doc(&["xx", "ab cd ab ef ab", "yy"]);
         let query = make_query("ab");
-        let border = MatchPosition {
-            line_index: 1,
-            plain_range: 0..2,
-        };
+        let border = MatchPosition::new(1, 0..2);
         assert_eq!(
             search_document(
                 &mut doc,
@@ -246,10 +240,7 @@ mod tests {
     fn document_next_of_forward_advances_to_next_line() {
         let mut doc = make_doc(&["xx", "ab cd", "yy ab"]);
         let query = make_query("ab");
-        let border = MatchPosition {
-            line_index: 1,
-            plain_range: 0..2,
-        };
+        let border = MatchPosition::new(1, 0..2);
         // No further match on line 1; advances to line 2.
         assert_eq!(
             search_document(
@@ -268,10 +259,7 @@ mod tests {
         // and picks up the match before border on the same line.
         let mut doc = make_doc(&["xx", "ab cd ab", "yy"]);
         let query = make_query("ab");
-        let border = MatchPosition {
-            line_index: 1,
-            plain_range: 6..8,
-        };
+        let border = MatchPosition::new(1, 6..8);
         assert_eq!(
             search_document(
                 &mut doc,
@@ -287,10 +275,7 @@ mod tests {
     fn document_next_of_backward_same_line() {
         let mut doc = make_doc(&["xx", "ab cd ab ef ab", "yy"]);
         let query = make_query("ab");
-        let border = MatchPosition {
-            line_index: 1,
-            plain_range: 12..14,
-        };
+        let border = MatchPosition::new(1, 12..14);
         assert_eq!(
             search_document(
                 &mut doc,
@@ -308,10 +293,7 @@ mod tests {
         // and picks up the match after border on the same line.
         let mut doc = make_doc(&["xx", "ab cd ab", "yy"]);
         let query = make_query("ab");
-        let border = MatchPosition {
-            line_index: 1,
-            plain_range: 0..2,
-        };
+        let border = MatchPosition::new(1, 0..2);
         assert_eq!(
             search_document(
                 &mut doc,

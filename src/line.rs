@@ -78,15 +78,29 @@ impl Row {
 }
 
 /// Position of a specific search match: line index and a text range in the line.
-///
-/// `plain_range.start < plain_range.end` is always satisfied — zero-width
-/// matches are excluded at the search layer because they have no visible
-/// content to highlight or navigate to.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchPosition {
-    pub line_index: usize,
+    line_index: usize,
     /// A match range in the line's plain text.
-    pub plain_range: Range<usize>,
+    /// `plain_range.start < plain_range.end` is always satisfied — zero-width
+    /// matches are excluded at the search layer because they have no visible
+    /// content to highlight or navigate to.
+    plain_range: Range<usize>,
+}
+
+impl MatchPosition {
+    #[cfg(test)]
+    pub fn new(line_index: usize, plain_range: Range<usize>) -> Self {
+        Self {
+            line_index,
+            plain_range,
+        }
+    }
+
+    #[inline]
+    pub fn line_index(&self) -> usize {
+        self.line_index
+    }
 }
 
 /// Specifies the starting position when searching within a [`Line`].
@@ -170,13 +184,6 @@ impl Line {
             plain,
             plain_to_raw,
         }
-    }
-
-    /// Returns the position of this line in the document.
-    #[cfg(test)]
-    #[inline]
-    pub fn index(&self) -> usize {
-        self.index
     }
 
     /// Returns the original raw text including ANSI escape sequences.

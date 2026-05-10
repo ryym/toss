@@ -187,10 +187,7 @@ mod tests {
     fn build_from_line(line: &Line, ranges: &[(usize, usize)]) -> Vec<HighlightPos> {
         let matches = ranges
             .iter()
-            .map(|r| MatchPosition {
-                line_index: line.index(),
-                plain_range: r.0..r.1,
-            })
+            .map(|r| MatchPosition::new(0, r.0..r.1))
             .collect::<Vec<_>>();
         build_highlight_positions(&matches, &matches.get(0).cloned(), line)
     }
