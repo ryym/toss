@@ -6,7 +6,7 @@ use regex::Regex;
 
 use crate::document::Document;
 use crate::line::{MatchPosition, Row};
-use crate::line_editor::LineEditor;
+use crate::line_editor::{LineEdit, LineEditor};
 use crate::pager::Pager;
 use crate::renderer::Renderer;
 use crate::screen::Screen;
@@ -284,25 +284,25 @@ impl<S: Screen> App<S> {
                         self.cancel_search();
                         return;
                     }
-                    editor.backspace();
+                    editor.edit(LineEdit::DeleteCharBeforeCursor);
                 }
                 self.update_search_preview();
             }
             KeyCode::Char(ch) => {
                 if let AppMode::Search { editor, .. } = &mut self.mode {
-                    editor.insert(ch);
+                    editor.edit(LineEdit::AddChar(ch))
                 }
                 self.update_search_preview();
             }
             KeyCode::Left => {
                 if let AppMode::Search { editor, .. } = &mut self.mode {
-                    editor.move_left();
+                    editor.edit(LineEdit::MoveCursorLeft);
                     self.dirty = true;
                 }
             }
             KeyCode::Right => {
                 if let AppMode::Search { editor, .. } = &mut self.mode {
-                    editor.move_right();
+                    editor.edit(LineEdit::MoveCursorRight);
                     self.dirty = true;
                 }
             }
