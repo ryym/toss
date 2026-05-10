@@ -114,12 +114,14 @@ pub struct Line {
 
     /// Byte index mapping from each byte in `plain` to the corresponding byte
     /// position in `raw`. For multi-byte characters every byte of the character
-    /// is mapped individually.
+    /// is mapped individually. The vector also includes a sentinel entry at
+    /// `plain.len()` whose value is `raw.len()`, so `plain_to_raw[i]` is valid
+    /// for any `i` in `0..=plain.len()`.
     ///
     /// Example:
     /// - raw:   `\x1b[1mHi\x1b[0m, 😀` ("Hi" is bold)
     /// - plain: `Hi, 😀`
-    /// - plain_to_raw: [4, 5, 10, 11, 12, 13, 14, 15]
+    /// - plain_to_raw: [4, 5, 10, 11, 12, 13, 14, 15, 16]
     ///   ```text
     ///   (escape sequences: bold start)
     ///   0:  4 ──── H
@@ -131,6 +133,7 @@ pub struct Line {
     ///   5: 13 ──┤
     ///   6: 14 ──┤
     ///   7: 15 ──┘
+    ///   8: 16 ──── (sentinel: raw.len())
     ///   ```
     plain_to_raw: Vec<usize>,
 }
@@ -156,6 +159,7 @@ impl Line {
                 }
             }
         }
+        plain_to_raw.push(raw_line.len());
         Self {
             index,
             raw: raw_line,
@@ -263,20 +267,18 @@ impl Line {
             SearchLineFrom::PrevOf(border) => {
                 Box::new(matches.take_while(|m| m.plain_range.end <= border.plain_range.start))
             }
-            SearchLineFrom::Row(row) => {
-                Box::new(matches.skip_while(|m| {
-                    self.plain_to_raw_safe(m.plain_range.start) < row.raw_range.start
-                }))
-            }
+            SearchLineFrom::Row(row) => Box::new(
+                matches
+                    .skip_while(|m| self.plain_to_raw[m.plain_range.start] < row.raw_range.start),
+            ),
         }
     }
 
     /// Raw-text byte range corresponding to the match.
-    /// The end falls back to `raw.len()` when `plain_range.end == plain.len()`.
     ///
     /// Behavior is undefined if `m` was not produced from this line.
     pub fn match_raw_range(&self, m: &MatchPosition) -> Range<usize> {
-        self.plain_to_raw_safe(m.plain_range.start)..self.plain_to_raw_safe(m.plain_range.end)
+        self.plain_to_raw[m.plain_range.start]..self.plain_to_raw[m.plain_range.end]
     }
 
     /// Iterate raw byte positions where ANSI escape sequences are embedded
@@ -291,16 +293,6 @@ impl Line {
         self.plain_to_raw[m.plain_range.start..m.plain_range.end]
             .windows(2)
             .filter_map(|w| (w[1] - w[0] > 1).then_some(w[1]))
-    }
-
-    /// Zero-width regex match at the end of plain text like `$` yields
-    /// a plain text index of `plain.len()`, which is out of bounds for `plain_to_raw`.
-    /// This method treats it as the end of raw text.
-    fn plain_to_raw_safe(&self, plain_index: usize) -> usize {
-        self.plain_to_raw
-            .get(plain_index)
-            .copied()
-            .unwrap_or(self.raw.len())
     }
 }
 
@@ -403,6 +395,7 @@ mod tests {
                 4, 5, // "Hi"
                 10, 11, // ", "
                 12, 13, 14, 15, // 😀
+                16, // sentinel: raw.len()
             ]
         );
     }
