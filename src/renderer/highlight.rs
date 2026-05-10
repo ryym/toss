@@ -88,11 +88,6 @@ fn build_highlight_positions(
     let mut positions = Vec::new();
 
     for m in matches.iter() {
-        let range = &m.plain_range;
-        if range.start >= range.end {
-            continue;
-        }
-
         let style = current_match
             .as_ref()
             .filter(|&current| current == m)

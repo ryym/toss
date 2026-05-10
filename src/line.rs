@@ -78,6 +78,10 @@ impl Row {
 }
 
 /// Position of a specific search match: line index and a text range in the line.
+///
+/// `plain_range.start < plain_range.end` is always satisfied — zero-width
+/// matches are excluded at the search layer because they have no visible
+/// content to highlight or navigate to.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchPosition {
     pub line_index: usize,
@@ -255,10 +259,13 @@ impl Line {
         query: &'a Regex,
         from: SearchLineFrom<'a>,
     ) -> Box<dyn Iterator<Item = MatchPosition> + 'a> {
-        let matches = query.find_iter(&self.plain).map(|m| MatchPosition {
-            line_index: self.index,
-            plain_range: m.start()..m.end(),
-        });
+        let matches = query
+            .find_iter(&self.plain)
+            .filter(|m| m.start() < m.end())
+            .map(|m| MatchPosition {
+                line_index: self.index,
+                plain_range: m.start()..m.end(),
+            });
         match from {
             SearchLineFrom::Start => Box::new(matches),
             SearchLineFrom::NextOf(border) => {
@@ -588,14 +595,12 @@ mod tests {
     }
 
     #[test]
-    fn matches_iter_row_handles_zero_width_match_at_end() {
-        // Regression: a zero-width match at plain.len() must not panic on
-        // plain_to_raw indexing.
+    fn matches_iter_excludes_zero_width_matches() {
+        // Zero-width matches like `$` have no visible content to highlight or
+        // navigate to, so the search layer drops them.
         let line = Line::new(0, "abc".into());
         let query = Regex::new("$").unwrap();
-        let rows = line.wrap(80);
-        let result = collect_from(&line, &query, SearchLineFrom::Row(&rows[0]));
-        assert_eq!(result, vec![match_pos(0, 3..3)]);
+        assert!(collect_from(&line, &query, SearchLineFrom::Start).is_empty());
     }
 
     #[test]
