@@ -7,7 +7,7 @@
 //! Inspired by https://github.com/yuttie/comfortable-motion.vim
 
 /// Base friction force, tuned for REFERENCE_HEIGHT.
-const BASE_FRICTION: f64 = 80.0;
+const BASE_FRICTION: f64 = 200.0;
 
 /// Base drag coefficient, tuned for REFERENCE_HEIGHT.
 const BASE_AIR_DRAG: f64 = 4.0;
