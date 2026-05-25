@@ -82,9 +82,8 @@ impl<S: Screen> App<S> {
     }
 
     fn render(&mut self) -> io::Result<()> {
-        let status_text = self.pager.status_text();
         let (snapshot, doc) = self.pager.snapshot();
-        self.renderer.render(doc, snapshot, &status_text)
+        self.renderer.render(doc, snapshot)
     }
 
     /// Returns true if the app should quit.

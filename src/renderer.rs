@@ -65,17 +65,12 @@ impl<S: Screen> Renderer<S> {
     /// - [`PageUpdate::Full`]: the entire page (headers, content, status line) is redrawn.
     /// - [`PageUpdate::Scroll`]: the terminal itself is scrolled so the existing rows are
     ///   preserved by the terminal, and only the newly appeared rows are drawn.
-    pub fn render(
-        &mut self,
-        doc: &mut Document,
-        page: PageSnapshot,
-        status_text: &str,
-    ) -> io::Result<()> {
+    pub fn render(&mut self, doc: &mut Document, page: PageSnapshot) -> io::Result<()> {
         log::debug!("render: {:?}", page.last_update);
         let result = match page.last_update {
-            PageUpdate::None => self.render_status_line(&page, status_text),
-            PageUpdate::Full => self.render_full_page(doc, &page, status_text),
-            PageUpdate::Scroll(scroll_spec) => self.scroll(doc, &page, status_text, scroll_spec),
+            PageUpdate::None => self.render_status_line(&page),
+            PageUpdate::Full => self.render_full_page(doc, &page),
+            PageUpdate::Scroll(scroll_spec) => self.scroll(doc, &page, scroll_spec),
         };
         self.store_page_state(page.search);
         result
@@ -89,31 +84,26 @@ impl<S: Screen> Renderer<S> {
         self.last_highlight_lines = mem::take(&mut self.current_highlight_lines);
     }
 
-    fn render_status_line(&mut self, page: &PageSnapshot, status_text: &str) -> io::Result<()> {
-        self.redraw_status_line(page, status_text)?;
+    fn render_status_line(&mut self, page: &PageSnapshot) -> io::Result<()> {
+        self.redraw_status_line(page)?;
         self.screen.flush()
     }
 
-    fn redraw_status_line(&mut self, page: &PageSnapshot, status_text: &str) -> io::Result<()> {
+    fn redraw_status_line(&mut self, page: &PageSnapshot) -> io::Result<()> {
         let status_y = page.viewport_height() as u16;
         self.screen.clear_row(status_y)?;
-        self.screen.write_at(status_y, status_text)?;
+        self.screen.write_at(status_y, &page.status_line)?;
         Ok(())
     }
 
-    fn render_full_page(
-        &mut self,
-        doc: &mut Document,
-        page: &PageSnapshot,
-        status_text: &str,
-    ) -> io::Result<()> {
+    fn render_full_page(&mut self, doc: &mut Document, page: &PageSnapshot) -> io::Result<()> {
         self.screen.begin_sync()?;
 
         self.draw_rows(doc, page.header, page.search, 0)?;
         self.draw_rows(doc, page.heading, page.search, page.header.len())?;
         self.draw_rows(doc, page.content, page.search, page.total_header_height())?;
         self.clear_row_range(0, page.viewport_height()..page.height)?;
-        self.redraw_status_line(page, status_text)?;
+        self.redraw_status_line(page)?;
 
         self.screen.end_sync()?;
         self.screen.flush()
@@ -123,7 +113,6 @@ impl<S: Screen> Renderer<S> {
         &mut self,
         doc: &mut Document,
         page: &PageSnapshot,
-        status_text: &str,
         scroll: Scroll,
     ) -> io::Result<()> {
         self.screen.begin_sync()?;
@@ -153,7 +142,7 @@ impl<S: Screen> Renderer<S> {
         // Refresh headers and the status line.
         self.draw_rows(doc, page.header, page.search, 0)?;
         self.draw_rows(doc, page.heading, page.search, page.header.len())?;
-        self.redraw_status_line(page, status_text)?;
+        self.redraw_status_line(page)?;
 
         self.screen.end_sync()?;
         self.screen.flush()

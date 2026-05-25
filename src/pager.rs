@@ -56,6 +56,7 @@ pub struct PageSnapshot<'pager> {
     pub content: &'pager [Row],
     pub height: usize,
     pub search: Option<&'pager SearchState>,
+    pub status_line: String,
     pub last_update: PageUpdate,
 }
 
@@ -142,7 +143,7 @@ impl Pager {
         &mut self.doc
     }
 
-    pub fn status_text(&self) -> String {
+    fn status_line(&self) -> String {
         match &self.mode {
             PagerMode::View => ":".to_string(),
             PagerMode::SearchInput(search) => format!(
@@ -163,6 +164,7 @@ impl Pager {
             heading: self.heading.rows(),
             content: &self.viewport.rows()[self.total_header_height()..],
             height: self.viewport.size().height,
+            status_line: self.status_line(),
             search,
             last_update: self.last_update,
         };
