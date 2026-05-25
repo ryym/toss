@@ -54,6 +54,10 @@ impl LineEditor {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.input.is_empty()
+    }
+
     /// Return the current input as a string.
     pub fn input(&self) -> String {
         self.input.iter().collect()

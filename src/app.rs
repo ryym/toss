@@ -2,37 +2,20 @@ use std::io;
 use std::time::Duration;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use regex::Regex;
 
-use crate::document::Document;
-use crate::line::{MatchPosition, Row};
-use crate::line_editor::{LineEdit, LineEditor};
-use crate::pager::Pager;
+use crate::line_editor::LineEdit;
+use crate::pager::{Pager, PagerMode};
 use crate::renderer::Renderer;
 use crate::screen::Screen;
 use crate::scroll::ScrollPhysics;
-use crate::search::{self, SearchDirection, SearchFrom, SearchState};
+use crate::search::SearchDirection;
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
 
-enum AppMode {
-    View,
-    Search {
-        direction: SearchDirection,
-        editor: LineEditor,
-        /// Top line before search started, for restoring on cancel.
-        saved_top_line: usize,
-        /// Live search result updated on each keystroke.
-        preview: Option<SearchState>,
-    },
-}
-
 pub struct App<S: Screen> {
     renderer: Renderer<S>,
     pager: Pager,
-    mode: AppMode,
-    search: Option<SearchState>,
     scroll_physics: ScrollPhysics,
     instant_scroll: bool,
     dirty: bool,
@@ -47,8 +30,6 @@ impl<S: Screen> App<S> {
         Ok(Self {
             renderer,
             pager,
-            mode: AppMode::View,
-            search: None,
             scroll_physics,
             instant_scroll: false,
             dirty: false,
@@ -101,27 +82,17 @@ impl<S: Screen> App<S> {
     }
 
     fn render(&mut self) -> io::Result<()> {
-        let status_text = self.status_text();
-        let search = active_search(&self.mode, &self.search);
+        let status_text = self.pager.status_text();
         let (snapshot, doc) = self.pager.snapshot();
-        self.renderer.render(doc, snapshot, search, &status_text)
-    }
-
-    fn status_text(&self) -> String {
-        match &self.mode {
-            AppMode::View => ":".to_string(),
-            AppMode::Search {
-                direction, editor, ..
-            } => format!("{}{}", direction.prompt(), editor.input_with_cursor()),
-        }
+        self.renderer.render(doc, snapshot, &status_text)
     }
 
     /// Returns true if the app should quit.
     fn handle_key(&mut self, key: KeyEvent) -> io::Result<bool> {
         log::debug!("Key: {key:?}");
-        match self.mode {
-            AppMode::View => self.handle_key_view(key),
-            AppMode::Search { .. } => {
+        match self.pager.mode() {
+            PagerMode::View => self.handle_key_view(key),
+            PagerMode::SearchInput(_) => {
                 self.handle_key_search(key);
                 Ok(false)
             }
@@ -167,185 +138,56 @@ impl<S: Screen> App<S> {
                 self.dirty = true;
             }
             KeyCode::Char('/') => {
-                self.enter_search_mode(SearchDirection::Forward);
+                self.pager.start_search_input(SearchDirection::Forward);
+                self.dirty = true;
             }
             KeyCode::Char('?') => {
-                self.enter_search_mode(SearchDirection::Backward);
+                self.pager.start_search_input(SearchDirection::Backward);
+                self.dirty = true;
             }
             KeyCode::Char('n') => {
-                self.jump_to_next_match(false);
+                self.dirty = self.pager.jump_to_next_match(false);
             }
             KeyCode::Char('N') => {
-                self.jump_to_next_match(true);
+                self.dirty = self.pager.jump_to_next_match(true);
             }
             _ => {}
         }
         Ok(false)
     }
 
-    fn enter_search_mode(&mut self, direction: SearchDirection) {
-        log::debug!("Enter search mode: {direction:?}");
-        self.scroll_physics.stop();
-
-        // Save the top line of the contiguous rows. This line is:
-        //   1. the start line of the search range performing an incremental search within
-        //   2. the position to go back to when the search is cancelled
-        //
-        // The first purpose is why it needs to be a first line of contiguous rows that
-        // may include header rows. When the header line is not overlaid, include it in the
-        // search range. If a match is found, place the initial cursor position within the header.
-        // Excluding the header would cause unnatural behavior where the cursor starts in the content
-        // during preview and only jumps to the header via n/N after the query is submitted.
-        //
-        // The position is restored correctly upon cancel, whether or not the top line is a header.
-        let saved_top_line = self.pager.contiguous_rows()[0].line_index();
-
-        let editor = LineEditor::new();
-        self.mode = AppMode::Search {
-            direction,
-            editor,
-            saved_top_line,
-            preview: None,
-        };
-        self.dirty = true;
-    }
-
-    fn exit_search_mode(&mut self) {
-        log::debug!("Exit search mode");
-        self.mode = AppMode::View;
-        self.dirty = true;
-    }
-
-    /// Cancel search: discard preview and restore the original scroll position.
-    fn cancel_search(&mut self) {
-        if let AppMode::Search { saved_top_line, .. } = &self.mode {
-            let top = *saved_top_line;
-            self.pager.jump_to(top);
-        }
-        self.exit_search_mode();
-    }
-
-    /// Update the search preview based on current input.
-    fn update_search_preview(&mut self) {
-        let (input, direction, saved_top_line) = match &self.mode {
-            AppMode::Search {
-                editor,
-                direction,
-                saved_top_line,
-                ..
-            } => (editor.input().to_string(), *direction, *saved_top_line),
-            _ => return,
-        };
-
-        if input.is_empty() {
-            // No query: clear preview and restore position.
-            if let AppMode::Search { preview, .. } = &mut self.mode {
-                *preview = None;
-            }
-            self.pager.jump_to(saved_top_line);
-            self.dirty = true;
-            return;
-        }
-
-        let re = Regex::new(&regex::escape(&input)).unwrap();
-        let matched = search::search_document(
-            self.pager.doc_mut(),
-            &re,
-            SearchFrom::Line(saved_top_line),
-            direction,
-        );
-        log::debug!("Search preview: query={input:?}, result={matched:?}");
-
-        if let Some(ref pos) = matched {
-            self.pager.jump_to(pos.line_index());
-        }
-
-        if let AppMode::Search { preview, .. } = &mut self.mode {
-            *preview = Some(SearchState {
-                query: re,
-                direction,
-                current: matched,
-            });
-        }
-        self.dirty = true;
-    }
-
     fn handle_key_search(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Enter => {
-                self.submit_search();
+                self.pager.submit_search();
+                self.dirty = true;
             }
             KeyCode::Esc => {
-                self.cancel_search();
+                self.pager.cancel_search_input();
+                self.dirty = true;
             }
             KeyCode::Backspace => {
-                if let AppMode::Search { editor, .. } = &mut self.mode {
-                    if editor.input().is_empty() {
-                        self.cancel_search();
-                        return;
-                    }
-                    editor.edit(LineEdit::DeleteCharBeforeCursor);
+                if self.pager.has_search_input() {
+                    self.pager
+                        .update_search_query(LineEdit::DeleteCharBeforeCursor);
+                } else {
+                    self.pager.cancel_search_input();
                 }
-                self.update_search_preview();
+                self.dirty = true;
             }
             KeyCode::Char(ch) => {
-                if let AppMode::Search { editor, .. } = &mut self.mode {
-                    editor.edit(LineEdit::AddChar(ch))
-                }
-                self.update_search_preview();
+                self.pager.update_search_query(LineEdit::AddChar(ch));
+                self.dirty = true;
             }
             KeyCode::Left => {
-                if let AppMode::Search { editor, .. } = &mut self.mode {
-                    editor.edit(LineEdit::MoveCursorLeft);
-                    self.dirty = true;
-                }
+                self.pager.update_search_query(LineEdit::MoveCursorLeft);
+                self.dirty = true;
             }
             KeyCode::Right => {
-                if let AppMode::Search { editor, .. } = &mut self.mode {
-                    editor.edit(LineEdit::MoveCursorRight);
-                    self.dirty = true;
-                }
+                self.pager.update_search_query(LineEdit::MoveCursorRight);
+                self.dirty = true;
             }
             _ => {}
-        }
-    }
-
-    /// Commit the current search preview on Enter.
-    fn submit_search(&mut self) {
-        if let AppMode::Search { preview, .. } = &mut self.mode
-            && let Some(preview) = preview.take()
-        {
-            log::debug!(
-                "Submit search: query={:?}, current={:?}",
-                preview.query.as_str(),
-                preview.current
-            );
-            self.search = Some(preview);
-        }
-        self.exit_search_mode();
-    }
-
-    /// Jump to next/previous match using the stored search state.
-    fn jump_to_next_match(&mut self, reverse: bool) {
-        let Some(ref search) = self.search else {
-            log::debug!("Jump to next match: no active search");
-            return;
-        };
-        let direction = if reverse {
-            search.direction.opposite()
-        } else {
-            search.direction
-        };
-        let current = &search.current;
-
-        let next = find_next_match_position(&mut self.pager, &search.query, current, direction);
-        log::debug!("Jump to next match: {next:?}");
-        if let Some(pos) = next {
-            self.pager.jump_to(pos.line_index());
-            if let Some(s) = self.search.as_mut() {
-                s.current = Some(pos);
-            }
-            self.dirty = true;
         }
     }
 
@@ -388,52 +230,4 @@ impl<S: Screen> App<S> {
         let scroll_rows = self.pager.scroll(clamped);
         self.dirty = scroll_rows != 0;
     }
-}
-
-/// Resolve which SearchState is active: preview (during search) or committed.
-fn active_search<'a>(
-    mode: &'a AppMode,
-    committed: &'a Option<SearchState>,
-) -> Option<&'a SearchState> {
-    match mode {
-        AppMode::Search { preview, .. } => preview.as_ref().or(committed.as_ref()),
-        _ => committed.as_ref(),
-    }
-}
-
-/// Find the next match to jump to. Handles re-anchoring when the current match
-/// is no longer visible (e.g., after jump by g/G).
-fn find_next_match_position(
-    pager: &mut Pager,
-    query: &Regex,
-    current: &Option<MatchPosition>,
-    direction: SearchDirection,
-) -> Option<MatchPosition> {
-    let visible_rows = pager.contiguous_rows().to_vec();
-    if visible_rows.is_empty() {
-        return None;
-    }
-    let (search_from, direction) = if let Some(current) = current
-        && is_match_visible(pager.doc_mut(), current, &visible_rows)
-    {
-        log::debug!("search '{query}': match in viewport, search next match");
-        (SearchFrom::NextOf(current), direction)
-    } else {
-        // When the current match is not in the viewport,
-        // jump to the first match in the viewport regardless of direction.
-        log::debug!("search '{query}': match not in viewport, search the first match in viewport");
-        (SearchFrom::Row(&visible_rows[0]), SearchDirection::Forward)
-    };
-    search::search_document(pager.doc_mut(), query, search_from, direction)
-}
-
-/// Check if a match is on a wrap row that is actually visible on screen.
-fn is_match_visible(doc: &mut Document, pos: &MatchPosition, visible_rows: &[Row]) -> bool {
-    let Some(line) = doc.line(pos.line_index()) else {
-        return false;
-    };
-    let raw_offset = line.match_raw_range(pos).start;
-    visible_rows
-        .iter()
-        .any(|r| r.line_index() == pos.line_index() && r.raw_range().contains(&raw_offset))
 }

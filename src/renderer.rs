@@ -69,17 +69,15 @@ impl<S: Screen> Renderer<S> {
         &mut self,
         doc: &mut Document,
         page: PageSnapshot,
-        search: Option<&SearchState>,
         status_text: &str,
     ) -> io::Result<()> {
+        log::debug!("render: {:?}", page.last_update);
         let result = match page.last_update {
             PageUpdate::None => self.render_status_line(&page, status_text),
-            PageUpdate::Full => self.render_full_page(doc, &page, search, status_text),
-            PageUpdate::Scroll(scroll_spec) => {
-                self.scroll(doc, &page, search, status_text, scroll_spec)
-            }
+            PageUpdate::Full => self.render_full_page(doc, &page, status_text),
+            PageUpdate::Scroll(scroll_spec) => self.scroll(doc, &page, status_text, scroll_spec),
         };
-        self.store_page_state(search);
+        self.store_page_state(page.search);
         result
     }
 
@@ -107,14 +105,13 @@ impl<S: Screen> Renderer<S> {
         &mut self,
         doc: &mut Document,
         page: &PageSnapshot,
-        search: Option<&SearchState>,
         status_text: &str,
     ) -> io::Result<()> {
         self.screen.begin_sync()?;
 
-        self.draw_rows(doc, page.header, search, 0)?;
-        self.draw_rows(doc, page.heading, search, page.header.len())?;
-        self.draw_rows(doc, page.content, search, page.total_header_height())?;
+        self.draw_rows(doc, page.header, page.search, 0)?;
+        self.draw_rows(doc, page.heading, page.search, page.header.len())?;
+        self.draw_rows(doc, page.content, page.search, page.total_header_height())?;
         self.clear_row_range(0, page.viewport_height()..page.height)?;
         self.redraw_status_line(page, status_text)?;
 
@@ -126,7 +123,6 @@ impl<S: Screen> Renderer<S> {
         &mut self,
         doc: &mut Document,
         page: &PageSnapshot,
-        search: Option<&SearchState>,
         status_text: &str,
         scroll: Scroll,
     ) -> io::Result<()> {
@@ -140,23 +136,23 @@ impl<S: Screen> Renderer<S> {
         if !ranges.new_rows.is_empty() {
             self.screen.scroll_terminal(&scroll)?;
             let screen_y = header_height + ranges.new_rows.start;
-            self.draw_rows(doc, &page.content[ranges.new_rows], search, screen_y)?;
+            self.draw_rows(doc, &page.content[ranges.new_rows], page.search, screen_y)?;
         }
 
         // If the search state has changed, refresh other rows as well.
-        let is_search_same = match (&self.last_search, search) {
+        let is_search_same = match (&self.last_search, page.search) {
             (Some(prev), Some(current)) => prev == current,
             (None, None) => true,
             _ => false,
         };
         if !is_search_same {
             let screen_y = header_height + ranges.remaining.start;
-            self.refresh_rows(doc, &page.content[ranges.remaining], search, screen_y)?;
+            self.refresh_rows(doc, &page.content[ranges.remaining], page.search, screen_y)?;
         }
 
         // Refresh headers and the status line.
-        self.draw_rows(doc, page.header, search, 0)?;
-        self.draw_rows(doc, page.heading, search, page.header.len())?;
+        self.draw_rows(doc, page.header, page.search, 0)?;
+        self.draw_rows(doc, page.heading, page.search, page.header.len())?;
         self.redraw_status_line(page, status_text)?;
 
         self.screen.end_sync()?;

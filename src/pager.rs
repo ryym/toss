@@ -1,9 +1,15 @@
+use std::mem;
+
+use regex::Regex;
+
 use crate::{
     document::Document,
-    line::Row,
+    line::{MatchPosition, Row},
+    line_editor::{LineEdit, LineEditor},
     options::Options,
     pager::{header::Header, heading::Heading, viewport::Viewport},
     screen::{Direction, ScreenSize, Scroll},
+    search::{self, SearchDirection, SearchFrom, SearchState},
 };
 
 mod header;
@@ -49,6 +55,7 @@ pub struct PageSnapshot<'pager> {
     pub heading: &'pager [Row],
     pub content: &'pager [Row],
     pub height: usize,
+    pub search: Option<&'pager SearchState>,
     pub last_update: PageUpdate,
 }
 
@@ -60,6 +67,22 @@ impl<'pager> PageSnapshot<'pager> {
     pub fn viewport_height(&self) -> usize {
         self.total_header_height() + self.content.len()
     }
+}
+
+#[derive(Default)]
+pub enum PagerMode {
+    #[default]
+    View,
+    SearchInput(SearchInputMode),
+}
+
+pub struct SearchInputMode {
+    direction: SearchDirection,
+    editor: LineEditor,
+    /// Top line where search started, for searching and restoring on cancel.
+    start_line_index: usize,
+    /// Live search state before finalizing a search query.
+    draft: Option<SearchState>,
 }
 
 /// Centrally manages the pagination state.
@@ -85,9 +108,11 @@ impl<'pager> PageSnapshot<'pager> {
 /// [`Pager`] only holds the state but does not write anything to the screen itself.
 pub struct Pager {
     doc: Document,
+    mode: PagerMode,
     header: Header,
     heading: Heading,
     viewport: Viewport,
+    search: Option<SearchState>,
     last_update: PageUpdate,
 }
 
@@ -100,30 +125,52 @@ impl Pager {
         let viewport = Viewport::new(&mut doc, size);
         Self {
             doc,
+            mode: PagerMode::View,
             header,
             heading,
             viewport,
+            search: None,
             last_update: PageUpdate::Full,
         }
+    }
+
+    pub fn mode(&self) -> &PagerMode {
+        &self.mode
     }
 
     pub fn doc_mut(&mut self) -> &mut Document {
         &mut self.doc
     }
 
+    pub fn status_text(&self) -> String {
+        match &self.mode {
+            PagerMode::View => ":".to_string(),
+            PagerMode::SearchInput(search) => format!(
+                "{}{}",
+                search.direction.prompt(),
+                search.editor.input_with_cursor()
+            ),
+        }
+    }
+
     pub fn snapshot<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
+        let search = match &self.mode {
+            PagerMode::SearchInput(search) => search.draft.as_ref().or(self.search.as_ref()),
+            _ => self.search.as_ref(),
+        };
         let snapshot = PageSnapshot {
             header: self.header.rows(),
             heading: self.heading.rows(),
             content: &self.viewport.rows()[self.total_header_height()..],
             height: self.viewport.size().height,
+            search,
             last_update: self.last_update,
         };
         self.last_update = PageUpdate::None;
         (snapshot, &mut self.doc)
     }
 
-    pub fn total_header_height(&self) -> usize {
+    fn total_header_height(&self) -> usize {
         self.header.height() + self.heading.height()
     }
 
@@ -140,7 +187,7 @@ impl Pager {
     /// If a global header also exists at lines 1-2, the global header is included as well.
     /// However, if the content starts at line 7 or later (not adjacent), only the content rows
     /// are returned.
-    pub fn contiguous_rows(&self) -> &[Row] {
+    fn contiguous_rows(&self) -> &[Row] {
         &self.viewport.rows()[self.contiguous_top_row_index()..]
     }
 
@@ -340,6 +387,156 @@ impl Pager {
         let push_up = overlay_height.saturating_sub(other_section_start);
         self.heading.push_up(push_up);
     }
+
+    pub fn has_search_input(&self) -> bool {
+        match &self.mode {
+            PagerMode::SearchInput(mode) => !mode.editor.is_empty(),
+            _ => false,
+        }
+    }
+
+    pub fn start_search_input(&mut self, direction: SearchDirection) {
+        // Start searching from the top line of the contiguous rows.
+        // The first purpose is why it needs to be a first line of contiguous rows that
+        // may include header rows. When the header line is not overlaid, include it in the
+        // search range. If a match is found, place the initial cursor position within the header.
+        // Excluding the header would cause unnatural behavior where the cursor starts in the content
+        // during preview and only jumps to the header via n/N after the query is submitted.
+        let start_line_index = self.contiguous_rows()[0].line_index();
+        let editor = LineEditor::new();
+        self.mode = PagerMode::SearchInput(SearchInputMode {
+            direction,
+            editor,
+            start_line_index,
+            draft: None,
+        });
+    }
+
+    /// Commit the current search input.
+    pub fn submit_search(&mut self) {
+        if let PagerMode::SearchInput(mut mode) = mem::take(&mut self.mode)
+            && let Some(draft) = mode.draft.take()
+        {
+            log::debug!("Submit search: query={:?}", draft.query.as_str());
+            self.search = Some(draft);
+        }
+    }
+
+    /// Cancel search: discard input and restore the original scroll position.
+    pub fn cancel_search_input(&mut self) {
+        if let PagerMode::SearchInput(mode) = mem::take(&mut self.mode) {
+            log::debug!("Cancel search");
+            self.jump_to(mode.start_line_index);
+        }
+    }
+
+    /// Update the search input and scroll to the first match.
+    pub fn update_search_query(&mut self, edit: LineEdit) {
+        let PagerMode::SearchInput(mode) = &mut self.mode else {
+            return;
+        };
+
+        mode.editor.edit(edit);
+        let input = mode.editor.input();
+
+        if input.is_empty() {
+            mode.draft = None;
+            self.last_update = PageUpdate::Scroll(Scroll {
+                direction: Direction::Down,
+                num_rows: 0,
+            });
+            return;
+        }
+
+        let re = Regex::new(&regex::escape(&input)).unwrap();
+        let matched = search::search_document(
+            &mut self.doc,
+            &re,
+            SearchFrom::Line(mode.start_line_index),
+            mode.direction,
+        );
+        log::debug!("Search preview: query={input:?}, result={matched:?}");
+
+        let current_line_index = matched.as_ref().map(|m| m.line_index());
+        mode.draft = Some(SearchState {
+            query: re,
+            direction: mode.direction,
+            current: matched,
+        });
+
+        if let Some(line_index) = current_line_index {
+            self.jump_to(line_index);
+        }
+    }
+
+    /// Jump to next/previous match using the stored search state.
+    pub fn jump_to_next_match(&mut self, reverse: bool) -> bool {
+        let Some(ref search) = self.search else {
+            log::debug!("Jump to next match: no active search");
+            return false;
+        };
+        let direction = if reverse {
+            search.direction.opposite()
+        } else {
+            search.direction
+        };
+        let current = &search.current;
+
+        let next = find_next_match_position(
+            self.contiguous_rows().to_vec(),
+            &mut self.doc,
+            &search.query,
+            current,
+            direction,
+        );
+        log::debug!("Jump to next match: {next:?}");
+        if let Some(pos) = next {
+            self.jump_to(pos.line_index());
+            if let Some(s) = self.search.as_mut() {
+                s.current = Some(pos);
+                return true;
+            }
+        }
+
+        false
+    }
+}
+
+/// Find the next match to jump to.
+/// Handles re-anchoring when the current match is no longer visible in viewport.
+fn find_next_match_position(
+    visible_rows: Vec<Row>,
+    doc: &mut Document,
+    query: &Regex,
+    current: &Option<MatchPosition>,
+    direction: SearchDirection,
+) -> Option<MatchPosition> {
+    if visible_rows.is_empty() {
+        return None;
+    }
+    let (search_from, direction) = if let Some(current) = current
+        && is_match_visible(doc, current, &visible_rows)
+    {
+        log::debug!("search '{query}': match in viewport, search next match");
+        (SearchFrom::NextOf(current), direction)
+    } else {
+        // When the current match is not in the viewport,
+        // jump to the first match in the viewport regardless of direction.
+        log::debug!("search '{query}': match not in viewport, search the first match in viewport");
+        (SearchFrom::Row(&visible_rows[0]), SearchDirection::Forward)
+    };
+    search::search_document(doc, query, search_from, direction)
+}
+
+/// Check if a match is on a wrap row that is actually visible on screen.
+fn is_match_visible(doc: &mut Document, pos: &MatchPosition, visible_rows: &[Row]) -> bool {
+    let Some(line) = doc.line(pos.line_index()) else {
+        return false;
+    };
+    let raw_offset = line.match_raw_range(pos).start;
+    visible_rows
+        .iter()
+        .any(|r| r.line_index() == pos.line_index() && r.raw_range().contains(&raw_offset))
 }
 
 #[cfg(test)]
@@ -365,6 +562,12 @@ mod tests {
 
     fn line_indices(rows: &[Row]) -> Vec<usize> {
         rows.iter().map(|r| r.line_index()).collect()
+    }
+
+    fn type_query(pager: &mut Pager, query: &str) {
+        for ch in query.chars() {
+            pager.update_search_query(LineEdit::AddChar(ch));
+        }
     }
 
     #[test]
@@ -536,6 +739,21 @@ mod tests {
             ScreenSize::new(20, 5),
         );
         assert_eq!(line_indices(pager.contiguous_rows()), vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn snapshot_search_prefers_draft_over_committed_query() {
+        let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
+        pager.start_search_input(SearchDirection::Forward);
+        type_query(&mut pager, "line5");
+        pager.submit_search();
+
+        // Start a new search: the draft input takes precedence over the committed query.
+        pager.start_search_input(SearchDirection::Forward);
+        type_query(&mut pager, "line8");
+        let (snap, _doc) = pager.snapshot();
+        let search = snap.search.expect("draft search should override committed");
+        assert_eq!(search.query.as_str(), "line8");
     }
 
     #[test]

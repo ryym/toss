@@ -33,6 +33,7 @@ impl SearchDirection {
 }
 
 /// Active search state, preserved across search submissions.
+#[derive(Debug)]
 pub struct SearchState {
     pub query: Regex,
     pub direction: SearchDirection,
