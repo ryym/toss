@@ -468,6 +468,12 @@ impl Pager {
 
         if let Some(line_index) = current_line_index {
             self.jump_to(line_index);
+        } else {
+            // Refresh the page to clear search highlights.
+            self.last_update = PageUpdate::Scroll(Scroll {
+                direction: Direction::Down,
+                num_rows: 0,
+            });
         }
     }
 

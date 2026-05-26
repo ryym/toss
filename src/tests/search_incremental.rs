@@ -686,6 +686,62 @@ line 3
     assert_eq!(screen.out(), want);
 }
 
+// When the query stops matching, the previous match highlight should disappear.
+#[test]
+fn preview_clears_highlight_when_query_no_longer_matches() {
+    let content = "\
+ff bar
+line 2
+line 3
+line 4
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 4,
+        content,
+        events: vec![key('/'), key('f'), key('f'), key('f'), esc()],
+        ..Default::default()
+    });
+    let want = "\
+ff bar
+line 2
+line 3
+:
+-----
+[EVENT]:char:/
+ff bar
+line 2
+line 3
+/█
+-----
+[EVENT]:char:f
+{reverse}f{/reverse}{dim}{reverse}f{/reverse}{/dim} bar
+line 2
+line 3
+/f█
+-----
+[EVENT]:char:f
+{reverse}ff{/reverse} bar
+line 2
+line 3
+/ff█
+-----
+[EVENT]:char:f
+ff bar
+line 2
+line 3
+/fff█
+-----
+[EVENT]:esc
+ff bar
+line 2
+line 3
+:
+-----
+";
+    assert_eq!(screen.out(), want);
+}
+
 // Preview shows all matches on screen, not just the current one.
 // Current match (first) is reverse, others are dim reverse.
 #[test]
