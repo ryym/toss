@@ -43,6 +43,16 @@ pub struct Scroll {
     pub num_rows: NonZeroUsize,
 }
 
+impl Scroll {
+    /// Construct a [`Scroll`] if `num_rows` is non-zero; returns `None` otherwise.
+    pub fn new(direction: Direction, num_rows: usize) -> Option<Self> {
+        NonZeroUsize::new(num_rows).map(|num_rows| Self {
+            direction,
+            num_rows,
+        })
+    }
+}
+
 /// Abstract terminal operations for rendering and input.
 pub trait Screen {
     fn size(&self) -> io::Result<ScreenSize>;
