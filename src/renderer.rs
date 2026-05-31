@@ -63,14 +63,14 @@ impl<S: Screen> Renderer<S> {
     ///
     /// - [`PageUpdate::None`]: only the status line is rewritten.
     /// - [`PageUpdate::Full`]: the entire page (headers, content, status line) is redrawn.
-    /// - [`PageUpdate::Scroll`]: the terminal itself is scrolled so the existing rows are
-    ///   preserved by the terminal, and only the newly appeared rows are drawn.
+    /// - [`PageUpdate::Partial`]: only rows affected by state changes are redrawn. when a
+    ///   [`Scroll`] is provided, the terminal is scrolled so the existing rows are preserved.
     pub fn render(&mut self, doc: &mut Document, page: PageSnapshot) -> io::Result<()> {
         log::debug!("render: {:?}", page.last_update);
         let result = match page.last_update {
             PageUpdate::None => self.render_status_line(&page),
             PageUpdate::Full => self.render_full_page(doc, &page),
-            PageUpdate::Scroll(scroll_spec) => self.scroll(doc, &page, scroll_spec),
+            PageUpdate::Partial(scroll) => self.render_partial(doc, &page, scroll),
         };
         self.store_page_state(page.search);
         result
@@ -109,21 +109,23 @@ impl<S: Screen> Renderer<S> {
         self.screen.flush()
     }
 
-    fn scroll(
+    fn render_partial(
         &mut self,
         doc: &mut Document,
         page: &PageSnapshot,
-        scroll: Scroll,
+        scroll: Option<Scroll>,
     ) -> io::Result<()> {
         self.screen.begin_sync()?;
 
         let header_height = page.total_header_height();
-        let ranges = compute_scroll_redraw_ranges(page.content, &scroll);
-        log::debug!("render as scroll: new_rows_range={:?}", ranges);
+        let ranges = compute_scroll_redraw_ranges(page.content, scroll.as_ref());
+        log::debug!("render partial: new_rows_range={:?}", ranges);
 
         // Scroll the terminal and draw newly appeared rows.
-        if !ranges.new_rows.is_empty() {
-            self.screen.scroll_terminal(&scroll)?;
+        if let Some(scroll) = &scroll
+            && !ranges.new_rows.is_empty()
+        {
+            self.screen.scroll_terminal(scroll)?;
             let screen_y = header_height + ranges.new_rows.start;
             self.draw_rows(doc, &page.content[ranges.new_rows], page.search, screen_y)?;
         }
@@ -235,7 +237,7 @@ struct ScrollRedrawRanges {
 }
 
 /// Compute the range of rows that need redrawing after a scroll as well as the remaining rows.
-fn compute_scroll_redraw_ranges(rows: &[Row], scroll: &Scroll) -> ScrollRedrawRanges {
+fn compute_scroll_redraw_ranges(rows: &[Row], scroll: Option<&Scroll>) -> ScrollRedrawRanges {
     let (from, to) = scroll_dirty_range(rows, scroll);
     let remaining = if from == 0 { to..rows.len() } else { 0..from };
     ScrollRedrawRanges {
@@ -247,7 +249,10 @@ fn compute_scroll_redraw_ranges(rows: &[Row], scroll: &Scroll) -> ScrollRedrawRa
 /// After terminal scroll shifts content, `scroll_rows` new rows appear at one edge.
 /// This function returns the range extended to include adjacent existing
 /// rows from the same logical line, so soft-wrap groups are drawn correctly.
-fn scroll_dirty_range(rows: &[Row], scroll: &Scroll) -> (usize, usize) {
+fn scroll_dirty_range(rows: &[Row], scroll: Option<&Scroll>) -> (usize, usize) {
+    let Some(scroll) = scroll else {
+        return (0, 0);
+    };
     if scroll.num_rows == 0 {
         return (0, 0);
     }
