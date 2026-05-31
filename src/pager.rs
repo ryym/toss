@@ -46,7 +46,7 @@ impl ViewportSize {
 pub enum PageUpdate {
     Full,
     Partial(Option<Scroll>),
-    None,
+    StatusOnly,
 }
 
 #[derive(Debug)]
@@ -57,7 +57,6 @@ pub struct PageSnapshot<'pager> {
     pub height: usize,
     pub search: Option<&'pager SearchState>,
     pub status_line: String,
-    pub last_update: PageUpdate,
 }
 
 impl<'pager> PageSnapshot<'pager> {
@@ -114,7 +113,6 @@ pub struct Pager {
     heading: Heading,
     viewport: Viewport,
     search: Option<SearchState>,
-    last_update: PageUpdate,
 }
 
 impl Pager {
@@ -131,7 +129,6 @@ impl Pager {
             heading,
             viewport,
             search: None,
-            last_update: PageUpdate::Full,
         }
     }
 
@@ -166,9 +163,7 @@ impl Pager {
             height: self.viewport.size().height,
             status_line: self.status_line(),
             search,
-            last_update: self.last_update,
         };
-        self.last_update = PageUpdate::None;
         (snapshot, &mut self.doc)
     }
 
@@ -223,20 +218,20 @@ impl Pager {
     }
 
     /// Resize the page to fit the new dimensions.
-    pub fn resize(&mut self, screen_width: usize, screen_height: usize) {
+    pub fn resize(&mut self, screen_width: usize, screen_height: usize) -> PageUpdate {
         let size = ViewportSize::new(screen_width, screen_height);
         self.header.resize(&mut self.doc, &size);
         self.heading
             .resize(&mut self.doc, &size, self.header.height());
         self.viewport.resize(&mut self.doc, size);
-        self.last_update = PageUpdate::Full;
+        PageUpdate::Full
     }
 
     /// Move the page so that the specified line comes to the top.
     /// - If the specified line is within the global header, jump to the start of the document.
     /// - If the specified line is within any heading, move so that it comes to the top.
     /// - Otherwise, move so that the specified line comes right after the headers.
-    pub fn jump_to(&mut self, mut line_index: usize) {
+    pub fn jump_to(&mut self, mut line_index: usize) -> PageUpdate {
         if self.header.contains(line_index) {
             line_index = 0;
         }
@@ -259,12 +254,12 @@ impl Pager {
         if prev_viewport_top < self.viewport.rows()[0] {
             // If this is a downward jump and the destination was within the original viewport,
             // we can treat this update as a scroll rather than a jump.
-            self.last_update = if let Some(prev_line_pos) = prev_line_pos {
+            if let Some(prev_line_pos) = prev_line_pos {
                 let num_rows = new_line_pos.abs_diff(prev_line_pos);
                 PageUpdate::Partial(Scroll::new(Direction::Down, num_rows))
             } else {
                 PageUpdate::Full
-            };
+            }
         } else {
             // If this is an upward jump and the original top row of the viewport is still within
             // the new viewport, we can treat this update as a scroll rather than a jump.
@@ -272,29 +267,29 @@ impl Pager {
                 prev_viewport_top.line_index(),
                 prev_viewport_top.wrap_index(),
             );
-            self.last_update = if let Some(pos) = prev_viewport_top_new_pos {
+            if let Some(pos) = prev_viewport_top_new_pos {
                 PageUpdate::Partial(Scroll::new(Direction::Up, pos))
             } else {
                 PageUpdate::Full
-            };
+            }
         }
     }
 
     /// Jump to the end of the document so that the last line is at the bottom.
-    pub fn jump_to_end(&mut self) {
+    pub fn jump_to_end(&mut self) -> PageUpdate {
         self.viewport.jump_to_end(&mut self.doc);
 
         let top_line_index = self.viewport.rows()[0].line_index();
         self.heading.resolve(&mut self.doc, top_line_index);
         self.push_up_heading_if_needed();
 
-        self.last_update = PageUpdate::Full;
+        PageUpdate::Full
     }
 
     /// Scroll by the given number of rows (positive = down, negative = up).
-    /// Returns the number of rows scrolled.
-    /// This may be less than `num_rows` If there is limited room to scroll.
-    pub fn scroll(&mut self, num_rows: i32) -> usize {
+    /// Returns the resulting [`PageUpdate`] when any rows were actually scrolled.
+    /// Returns `None` when there is no room to scroll.
+    pub fn scroll(&mut self, num_rows: i32) -> Option<PageUpdate> {
         if num_rows.unsigned_abs() as usize > self.viewport.size().height {
             panic!("scroll rows too big");
         }
@@ -306,13 +301,18 @@ impl Pager {
         } else {
             0
         };
+        if actual_scroll_rows == 0 {
+            return None;
+        }
         let direction = if num_rows < 0 {
             Direction::Up
         } else {
             Direction::Down
         };
-        self.last_update = PageUpdate::Partial(Scroll::new(direction, actual_scroll_rows));
-        actual_scroll_rows
+        Some(PageUpdate::Partial(Scroll::new(
+            direction,
+            actual_scroll_rows,
+        )))
     }
 
     fn scroll_up(&mut self, num_rows: usize) -> usize {
@@ -389,7 +389,7 @@ impl Pager {
         }
     }
 
-    pub fn start_search_input(&mut self, direction: SearchDirection) {
+    pub fn start_search_input(&mut self, direction: SearchDirection) -> PageUpdate {
         // Start searching from the top line of the contiguous rows.
         // The first purpose is why it needs to be a first line of contiguous rows that
         // may include header rows. When the header line is not overlaid, include it in the
@@ -404,30 +404,34 @@ impl Pager {
             start_line_index,
             draft: None,
         });
+        PageUpdate::StatusOnly
     }
 
     /// Commit the current search input.
-    pub fn submit_search(&mut self) {
+    pub fn submit_search(&mut self) -> PageUpdate {
         if let PagerMode::SearchInput(mut mode) = mem::take(&mut self.mode)
             && let Some(draft) = mode.draft.take()
         {
             log::debug!("Submit search: query={:?}", draft.query.as_str());
             self.search = Some(draft);
         }
+        PageUpdate::StatusOnly
     }
 
     /// Cancel search: discard input and restore the original scroll position.
-    pub fn cancel_search_input(&mut self) {
+    pub fn cancel_search_input(&mut self) -> PageUpdate {
         if let PagerMode::SearchInput(mode) = mem::take(&mut self.mode) {
             log::debug!("Cancel search");
-            self.jump_to(mode.start_line_index);
+            self.jump_to(mode.start_line_index)
+        } else {
+            PageUpdate::StatusOnly
         }
     }
 
     /// Update the search input and scroll to the first match.
-    pub fn update_search_query(&mut self, edit: LineEdit) {
+    pub fn update_search_query(&mut self, edit: LineEdit) -> PageUpdate {
         let PagerMode::SearchInput(mode) = &mut self.mode else {
-            return;
+            return PageUpdate::StatusOnly;
         };
 
         mode.editor.edit(edit);
@@ -435,8 +439,7 @@ impl Pager {
 
         if input.is_empty() {
             mode.draft = None;
-            self.last_update = PageUpdate::Partial(None);
-            return;
+            return PageUpdate::Partial(None);
         }
 
         let re = Regex::new(&regex::escape(&input)).unwrap();
@@ -456,18 +459,19 @@ impl Pager {
         });
 
         if let Some(line_index) = current_line_index {
-            self.jump_to(line_index);
+            self.jump_to(line_index)
         } else {
             // Refresh the page to clear search highlights.
-            self.last_update = PageUpdate::Partial(None);
+            PageUpdate::Partial(None)
         }
     }
 
     /// Jump to next/previous match using the stored search state.
-    pub fn jump_to_next_match(&mut self, reverse: bool) -> bool {
+    /// Returns `Some` when a match was found and applied, `None` otherwise.
+    pub fn jump_to_next_match(&mut self, reverse: bool) -> Option<PageUpdate> {
         let Some(ref search) = self.search else {
             log::debug!("Jump to next match: no active search");
-            return false;
+            return None;
         };
         let direction = if reverse {
             search.direction.opposite()
@@ -485,14 +489,14 @@ impl Pager {
         );
         log::debug!("Jump to next match: {next:?}");
         if let Some(pos) = next {
-            self.jump_to(pos.line_index());
+            let update = self.jump_to(pos.line_index());
             if let Some(s) = self.search.as_mut() {
                 s.current = Some(pos);
-                return true;
+                return Some(update);
             }
         }
 
-        false
+        None
     }
 }
 
@@ -586,11 +590,18 @@ mod tests {
         assert_eq!(line_indices(snap.content), vec![2, 3, 4]);
     }
 
+    fn scroll_num_rows(update: Option<PageUpdate>) -> usize {
+        match update {
+            Some(PageUpdate::Partial(Some(scroll))) => scroll.num_rows.get(),
+            _ => 0,
+        }
+    }
+
     #[test]
     fn scroll_down_shifts_content_forward() {
         let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
-        let n = pager.scroll(2);
-        assert_eq!(n, 2);
+        let update = pager.scroll(2);
+        assert_eq!(scroll_num_rows(update), 2);
         let (snap, _doc) = pager.snapshot();
         assert_eq!(line_indices(snap.content), vec![2, 3, 4, 5]);
     }
@@ -600,8 +611,8 @@ mod tests {
         let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
         pager.scroll(3);
         assert_eq!(line_indices(pager.snapshot().0.content), vec![3, 4, 5, 6]);
-        let n = pager.scroll(-1);
-        assert_eq!(n, 1);
+        let update = pager.scroll(-1);
+        assert_eq!(scroll_num_rows(update), 1);
         assert_eq!(line_indices(pager.snapshot().0.content), vec![2, 3, 4, 5]);
     }
 

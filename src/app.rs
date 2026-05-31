@@ -4,7 +4,7 @@ use std::time::Duration;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::line_editor::LineEdit;
-use crate::pager::{Pager, PagerMode};
+use crate::pager::{PageUpdate, Pager, PagerMode};
 use crate::renderer::Renderer;
 use crate::screen::Screen;
 use crate::scroll::ScrollPhysics;
@@ -13,12 +13,17 @@ use crate::search::SearchDirection;
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
 
+/// Result of handling a terminal event or key input.
+enum AppAction {
+    Continue(Option<PageUpdate>),
+    Quit,
+}
+
 pub struct App<S: Screen> {
     renderer: Renderer<S>,
     pager: Pager,
     scroll_physics: ScrollPhysics,
     instant_scroll: bool,
-    dirty: bool,
 }
 
 impl<S: Screen> App<S> {
@@ -32,7 +37,6 @@ impl<S: Screen> App<S> {
             pager,
             scroll_physics,
             instant_scroll: false,
-            dirty: false,
         })
     }
 
@@ -45,192 +49,153 @@ impl<S: Screen> App<S> {
     }
 
     pub fn run(&mut self) -> io::Result<()> {
-        self.render()?;
-        self.dirty = false;
+        self.render(PageUpdate::Full)?;
 
         loop {
-            let should_quit = self.handle_terminal_event()?;
-            if should_quit {
-                return Ok(());
-            }
+            let event_update = match self.handle_terminal_event()? {
+                AppAction::Quit => return Ok(()),
+                AppAction::Continue(update) => update,
+            };
+            let scroll_anim_update = self.update_scroll_animation();
 
-            self.update_animation();
-
-            if self.dirty {
-                self.render()?;
-                self.dirty = false;
+            if let Some(update) = scroll_anim_update.or(event_update) {
+                self.render(update)?;
             }
         }
     }
 
-    fn render(&mut self) -> io::Result<()> {
+    fn render(&mut self, update: PageUpdate) -> io::Result<()> {
         let (snapshot, doc) = self.pager.snapshot();
-        self.renderer.render(doc, snapshot)
+        self.renderer.render(doc, snapshot, update)
     }
 
-    fn handle_terminal_event(&mut self) -> io::Result<bool> {
+    fn handle_terminal_event(&mut self) -> io::Result<AppAction> {
         let timeout = if self.scroll_physics.is_active() {
             FRAME_DURATION_ANIMATING
         } else {
             FRAME_DURATION_IDLE
         };
         let Some(event) = self.renderer.poll_event(timeout)? else {
-            return Ok(false);
+            return Ok(AppAction::Continue(None));
         };
         match event {
-            Event::Key(key) => self.handle_key(key),
+            Event::Key(key) => Ok(self.handle_key(key)),
             Event::Resize(w, h) => {
                 log::debug!("Resize: {w}x{h}");
-                self.pager.resize(w as usize, h as usize);
+                let update = self.pager.resize(w as usize, h as usize);
                 self.scroll_physics.configure(h as usize);
-                self.dirty = true;
-                Ok(false)
+                Ok(AppAction::Continue(Some(update)))
             }
-            _ => Ok(false),
+            _ => Ok(AppAction::Continue(None)),
         }
     }
 
-    /// Returns true if the app should quit.
-    fn handle_key(&mut self, key: KeyEvent) -> io::Result<bool> {
+    fn handle_key(&mut self, key: KeyEvent) -> AppAction {
         log::debug!("Key: {key:?}");
         match self.pager.mode() {
             PagerMode::View => self.handle_key_view(key),
-            PagerMode::SearchInput(_) => {
-                self.handle_key_search(key);
-                Ok(false)
-            }
+            PagerMode::SearchInput(_) => AppAction::Continue(self.handle_key_search(key)),
         }
     }
 
-    fn handle_key_view(&mut self, key: KeyEvent) -> io::Result<bool> {
-        match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => return Ok(true),
+    fn handle_key_view(&mut self, key: KeyEvent) -> AppAction {
+        let update = match key.code {
+            KeyCode::Char('q') | KeyCode::Esc => return AppAction::Quit,
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Ok(true);
+                return AppAction::Quit;
             }
-            KeyCode::Char('j') | KeyCode::Down => {
-                self.scroll_immediate(1);
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                self.scroll_immediate(-1);
-            }
+            KeyCode::Char('j') | KeyCode::Down => self.scroll_immediate(1),
+            KeyCode::Char('k') | KeyCode::Up => self.scroll_immediate(-1),
             KeyCode::Char('d') => {
                 let half = self.pager.content_height() as i32 / 2;
-                self.scroll_animated(half);
+                self.scroll_animated(half)
             }
             KeyCode::Char('u') => {
                 let half = -(self.pager.content_height() as i32 / 2);
-                self.scroll_animated(half);
+                self.scroll_animated(half)
             }
             KeyCode::Char('f') | KeyCode::Char(' ') => {
                 let full = self.pager.content_height() as i32;
-                self.scroll_animated(full);
+                self.scroll_animated(full)
             }
             KeyCode::Char('b') => {
                 let full = -(self.pager.content_height() as i32);
-                self.scroll_animated(full);
+                self.scroll_animated(full)
             }
             KeyCode::Char('g') => {
                 self.scroll_physics.stop();
-                self.pager.jump_to(0);
-                self.dirty = true;
+                Some(self.pager.jump_to(0))
             }
             KeyCode::Char('G') => {
                 self.scroll_physics.stop();
-                self.pager.jump_to_end();
-                self.dirty = true;
+                Some(self.pager.jump_to_end())
             }
-            KeyCode::Char('/') => {
-                self.pager.start_search_input(SearchDirection::Forward);
-                self.dirty = true;
-            }
-            KeyCode::Char('?') => {
-                self.pager.start_search_input(SearchDirection::Backward);
-                self.dirty = true;
-            }
-            KeyCode::Char('n') => {
-                self.dirty = self.pager.jump_to_next_match(false);
-            }
-            KeyCode::Char('N') => {
-                self.dirty = self.pager.jump_to_next_match(true);
-            }
-            _ => {}
-        }
-        Ok(false)
+            KeyCode::Char('/') => Some(self.pager.start_search_input(SearchDirection::Forward)),
+            KeyCode::Char('?') => Some(self.pager.start_search_input(SearchDirection::Backward)),
+            KeyCode::Char('n') => self.pager.jump_to_next_match(false),
+            KeyCode::Char('N') => self.pager.jump_to_next_match(true),
+            _ => None,
+        };
+        AppAction::Continue(update)
     }
 
-    fn handle_key_search(&mut self, key: KeyEvent) {
+    fn handle_key_search(&mut self, key: KeyEvent) -> Option<PageUpdate> {
         match key.code {
-            KeyCode::Enter => {
-                self.pager.submit_search();
-                self.dirty = true;
-            }
-            KeyCode::Esc => {
-                self.pager.cancel_search_input();
-                self.dirty = true;
-            }
+            KeyCode::Enter => Some(self.pager.submit_search()),
+            KeyCode::Esc => Some(self.pager.cancel_search_input()),
             KeyCode::Backspace => {
-                if self.pager.has_search_input() {
+                let update = if self.pager.has_search_input() {
                     self.pager
-                        .update_search_query(LineEdit::DeleteCharBeforeCursor);
+                        .update_search_query(LineEdit::DeleteCharBeforeCursor)
                 } else {
-                    self.pager.cancel_search_input();
-                }
-                self.dirty = true;
+                    self.pager.cancel_search_input()
+                };
+                Some(update)
             }
-            KeyCode::Char(ch) => {
-                self.pager.update_search_query(LineEdit::AddChar(ch));
-                self.dirty = true;
-            }
-            KeyCode::Left => {
-                self.pager.update_search_query(LineEdit::MoveCursorLeft);
-                self.dirty = true;
-            }
-            KeyCode::Right => {
-                self.pager.update_search_query(LineEdit::MoveCursorRight);
-                self.dirty = true;
-            }
-            _ => {}
+            KeyCode::Char(ch) => Some(self.pager.update_search_query(LineEdit::AddChar(ch))),
+            KeyCode::Left => Some(self.pager.update_search_query(LineEdit::MoveCursorLeft)),
+            KeyCode::Right => Some(self.pager.update_search_query(LineEdit::MoveCursorRight)),
+            _ => None,
         }
     }
 
-    fn scroll_immediate(&mut self, rows: i32) {
+    fn scroll_immediate(&mut self, rows: i32) -> Option<PageUpdate> {
         self.scroll_physics.stop();
-        self.apply_scroll(rows);
+        self.apply_scroll(rows)
     }
 
     /// Start or add momentum for an animated scroll.
     /// In instant_scroll mode (tests), scrolls immediately instead.
-    fn scroll_animated(&mut self, total_rows: i32) {
+    fn scroll_animated(&mut self, total_rows: i32) -> Option<PageUpdate> {
         if self.instant_scroll {
             self.scroll_physics.stop();
-            self.apply_scroll(total_rows);
+            self.apply_scroll(total_rows)
         } else {
             log::debug!("Scroll animation impulse: rows={total_rows}");
             self.scroll_physics.impulse(total_rows as f64);
+            None
         }
     }
 
-    fn update_animation(&mut self) {
+    fn update_scroll_animation(&mut self) -> Option<PageUpdate> {
         if !self.scroll_physics.is_active() {
-            return;
+            return None;
         }
         let rows = self
             .scroll_physics
             .tick(FRAME_DURATION_ANIMATING.as_secs_f64());
-        self.apply_scroll(rows as i32);
+        self.apply_scroll(rows as i32)
     }
 
-    fn apply_scroll(&mut self, rows: i32) {
+    fn apply_scroll(&mut self, rows: i32) -> Option<PageUpdate> {
         if rows == 0 {
-            return;
+            return None;
         }
         let max = self.pager.content_height() as i32;
         let clamped = rows.clamp(-max, max);
         if clamped == 0 {
-            return;
+            return None;
         }
-        let scroll_rows = self.pager.scroll(clamped);
-        self.dirty = scroll_rows != 0;
+        self.pager.scroll(clamped)
     }
 }

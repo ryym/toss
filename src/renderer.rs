@@ -59,16 +59,21 @@ impl<S: Screen> Renderer<S> {
 
     /// Apply the given [`PageSnapshot`] to the screen.
     /// To keep updates smooth and avoid unnecessary flicker, picks a redraw strategy
-    /// based on the [`PageUpdate`] reported by the snapshot:
+    /// based on the supplied [`PageUpdate`]:
     ///
-    /// - [`PageUpdate::None`]: only the status line is rewritten.
+    /// - [`PageUpdate::StatusOnly`]: only the status line is rewritten.
     /// - [`PageUpdate::Full`]: the entire page (headers, content, status line) is redrawn.
     /// - [`PageUpdate::Partial`]: only rows affected by state changes are redrawn. when a
     ///   [`Scroll`] is provided, the terminal is scrolled so the existing rows are preserved.
-    pub fn render(&mut self, doc: &mut Document, page: PageSnapshot) -> io::Result<()> {
-        log::debug!("render: {:?}", page.last_update);
-        let result = match page.last_update {
-            PageUpdate::None => self.render_status_line(&page),
+    pub fn render(
+        &mut self,
+        doc: &mut Document,
+        page: PageSnapshot,
+        update: PageUpdate,
+    ) -> io::Result<()> {
+        log::debug!("render: {update:?}");
+        let result = match update {
+            PageUpdate::StatusOnly => self.render_status_line(&page),
             PageUpdate::Full => self.render_full_page(doc, &page),
             PageUpdate::Partial(scroll) => self.render_partial(doc, &page, scroll),
         };
