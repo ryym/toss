@@ -49,27 +49,9 @@ impl<S: Screen> App<S> {
         self.dirty = false;
 
         loop {
-            let timeout = if self.scroll_physics.is_active() {
-                FRAME_DURATION_ANIMATING
-            } else {
-                FRAME_DURATION_IDLE
-            };
-
-            if let Some(event) = self.renderer.poll_event(timeout)? {
-                match event {
-                    Event::Key(key) => {
-                        if self.handle_key(key)? {
-                            return Ok(());
-                        }
-                    }
-                    Event::Resize(w, h) => {
-                        log::debug!("Resize: {w}x{h}");
-                        self.pager.resize(w as usize, h as usize);
-                        self.scroll_physics.configure(h as usize);
-                        self.dirty = true;
-                    }
-                    _ => {}
-                }
+            let should_quit = self.handle_terminal_event()?;
+            if should_quit {
+                return Ok(());
             }
 
             self.update_animation();
@@ -84,6 +66,28 @@ impl<S: Screen> App<S> {
     fn render(&mut self) -> io::Result<()> {
         let (snapshot, doc) = self.pager.snapshot();
         self.renderer.render(doc, snapshot)
+    }
+
+    fn handle_terminal_event(&mut self) -> io::Result<bool> {
+        let timeout = if self.scroll_physics.is_active() {
+            FRAME_DURATION_ANIMATING
+        } else {
+            FRAME_DURATION_IDLE
+        };
+        let Some(event) = self.renderer.poll_event(timeout)? else {
+            return Ok(false);
+        };
+        match event {
+            Event::Key(key) => self.handle_key(key),
+            Event::Resize(w, h) => {
+                log::debug!("Resize: {w}x{h}");
+                self.pager.resize(w as usize, h as usize);
+                self.scroll_physics.configure(h as usize);
+                self.dirty = true;
+                Ok(false)
+            }
+            _ => Ok(false),
+        }
     }
 
     /// Returns true if the app should quit.
