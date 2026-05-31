@@ -122,9 +122,7 @@ impl<S: Screen> Renderer<S> {
         log::debug!("render partial: new_rows_range={:?}", ranges);
 
         // Scroll the terminal and draw newly appeared rows.
-        if let Some(scroll) = &scroll
-            && !ranges.new_rows.is_empty()
-        {
+        if let Some(scroll) = &scroll {
             self.screen.scroll_terminal(scroll)?;
             let screen_y = header_height + ranges.new_rows.start;
             self.draw_rows(doc, &page.content[ranges.new_rows], page.search, screen_y)?;
@@ -253,13 +251,11 @@ fn scroll_dirty_range(rows: &[Row], scroll: Option<&Scroll>) -> (usize, usize) {
     let Some(scroll) = scroll else {
         return (0, 0);
     };
-    if scroll.num_rows == 0 {
-        return (0, 0);
-    }
+    let num_rows = scroll.num_rows.get();
     let len = rows.len();
     match scroll.direction {
         Direction::Down => {
-            let new_start = len.saturating_sub(scroll.num_rows);
+            let new_start = len.saturating_sub(num_rows);
             let mut from = new_start;
             while from > 0 && rows[from - 1].line_index() == rows[new_start].line_index() {
                 from -= 1;
@@ -267,7 +263,7 @@ fn scroll_dirty_range(rows: &[Row], scroll: Option<&Scroll>) -> (usize, usize) {
             (from, len)
         }
         Direction::Up => {
-            let new_end = scroll.num_rows.min(len);
+            let new_end = num_rows.min(len);
             let mut to = new_end;
             while to < len && rows[to].line_index() == rows[new_end - 1].line_index() {
                 to += 1;

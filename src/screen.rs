@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, num::NonZeroUsize};
 
 use crossterm::event::Event;
 
@@ -40,7 +40,7 @@ pub enum Direction {
 #[derive(Debug, Clone, Copy)]
 pub struct Scroll {
     pub direction: Direction,
-    pub num_rows: usize,
+    pub num_rows: NonZeroUsize,
 }
 
 /// Abstract terminal operations for rendering and input.

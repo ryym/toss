@@ -1,4 +1,4 @@
-use std::mem;
+use std::{mem, num::NonZeroUsize};
 
 use regex::Regex;
 
@@ -261,7 +261,7 @@ impl Pager {
             // we can treat this update as a scroll rather than a jump.
             self.last_update = if let Some(prev_line_pos) = prev_line_pos {
                 let num_rows = new_line_pos.abs_diff(prev_line_pos);
-                PageUpdate::Partial(Some(Scroll {
+                PageUpdate::Partial(NonZeroUsize::new(num_rows).map(|num_rows| Scroll {
                     direction: Direction::Down,
                     num_rows,
                 }))
@@ -276,9 +276,9 @@ impl Pager {
                 prev_viewport_top.wrap_index(),
             );
             self.last_update = if let Some(pos) = prev_viewport_top_new_pos {
-                PageUpdate::Partial(Some(Scroll {
+                PageUpdate::Partial(NonZeroUsize::new(pos).map(|num_rows| Scroll {
                     direction: Direction::Up,
-                    num_rows: pos,
+                    num_rows,
                 }))
             } else {
                 PageUpdate::Full
@@ -312,14 +312,17 @@ impl Pager {
         } else {
             0
         };
-        self.last_update = PageUpdate::Partial(Some(Scroll {
-            direction: if num_rows < 0 {
-                Direction::Up
-            } else {
-                Direction::Down
+        let direction = if num_rows < 0 {
+            Direction::Up
+        } else {
+            Direction::Down
+        };
+        self.last_update = PageUpdate::Partial(NonZeroUsize::new(actual_scroll_rows).map(
+            |num_rows| Scroll {
+                direction,
+                num_rows,
             },
-            num_rows: actual_scroll_rows,
-        }));
+        ));
         actual_scroll_rows
     }
 

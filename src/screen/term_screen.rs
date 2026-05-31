@@ -67,10 +67,7 @@ impl Screen for TermScreen {
     }
 
     fn scroll_terminal(&mut self, scroll: &Scroll) -> io::Result<()> {
-        if scroll.num_rows == 0 {
-            return Ok(());
-        }
-        let n = scroll.num_rows as u16;
+        let n = scroll.num_rows.get() as u16;
         match scroll.direction {
             Direction::Down => {
                 queue!(self.stdout, terminal::ScrollUp(n))?;

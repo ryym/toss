@@ -217,10 +217,11 @@ impl Screen for MockScreen {
 
     fn scroll_terminal(&mut self, scroll: &Scroll) -> io::Result<()> {
         let height = self.height as usize;
+        let num_rows = scroll.num_rows.get();
         match scroll.direction {
             Direction::Down => {
                 // Content moves up: remove n rows from top, add blank at bottom.
-                let remove = scroll.num_rows.min(height);
+                let remove = num_rows.min(height);
                 for _ in 0..remove {
                     self.grid.remove(0);
                     self.grid.push(GridRow::new());
@@ -228,7 +229,7 @@ impl Screen for MockScreen {
             }
             Direction::Up => {
                 // Content moves down: remove n rows from bottom, add blank at top.
-                let remove = scroll.num_rows.min(height);
+                let remove = num_rows.min(height);
                 for _ in 0..remove {
                     self.grid.pop();
                     self.grid.insert(0, GridRow::new());
