@@ -132,8 +132,14 @@ impl<S: Screen> App<S> {
             }
             KeyCode::Char('/') => Some(self.pager.start_search_input(SearchDirection::Forward)),
             KeyCode::Char('?') => Some(self.pager.start_search_input(SearchDirection::Backward)),
-            KeyCode::Char('n') => self.pager.jump_to_next_match(false),
-            KeyCode::Char('N') => self.pager.jump_to_next_match(true),
+            KeyCode::Char('n') => {
+                self.scroll_physics.stop();
+                self.pager.jump_to_next_match(false)
+            }
+            KeyCode::Char('N') => {
+                self.scroll_physics.stop();
+                self.pager.jump_to_next_match(true)
+            }
             _ => None,
         };
         AppAction::Continue(update)
