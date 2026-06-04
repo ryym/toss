@@ -39,25 +39,25 @@ line 3
 -----
 [EVENT]:char:f
 line 3
-target {reverse}f{/reverse}oo here
+target {reverse}{bold}f{/reverse}{/bold}oo here
 line 5
 /f█
 -----
 [EVENT]:char:o
 line 3
-target {reverse}fo{/reverse}o here
+target {reverse}{bold}fo{/reverse}{/bold}o here
 line 5
 /fo█
 -----
 [EVENT]:char:o
 line 3
-target {reverse}foo{/reverse} here
+target {reverse}{bold}foo{/reverse}{/bold} here
 line 5
 /foo█
 -----
 [EVENT]:enter
 line 3
-target {reverse}foo{/reverse} here
+target {reverse}{bold}foo{/reverse}{/bold} here
 line 5
 :
 -----
@@ -110,25 +110,25 @@ line 5
 ?█
 -----
 [EVENT]:char:t
-{reverse}t{/reverse}op line
+{reverse}{bold}t{/reverse}{/bold}op line
 line 2
 line 3
 ?t█
 -----
 [EVENT]:char:o
-{reverse}to{/reverse}p line
+{reverse}{bold}to{/reverse}{/bold}p line
 line 2
 line 3
 ?to█
 -----
 [EVENT]:char:p
-{reverse}top{/reverse} line
+{reverse}{bold}top{/reverse}{/bold} line
 line 2
 line 3
 ?top█
 -----
 [EVENT]:enter
-{reverse}top{/reverse} line
+{reverse}{bold}top{/reverse}{/bold} line
 line 2
 line 3
 :
@@ -138,7 +138,8 @@ line 3
 }
 
 // n key: jump to next match in search direction.
-// Current match uses reverse, other matches use dim reverse.
+// Current match uses reverse + bold; other matches use underline + bold with
+// their first character also reversed.
 #[test]
 fn next_match_navigation() {
     let content = "\
@@ -175,33 +176,33 @@ foo 2
 /█
 -----
 [EVENT]:char:f
-{reverse}f{/reverse}oo 1
+{reverse}{bold}f{/reverse}{/bold}oo 1
 bar
-{dim}{reverse}f{/reverse}{/dim}oo 2
+{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}oo 2
 /f█
 -----
 [EVENT]:char:o
-{reverse}fo{/reverse}o 1
+{reverse}{bold}fo{/reverse}{/bold}o 1
 bar
-{dim}{reverse}fo{/reverse}{/dim}o 2
+{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}o{/underline}{/bold}o 2
 /fo█
 -----
 [EVENT]:char:o
-{reverse}foo{/reverse} 1
+{reverse}{bold}foo{/reverse}{/bold} 1
 bar
-{dim}{reverse}foo{/reverse}{/dim} 2
+{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} 2
 /foo█
 -----
 [EVENT]:enter
-{reverse}foo{/reverse} 1
+{reverse}{bold}foo{/reverse}{/bold} 1
 bar
-{dim}{reverse}foo{/reverse}{/dim} 2
+{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} 2
 :
 -----
 [EVENT]:char:n
-{reverse}foo{/reverse} 2
+{reverse}{bold}foo{/reverse}{/bold} 2
 baz
-{dim}{reverse}foo{/reverse}{/dim} 3
+{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} 3
 :
 -----
 ";
@@ -245,33 +246,33 @@ foo 2
 /█
 -----
 [EVENT]:char:f
-{reverse}f{/reverse}oo 1
+{reverse}{bold}f{/reverse}{/bold}oo 1
 bar
-{dim}{reverse}f{/reverse}{/dim}oo 2
+{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}oo 2
 /f█
 -----
 [EVENT]:char:o
-{reverse}fo{/reverse}o 1
+{reverse}{bold}fo{/reverse}{/bold}o 1
 bar
-{dim}{reverse}fo{/reverse}{/dim}o 2
+{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}o{/underline}{/bold}o 2
 /fo█
 -----
 [EVENT]:char:o
-{reverse}foo{/reverse} 1
+{reverse}{bold}foo{/reverse}{/bold} 1
 bar
-{dim}{reverse}foo{/reverse}{/dim} 2
+{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} 2
 /foo█
 -----
 [EVENT]:enter
-{reverse}foo{/reverse} 1
+{reverse}{bold}foo{/reverse}{/bold} 1
 bar
-{dim}{reverse}foo{/reverse}{/dim} 2
+{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} 2
 :
 -----
 [EVENT]:char:N
-{dim}{reverse}foo{/reverse}{/dim} 2
+{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} 2
 baz
-{reverse}foo{/reverse} 3
+{reverse}{bold}foo{/reverse}{/bold} 3
 :
 -----
 ";
@@ -380,43 +381,43 @@ line 4
 /█
 -----
 [EVENT]:char:t
-{reverse}t{/reverse}arge{dim}{reverse}t{/reverse}{/dim} here
+{reverse}{bold}t{/reverse}{/bold}arge{reverse}{underline}{bold}t{/reverse}{/underline}{/bold} here
 line 2
 line 3
 /t█
 -----
 [EVENT]:char:a
-{reverse}ta{/reverse}rget here
+{reverse}{bold}ta{/reverse}{/bold}rget here
 line 2
 line 3
 /ta█
 -----
 [EVENT]:char:r
-{reverse}tar{/reverse}get here
+{reverse}{bold}tar{/reverse}{/bold}get here
 line 2
 line 3
 /tar█
 -----
 [EVENT]:char:g
-{reverse}targ{/reverse}et here
+{reverse}{bold}targ{/reverse}{/bold}et here
 line 2
 line 3
 /targ█
 -----
 [EVENT]:char:e
-{reverse}targe{/reverse}t here
+{reverse}{bold}targe{/reverse}{/bold}t here
 line 2
 line 3
 /targe█
 -----
 [EVENT]:char:t
-{reverse}target{/reverse} here
+{reverse}{bold}target{/reverse}{/bold} here
 line 2
 line 3
 /target█
 -----
 [EVENT]:enter
-{reverse}target{/reverse} here
+{reverse}{bold}target{/reverse}{/bold} here
 line 2
 line 3
 :
@@ -465,37 +466,37 @@ line 3
 /█
 -----
 [EVENT]:char:C
-This is {bold}{reverse}C{/reverse}argo{reset}.toml
+This is {bold}{reverse}{bold}C{/reverse}{/bold}argo{reset}.toml
 line 3
 line 4
 /C█
 -----
 [EVENT]:char:a
-This is {bold}{reverse}Ca{/reverse}rgo{reset}.toml
+This is {bold}{reverse}{bold}Ca{/reverse}{/bold}rgo{reset}.toml
 line 3
 line 4
 /Ca█
 -----
 [EVENT]:char:r
-This is {bold}{reverse}Car{/reverse}go{reset}.toml
+This is {bold}{reverse}{bold}Car{/reverse}{/bold}go{reset}.toml
 line 3
 line 4
 /Car█
 -----
 [EVENT]:char:g
-This is {bold}{reverse}Carg{/reverse}o{reset}.toml
+This is {bold}{reverse}{bold}Carg{/reverse}{/bold}o{reset}.toml
 line 3
 line 4
 /Carg█
 -----
 [EVENT]:char:o
-This is {bold}{reverse}Cargo{reset}{/reverse}.toml
+This is {bold}{reverse}{bold}Cargo{reset}{/reverse}{/bold}.toml
 line 3
 line 4
 /Cargo█
 -----
 [EVENT]:enter
-This is {bold}{reverse}Cargo{reset}{/reverse}.toml
+This is {bold}{reverse}{bold}Cargo{reset}{/reverse}{/bold}.toml
 line 3
 line 4
 :
@@ -553,77 +554,78 @@ line 3
 /█
 -----
 [EVENT]:char:l
-{reverse}l{/reverse}ine 1
-{dim}{reverse}l{/reverse}{/dim}ine 2
-{dim}{reverse}l{/reverse}{/dim}ine 3
+{reverse}{bold}l{/reverse}{/bold}ine 1
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}ine 2
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}ine 3
 /l█
 -----
 [EVENT]:char:i
-{reverse}li{/reverse}ne 1
-{dim}{reverse}li{/reverse}{/dim}ne 2
-{dim}{reverse}li{/reverse}{/dim}ne 3
+{reverse}{bold}li{/reverse}{/bold}ne 1
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 2
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 3
 /li█
 -----
 [EVENT]:enter
-{reverse}li{/reverse}ne 1
-{dim}{reverse}li{/reverse}{/dim}ne 2
-{dim}{reverse}li{/reverse}{/dim}ne 3
+{reverse}{bold}li{/reverse}{/bold}ne 1
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 2
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 3
 :
 -----
 [EVENT]:char:j
-{dim}{reverse}li{/reverse}{/dim}ne 2
-{dim}{reverse}li{/reverse}{/dim}ne 3
-{dim}{reverse}li{/reverse}{/dim}ne 4
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 2
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 3
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 4
 :
 -----
 [EVENT]:char:j
-{dim}{reverse}li{/reverse}{/dim}ne 3
-{dim}{reverse}li{/reverse}{/dim}ne 4
-{dim}{reverse}li{/reverse}{/dim}ne 5
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 3
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 4
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 5
 :
 -----
 [EVENT]:char:/
-{dim}{reverse}li{/reverse}{/dim}ne 3
-{dim}{reverse}li{/reverse}{/dim}ne 4
-{dim}{reverse}li{/reverse}{/dim}ne 5
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 3
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 4
+{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 5
 /█
 -----
 [EVENT]:char:n
-li{reverse}n{/reverse}e 3
-li{dim}{reverse}n{/reverse}{/dim}e 4
-li{dim}{reverse}n{/reverse}{/dim}e 5
+li{reverse}{bold}n{/reverse}{/bold}e 3
+li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}e 4
+li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}e 5
 /n█
 -----
 [EVENT]:char:e
-li{reverse}ne{/reverse} 3
-li{dim}{reverse}ne{/reverse}{/dim} 4
-li{dim}{reverse}ne{/reverse}{/dim} 5
+li{reverse}{bold}ne{/reverse}{/bold} 3
+li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 4
+li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 5
 /ne█
 -----
 [EVENT]:enter
-li{reverse}ne{/reverse} 3
-li{dim}{reverse}ne{/reverse}{/dim} 4
-li{dim}{reverse}ne{/reverse}{/dim} 5
+li{reverse}{bold}ne{/reverse}{/bold} 3
+li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 4
+li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 5
 :
 -----
 [EVENT]:char:j
-li{dim}{reverse}ne{/reverse}{/dim} 4
-li{dim}{reverse}ne{/reverse}{/dim} 5
-li{dim}{reverse}ne{/reverse}{/dim} 6
+li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 4
+li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 5
+li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 6
 :
 -----
 [EVENT]:char:k
-li{reverse}ne{/reverse} 3
-li{dim}{reverse}ne{/reverse}{/dim} 4
-li{dim}{reverse}ne{/reverse}{/dim} 5
+li{reverse}{bold}ne{/reverse}{/bold} 3
+li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 4
+li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 5
 :
 -----
 ";
     assert_eq!(out, want);
 }
 
-// Multiple matches on the same line: the current match (first) uses reverse,
-// other matches on the same line use dim reverse.
+// Multiple matches on the same line: the current match (first) uses reverse + bold,
+// other matches on the same line use underline + bold with their first character
+// also reversed.
 #[test]
 fn multiple_matches_same_line() {
     let content = "\
@@ -652,25 +654,25 @@ line 3
 /█
 -----
 [EVENT]:char:f
-{reverse}f{/reverse}oo bar {dim}{reverse}f{/reverse}{/dim}oo baz {dim}{reverse}f{/reverse}{/dim}oo
+{reverse}{bold}f{/reverse}{/bold}oo bar {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}oo baz {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}oo
 line 2
 line 3
 /f█
 -----
 [EVENT]:char:o
-{reverse}fo{/reverse}o bar {dim}{reverse}fo{/reverse}{/dim}o baz {dim}{reverse}fo{/reverse}{/dim}o
+{reverse}{bold}fo{/reverse}{/bold}o bar {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}o{/underline}{/bold}o baz {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}o{/underline}{/bold}o
 line 2
 line 3
 /fo█
 -----
 [EVENT]:char:o
-{reverse}foo{/reverse} bar {dim}{reverse}foo{/reverse}{/dim} baz {dim}{reverse}foo{/reverse}{/dim}
+{reverse}{bold}foo{/reverse}{/bold} bar {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} baz {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold}
 line 2
 line 3
 /foo█
 -----
 [EVENT]:enter
-{reverse}foo{/reverse} bar {dim}{reverse}foo{/reverse}{/dim} baz {dim}{reverse}foo{/reverse}{/dim}
+{reverse}{bold}foo{/reverse}{/bold} bar {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} baz {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold}
 line 2
 line 3
 :
@@ -731,49 +733,49 @@ line 4
 [EVENT]:char:t
 line 3
 line 4
-{reverse}t{/reverse}arge{dim}{reverse}t{/reverse}{/dim} foo here
+{reverse}{bold}t{/reverse}{/bold}arge{reverse}{underline}{bold}t{/reverse}{/underline}{/bold} foo here
 line 6
 /t█
 -----
 [EVENT]:char:a
 line 3
 line 4
-{reverse}ta{/reverse}rget foo here
+{reverse}{bold}ta{/reverse}{/bold}rget foo here
 line 6
 /ta█
 -----
 [EVENT]:char:r
 line 3
 line 4
-{reverse}tar{/reverse}get foo here
+{reverse}{bold}tar{/reverse}{/bold}get foo here
 line 6
 /tar█
 -----
 [EVENT]:char:g
 line 3
 line 4
-{reverse}targ{/reverse}et foo here
+{reverse}{bold}targ{/reverse}{/bold}et foo here
 line 6
 /targ█
 -----
 [EVENT]:char:e
 line 3
 line 4
-{reverse}targe{/reverse}t foo here
+{reverse}{bold}targe{/reverse}{/bold}t foo here
 line 6
 /targe█
 -----
 [EVENT]:char:t
 line 3
 line 4
-{reverse}target{/reverse} foo here
+{reverse}{bold}target{/reverse}{/bold} foo here
 line 6
 /target█
 -----
 [EVENT]:enter
 line 3
 line 4
-{reverse}target{/reverse} foo here
+{reverse}{bold}target{/reverse}{/bold} foo here
 line 6
 :
 -----
@@ -832,14 +834,14 @@ line 4
 [EVENT]:char:9
 line 7
 line 8
-line {reverse}9{/reverse}
+line {reverse}{bold}9{/reverse}{/bold}
 line 10
 /9█
 -----
 [EVENT]:enter
 line 7
 line 8
-line {reverse}9{/reverse}
+line {reverse}{bold}9{/reverse}{/bold}
 line 10
 :
 -----
@@ -848,13 +850,13 @@ line 10
 line 6
 line 7
 line 8
-line {reverse}9{/reverse}
+line {reverse}{bold}9{/reverse}{/bold}
 :
 -----
 [EVENT]:char:j
 line 7
 line 8
-line {reverse}9{/reverse}
+line {reverse}{bold}9{/reverse}{/bold}
 line 10
 :
 -----
@@ -909,14 +911,14 @@ line 4
 [EVENT]:char:9
 line 7
 line 8
-line {reverse}9{/reverse}
+line {reverse}{bold}9{/reverse}{/bold}
 line 10
 /9█
 -----
 [EVENT]:enter
 line 7
 line 8
-line {reverse}9{/reverse}
+line {reverse}{bold}9{/reverse}{/bold}
 line 10
 :
 -----
@@ -924,7 +926,7 @@ line 10
 line 6
 line 7
 line 8
-line {reverse}9{/reverse}
+line {reverse}{bold}9{/reverse}{/bold}
 :
 -----
 [EVENT]:char:k
@@ -938,7 +940,7 @@ line 8
 line 6
 line 7
 line 8
-line {reverse}9{/reverse}
+line {reverse}{bold}9{/reverse}{/bold}
 :
 -----
 ";

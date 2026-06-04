@@ -133,9 +133,10 @@ fn escape_to_label(seq: &str) -> String {
     match seq {
         "\x1b[0m" => "{reset}".into(),
         "\x1b[1m" => "{bold}".into(),
-        "\x1b[2m" => "{dim}".into(),
-        "\x1b[22m" => "{/dim}".into(),
+        "\x1b[22m" => "{/bold}".into(),
         "\x1b[3m" => "{italic}".into(),
+        "\x1b[4m" => "{underline}".into(),
+        "\x1b[24m" => "{/underline}".into(),
         "\x1b[7m" => "{reverse}".into(),
         "\x1b[27m" => "{/reverse}".into(),
         "\x1b[30m" => "{black}".into(),

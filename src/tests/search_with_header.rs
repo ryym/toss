@@ -52,13 +52,13 @@ line 2
 -----
 [EVENT]:char:3
 # Title
-line {reverse}3{/reverse}
+line {reverse}{bold}3{/reverse}{/bold}
 line 4
 /3█
 -----
 [EVENT]:enter
 # Title
-line {reverse}3{/reverse}
+line {reverse}{bold}3{/reverse}{/bold}
 line 4
 :
 -----
@@ -117,21 +117,21 @@ line 2
 -----
 [EVENT]:char:A
 # Title
-{reverse}A{/reverse}
+{reverse}{bold}A{/reverse}{/bold}
 line 1
 line 2
 /A█
 -----
 [EVENT]:enter
 # Title
-{reverse}A{/reverse}
+{reverse}{bold}A{/reverse}{/bold}
 line 1
 line 2
 :
 -----
 [EVENT]:char:n
 # Title
-{reverse}A{/reverse}B
+{reverse}{bold}A{/reverse}{/bold}B
 line 4
 line 5
 :
@@ -139,13 +139,13 @@ line 5
 [EVENT]:char:n
 # Title
 line 5
-{reverse}A{/reverse}C
+{reverse}{bold}A{/reverse}{/bold}C
 line 6
 :
 -----
 [EVENT]:char:N
 # Title
-{reverse}A{/reverse}B
+{reverse}{bold}A{/reverse}{/bold}B
 line 4
 line 5
 :
@@ -192,13 +192,13 @@ line 2
 -----
 [EVENT]:char:3
 # Section A
-line {reverse}3{/reverse}
+line {reverse}{bold}3{/reverse}{/bold}
 line 4
 /3█
 -----
 [EVENT]:enter
 # Section A
-line {reverse}3{/reverse}
+line {reverse}{bold}3{/reverse}{/bold}
 line 4
 :
 -----
@@ -261,28 +261,28 @@ line 2
 -----
 [EVENT]:char:A
 # Section 1
-{reverse}A{/reverse}{dim}{reverse}A{/reverse}{/dim}{dim}{reverse}A{/reverse}{/dim}
+{reverse}{bold}A{/reverse}{/bold}{reverse}{underline}{bold}A{/reverse}{/underline}{/bold}{reverse}{underline}{bold}A{/reverse}{/underline}{/bold}
 line 1
 line 2
 /A█
 -----
 [EVENT]:char:A
 # Section 1
-{reverse}AA{/reverse}A
+{reverse}{bold}AA{/reverse}{/bold}A
 line 1
 line 2
 /AA█
 -----
 [EVENT]:enter
 # Section 1
-{reverse}AA{/reverse}A
+{reverse}{bold}AA{/reverse}{/bold}A
 line 1
 line 2
 :
 -----
 [EVENT]:char:n
 # Section 1
-{reverse}AA{/reverse}B
+{reverse}{bold}AA{/reverse}{/bold}B
 line 4
 # Section 2
 :
@@ -290,13 +290,13 @@ line 4
 [EVENT]:char:n
 # Section 2
 line 5
-{reverse}AA{/reverse}C
+{reverse}{bold}AA{/reverse}{/bold}C
 line 6
 :
 -----
 [EVENT]:char:N
 # Section 1
-{reverse}AA{/reverse}B
+{reverse}{bold}AA{/reverse}{/bold}B
 line 4
 # Section 2
 :
@@ -355,44 +355,44 @@ fn search_with_heading_jump_back_one_line() {
 -----
 [EVENT]:char:1
 # Section A
-{reverse}1{/reverse}27
-{dim}{reverse}1{/reverse}{/dim}28
+{reverse}{bold}1{/reverse}{/bold}27
+{reverse}{underline}{bold}1{/reverse}{/underline}{/bold}28
 /1█
 -----
 [EVENT]:char:3
 # Section A
-{reverse}13{/reverse}0
-{dim}{reverse}13{/reverse}{/dim}1
+{reverse}{bold}13{/reverse}{/bold}0
+{reverse}{underline}{bold}1{/reverse}{/underline}{/bold}{underline}{bold}3{/underline}{/bold}1
 /13█
 -----
 [EVENT]:enter
 # Section A
-{reverse}13{/reverse}0
-{dim}{reverse}13{/reverse}{/dim}1
+{reverse}{bold}13{/reverse}{/bold}0
+{reverse}{underline}{bold}1{/reverse}{/underline}{/bold}{underline}{bold}3{/underline}{/bold}1
 :
 -----
 [EVENT]:char:n
 # Section A
-{reverse}13{/reverse}1
-{dim}{reverse}13{/reverse}{/dim}2
+{reverse}{bold}13{/reverse}{/bold}1
+{reverse}{underline}{bold}1{/reverse}{/underline}{/bold}{underline}{bold}3{/underline}{/bold}2
 :
 -----
 [EVENT]:char:n
 # Section A
-{reverse}13{/reverse}2
-{dim}{reverse}13{/reverse}{/dim}3
+{reverse}{bold}13{/reverse}{/bold}2
+{reverse}{underline}{bold}1{/reverse}{/underline}{/bold}{underline}{bold}3{/underline}{/bold}3
 :
 -----
 [EVENT]:char:N
 # Section A
-{reverse}13{/reverse}1
-{dim}{reverse}13{/reverse}{/dim}2
+{reverse}{bold}13{/reverse}{/bold}1
+{reverse}{underline}{bold}1{/reverse}{/underline}{/bold}{underline}{bold}3{/underline}{/bold}2
 :
 -----
 [EVENT]:char:N
 # Section A
-{reverse}13{/reverse}0
-{dim}{reverse}13{/reverse}{/dim}1
+{reverse}{bold}13{/reverse}{/bold}0
+{reverse}{underline}{bold}1{/reverse}{/underline}{/bold}{underline}{bold}3{/underline}{/bold}1
 :
 -----
 ";
@@ -459,7 +459,7 @@ line 2
 # Section 1
 description 1-1
 description 1-2
-{reverse}A{/reverse}
+{reverse}{bold}A{/reverse}{/bold}
 line 3
 /A█
 -----
@@ -467,7 +467,7 @@ line 3
 # Section 1
 description 1-1
 description 1-2
-{reverse}A{/reverse}
+{reverse}{bold}A{/reverse}{/bold}
 line 3
 :
 -----
@@ -475,7 +475,7 @@ line 3
 # Section 1
 description 1-1
 description 1-2
-{reverse}A{/reverse}B
+{reverse}{bold}A{/reverse}{/bold}B
 # Section 2
 :
 -----
@@ -483,7 +483,7 @@ description 1-2
 # Section 2
 description 2-1
 description 2-2
-{reverse}A{/reverse}C
+{reverse}{bold}A{/reverse}{/bold}C
 line 6
 :
 -----
@@ -543,50 +543,50 @@ line 1
 /█
 -----
 [EVENT]:char:A
-# Section {reverse}A{/reverse}1
-{dim}{reverse}A{/reverse}{/dim}X
+# Section {reverse}{bold}A{/reverse}{/bold}1
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold}X
 line 1
 /A█
 -----
 [EVENT]:enter
-# Section {reverse}A{/reverse}1
-{dim}{reverse}A{/reverse}{/dim}X
+# Section {reverse}{bold}A{/reverse}{/bold}1
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold}X
 line 1
 :
 -----
 [EVENT]:char:n
-# Section {dim}{reverse}A{/reverse}{/dim}1
-{reverse}A{/reverse}X
+# Section {reverse}{underline}{bold}A{/reverse}{/underline}{/bold}1
+{reverse}{bold}A{/reverse}{/bold}X
 line 1
 :
 -----
 [EVENT]:char:n
-# Section {dim}{reverse}A{/reverse}{/dim}1
-{reverse}A{/reverse}Y
+# Section {reverse}{underline}{bold}A{/reverse}{/underline}{/bold}1
+{reverse}{bold}A{/reverse}{/bold}Y
 line 4
 :
 -----
 [EVENT]:char:n
-# Section {reverse}A{/reverse}2
+# Section {reverse}{bold}A{/reverse}{/bold}2
 line 5
-{dim}{reverse}A{/reverse}{/dim}Z
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold}Z
 :
 -----
 [EVENT]:char:n
-# Section {dim}{reverse}A{/reverse}{/dim}2
-{reverse}A{/reverse}Z
+# Section {reverse}{underline}{bold}A{/reverse}{/underline}{/bold}2
+{reverse}{bold}A{/reverse}{/bold}Z
 line 6
 :
 -----
 [EVENT]:char:N
-# Section {reverse}A{/reverse}2
+# Section {reverse}{bold}A{/reverse}{/bold}2
 line 5
-{dim}{reverse}A{/reverse}{/dim}Z
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold}Z
 :
 -----
 [EVENT]:char:N
-# Section {dim}{reverse}A{/reverse}{/dim}1
-{reverse}A{/reverse}Y
+# Section {reverse}{underline}{bold}A{/reverse}{/underline}{/bold}1
+{reverse}{bold}A{/reverse}{/bold}Y
 line 4
 :
 -----

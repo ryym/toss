@@ -295,6 +295,23 @@ impl Line {
         self.plain_to_raw[m.plain_range.start]..self.plain_to_raw[m.plain_range.end]
     }
 
+    /// Raw-text byte position immediately after the first plain character of
+    /// the match. Used to style the first character of a match differently
+    /// from the rest.
+    ///
+    /// Since matches are always non-empty, the match has at least one character,
+    /// so this never returns the match's start position. For a single-character
+    /// match it returns the match's raw end position.
+    ///
+    /// Behavior is undefined if `m` was not produced from this line.
+    pub fn match_first_char_raw_end(&self, m: &MatchPosition) -> usize {
+        let first_char_len = self.plain[m.plain_range.start..m.plain_range.end]
+            .chars()
+            .next()
+            .map_or(0, char::len_utf8);
+        self.plain_to_raw[m.plain_range.start + first_char_len]
+    }
+
     /// Iterate raw byte positions where ANSI escape sequences are embedded
     /// inside the match. Each yielded index points to the raw byte where plain
     /// text resumes immediately after such an embedded escape sequence.

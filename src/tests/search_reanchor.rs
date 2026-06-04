@@ -59,31 +59,31 @@ line 3
 /█
 -----
 [EVENT]:char:A
-{reverse}A{/reverse} 1
+{reverse}{bold}A{/reverse}{/bold} 1
 line 2
 line 3
 /A█
 -----
 [EVENT]:enter
-{reverse}A{/reverse} 1
+{reverse}{bold}A{/reverse}{/bold} 1
 line 2
 line 3
 :
 -----
 [EVENT]:char:G
 line 8
-{dim}{reverse}A{/reverse}{/dim} 9
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold} 9
 line 10
 :
 -----
 [EVENT]:char:n
 line 8
-{reverse}A{/reverse} 9
+{reverse}{bold}A{/reverse}{/bold} 9
 line 10
 :
 -----
 [EVENT]:char:n
-{reverse}A{/reverse} 1
+{reverse}{bold}A{/reverse}{/bold} 1
 line 2
 line 3
 :
@@ -135,13 +135,13 @@ line 3
 /█
 -----
 [EVENT]:char:A
-{reverse}A{/reverse} 1
+{reverse}{bold}A{/reverse}{/bold} 1
 line 2
 line 3
 /A█
 -----
 [EVENT]:enter
-{reverse}A{/reverse} 1
+{reverse}{bold}A{/reverse}{/bold} 1
 line 2
 line 3
 :
@@ -167,7 +167,7 @@ line 6
 [EVENT]:char:n
 line 6
 line 7
-{reverse}A{/reverse} 8
+{reverse}{bold}A{/reverse}{/bold} 8
 :
 -----
 ";
@@ -211,25 +211,25 @@ line 3
 /█
 -----
 [EVENT]:char:A
-{reverse}A{/reverse} 2
+{reverse}{bold}A{/reverse}{/bold} 2
 line 3
-{dim}{reverse}A{/reverse}{/dim} 4
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold} 4
 /A█
 -----
 [EVENT]:enter
-{reverse}A{/reverse} 2
+{reverse}{bold}A{/reverse}{/bold} 2
 line 3
-{dim}{reverse}A{/reverse}{/dim} 4
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold} 4
 :
 -----
 [EVENT]:char:k
 line 1
-{reverse}A{/reverse} 2
+{reverse}{bold}A{/reverse}{/bold} 2
 line 3
 :
 -----
 [EVENT]:char:n
-{reverse}A{/reverse} 4
+{reverse}{bold}A{/reverse}{/bold} 4
 line 5
 line 6
 :
@@ -279,33 +279,33 @@ line 3
 /█
 -----
 [EVENT]:char:A
-{reverse}A{/reverse} 4
+{reverse}{bold}A{/reverse}{/bold} 4
 line 5
-{dim}{reverse}A{/reverse}{/dim} 6
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold} 6
 /A█
 -----
 [EVENT]:enter
-{reverse}A{/reverse} 4
+{reverse}{bold}A{/reverse}{/bold} 4
 line 5
-{dim}{reverse}A{/reverse}{/dim} 6
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold} 6
 :
 -----
 [EVENT]:char:G
-{dim}{reverse}A{/reverse}{/dim} 6
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold} 6
 line 7
-{dim}{reverse}A{/reverse}{/dim} 8
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold} 8
 :
 -----
 [EVENT]:char:N
-{reverse}A{/reverse} 6
+{reverse}{bold}A{/reverse}{/bold} 6
 line 7
-{dim}{reverse}A{/reverse}{/dim} 8
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold} 8
 :
 -----
 [EVENT]:char:N
-{reverse}A{/reverse} 4
+{reverse}{bold}A{/reverse}{/bold} 4
 line 5
-{dim}{reverse}A{/reverse}{/dim} 6
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold} 6
 :
 -----
 ";
@@ -369,14 +369,14 @@ line 3
 -----
 [EVENT]:char:A
 # Sec
-{reverse}A{/reverse} 1
+{reverse}{bold}A{/reverse}{/bold} 1
 line 2
 line 3
 /A█
 -----
 [EVENT]:enter
 # Sec
-{reverse}A{/reverse} 1
+{reverse}{bold}A{/reverse}{/bold} 1
 line 2
 line 3
 :
@@ -384,20 +384,20 @@ line 3
 [EVENT]:char:G
 # Sec
 line 6
-{dim}{reverse}A{/reverse}{/dim} 7
+{reverse}{underline}{bold}A{/reverse}{/underline}{/bold} 7
 line 8
 :
 -----
 [EVENT]:char:n
 # Sec
 line 6
-{reverse}A{/reverse} 7
+{reverse}{bold}A{/reverse}{/bold} 7
 line 8
 :
 -----
 [EVENT]:char:n
 # Sec
-{reverse}A{/reverse} 1
+{reverse}{bold}A{/reverse}{/bold} 1
 line 2
 line 3
 :
@@ -456,45 +456,45 @@ foo34
 /█
 -----
 [EVENT]:char:f
-{reverse}f{/reverse}oo12{dim}{reverse}>
-f{/reverse}{/dim}oo34>
+{reverse}{bold}f{/reverse}{/bold}oo12{reverse}{underline}{bold}>
+f{/reverse}{/underline}{/bold}oo34>
 end
 /f█
 -----
 [EVENT]:char:o
-{reverse}fo{/reverse}o12{dim}{reverse}>
-fo{/reverse}{/dim}o34>
+{reverse}{bold}fo{/reverse}{/bold}o12{reverse}{underline}{bold}>
+f{/reverse}{/underline}{/bold}{underline}{bold}o{/underline}{/bold}o34>
 end
 /fo█
 -----
 [EVENT]:char:o
-{reverse}foo{/reverse}12{dim}{reverse}>
-foo{/reverse}{/dim}34>
+{reverse}{bold}foo{/reverse}{/bold}12{reverse}{underline}{bold}>
+f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold}34>
 end
 /foo█
 -----
 [EVENT]:enter
-{reverse}foo{/reverse}12{dim}{reverse}>
-foo{/reverse}{/dim}34>
+{reverse}{bold}foo{/reverse}{/bold}12{reverse}{underline}{bold}>
+f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold}34>
 end
 :
 -----
 [EVENT]:char:j
-foo{/reverse}{/dim}34>
+f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold}34>
 end
 last-
 :
 -----
 [EVENT]:char:j
 end
-last-{dim}{reverse}>
-foo{/reverse}{/dim}
+last-{reverse}{underline}{bold}>
+f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold}
 :
 -----
 [EVENT]:char:n
 end
-last-{reverse}>
-foo{/reverse}
+last-{reverse}{bold}>
+foo{/reverse}{/bold}
 :
 -----
 ";

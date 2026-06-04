@@ -14,24 +14,28 @@ use crate::{
 /// Highlight style for search matches.
 #[derive(Debug, Clone, Copy)]
 pub enum HighlightStyle {
-    /// Reverse video — used for the current match.
+    /// used for the current match.
     Reverse,
-    /// Dim + reverse video — used for non-current matches.
-    DimReverse,
+    /// used for the first character of a non-current match.
+    ReverseUnderlineBold,
+    /// used for the rest of a non-current match.
+    UnderlineBold,
 }
 
 impl HighlightStyle {
     fn on_seq(self) -> &'static str {
         match self {
-            HighlightStyle::Reverse => "\x1b[7m",
-            HighlightStyle::DimReverse => "\x1b[2m\x1b[7m",
+            HighlightStyle::Reverse => "\x1b[7m\x1b[1m",
+            HighlightStyle::ReverseUnderlineBold => "\x1b[7m\x1b[4m\x1b[1m",
+            HighlightStyle::UnderlineBold => "\x1b[4m\x1b[1m",
         }
     }
 
     fn off_seq(self) -> &'static str {
         match self {
-            HighlightStyle::Reverse => "\x1b[27m",
-            HighlightStyle::DimReverse => "\x1b[27m\x1b[22m",
+            HighlightStyle::Reverse => "\x1b[27m\x1b[22m",
+            HighlightStyle::ReverseUnderlineBold => "\x1b[27m\x1b[24m\x1b[22m",
+            HighlightStyle::UnderlineBold => "\x1b[24m\x1b[22m",
         }
     }
 }
@@ -76,10 +80,15 @@ pub fn apply_highlight_if_matches<'line>(
 }
 
 /// Build highlight positions from plain-text match ranges.
-/// The different highlight style is used for the current match specified by `current_match`.
+///
+/// The current match (specified by `current_match`) is highlighted with plain
+/// reverse video. Each non-current match is split into two styled segments: its
+/// first character (reverse + underline + bold) and the rest (underline + bold),
+/// so that the start of every match stands out. A single-character non-current
+/// match has only the first segment.
 ///
 /// `InnerControlEnd` markers are inserted at every embedded escape sequence
-/// inside a match so that the highlight is re-applied after each one.
+/// inside a segment so that the highlight is re-applied after each one.
 fn build_highlight_positions(
     matches: &[MatchPosition],
     current_match: &Option<MatchPosition>,
@@ -88,33 +97,71 @@ fn build_highlight_positions(
     let mut positions = Vec::new();
 
     for m in matches.iter() {
-        let style = current_match
-            .as_ref()
-            .filter(|&current| current == m)
-            .map(|_| HighlightStyle::Reverse)
-            .unwrap_or(HighlightStyle::DimReverse);
-
         let raw_range = line.match_raw_range(m);
-        positions.push(HighlightPos {
-            index: raw_range.start,
-            kind: HighlightPosKind::Start,
-            style,
-        });
-        for i_raw in line.match_inner_escape_boundaries(m) {
+        let inner: Vec<usize> = line.match_inner_escape_boundaries(m).collect();
+        let is_current = current_match.as_ref().is_some_and(|current| current == m);
+
+        if is_current {
+            push_segment(&mut positions, HighlightStyle::Reverse, raw_range, &inner);
+            continue;
+        }
+
+        // Non-current match: reverse the first character, underline + bold the rest.
+        let head_end = line.match_first_char_raw_end(m);
+        if head_end >= raw_range.end {
+            push_segment(
+                &mut positions,
+                HighlightStyle::ReverseUnderlineBold,
+                raw_range,
+                &inner,
+            );
+        } else {
+            push_segment(
+                &mut positions,
+                HighlightStyle::ReverseUnderlineBold,
+                raw_range.start..head_end,
+                &inner,
+            );
+            push_segment(
+                &mut positions,
+                HighlightStyle::UnderlineBold,
+                head_end..raw_range.end,
+                &inner,
+            );
+        }
+    }
+
+    positions
+}
+
+/// Push `Start`/`InnerControlEnd`/`End` positions for one styled segment.
+/// Only the embedded escape boundaries strictly inside `raw_range` are emitted;
+/// boundaries at a segment edge are handled by the adjacent segment's start/end.
+fn push_segment(
+    positions: &mut Vec<HighlightPos>,
+    style: HighlightStyle,
+    raw_range: Range<usize>,
+    inner_boundaries: &[usize],
+) {
+    positions.push(HighlightPos {
+        index: raw_range.start,
+        kind: HighlightPosKind::Start,
+        style,
+    });
+    for &i_raw in inner_boundaries {
+        if raw_range.start < i_raw && i_raw < raw_range.end {
             positions.push(HighlightPos {
                 index: i_raw,
                 kind: HighlightPosKind::InnerControlEnd,
                 style,
             });
         }
-        positions.push(HighlightPos {
-            index: raw_range.end,
-            kind: HighlightPosKind::End,
-            style,
-        });
     }
-
-    positions
+    positions.push(HighlightPos {
+        index: raw_range.end,
+        kind: HighlightPosKind::End,
+        style,
+    });
 }
 
 /// Apply highlight escape sequences to a range of raw text.
@@ -183,7 +230,8 @@ mod tests {
     use super::*;
     use crate::line::Line;
 
-    /// Helper to build positions from a line and plain-text ranges (all Reverse).
+    /// Helper to build positions from a line and plain-text ranges.
+    /// The first range is treated as the current match.
     fn build_from_line(line: &Line, ranges: &[(usize, usize)]) -> Vec<HighlightPos> {
         let matches = ranges
             .iter()
@@ -202,7 +250,7 @@ mod tests {
         let line = Line::new(0, "hello world".into());
         let positions = build_from_line(&line, &[(6, 11)]); // "world"
         let result = apply_full(&line, &positions);
-        assert_eq!(result, "hello \x1b[7mworld\x1b[27m");
+        assert_eq!(result, "hello \x1b[7m\x1b[1mworld\x1b[27m\x1b[22m");
     }
 
     #[test]
@@ -212,7 +260,7 @@ mod tests {
         let result = apply_full(&line, &positions);
         assert_eq!(
             result,
-            "\x1b[7mfoo\x1b[27m bar \x1b[2m\x1b[7mfoo\x1b[27m\x1b[22m"
+            "\x1b[7m\x1b[1mfoo\x1b[27m\x1b[22m bar \x1b[7m\x1b[4m\x1b[1mf\x1b[27m\x1b[24m\x1b[22m\x1b[4m\x1b[1moo\x1b[24m\x1b[22m"
         );
     }
 
@@ -224,10 +272,11 @@ mod tests {
         let line = Line::new(0, "This is \x1b[1mCargo\x1b[0m.toml".into());
         let positions = build_from_line(&line, &[(11, 16)]);
         let result = apply_full(&line, &positions);
-        // After "go", there's \x1b[0m, then ".to" starts. InnerControlEnd re-applies reverse.
+        // After "go", there's \x1b[0m, then ".to" starts. InnerControlEnd re-applies
+        // the highlight (reverse + bold).
         assert_eq!(
             result,
-            "This is \x1b[1mCar\x1b[7mgo\x1b[0m\x1b[7m.to\x1b[27mml"
+            "This is \x1b[1mCar\x1b[7m\x1b[1mgo\x1b[0m\x1b[7m\x1b[1m.to\x1b[27m\x1b[22mml"
         );
     }
 
@@ -244,7 +293,7 @@ mod tests {
         let line = Line::new(0, "hello world".into());
         let positions = build_from_line(&line, &[(0, 5)]); // "hello"
         let result = apply_full(&line, &positions);
-        assert_eq!(result, "\x1b[7mhello\x1b[27m world");
+        assert_eq!(result, "\x1b[7m\x1b[1mhello\x1b[27m\x1b[22m world");
     }
 
     #[test]
@@ -252,7 +301,7 @@ mod tests {
         let line = Line::new(0, "abc".into());
         let positions = build_from_line(&line, &[(0, 3)]);
         let result = apply_full(&line, &positions);
-        assert_eq!(result, "\x1b[7mabc\x1b[27m");
+        assert_eq!(result, "\x1b[7m\x1b[1mabc\x1b[27m\x1b[22m");
     }
 
     #[test]
@@ -266,10 +315,10 @@ mod tests {
 
         // Row 0: raw 0..5 -> "abcde" with "e" highlighted
         let r0 = apply_highlight_to_range(line.raw(), 0..5, &positions);
-        assert_eq!(r0, "abcd\x1b[7me\x1b[27m");
+        assert_eq!(r0, "abcd\x1b[7m\x1b[1me\x1b[27m\x1b[22m");
 
         // Row 1: raw 5..10 -> "fghij" with "f" highlighted
         let r1 = apply_highlight_to_range(line.raw(), 5..10, &positions);
-        assert_eq!(r1, "\x1b[7mf\x1b[27mghij");
+        assert_eq!(r1, "\x1b[7m\x1b[1mf\x1b[27m\x1b[22mghij");
     }
 }
