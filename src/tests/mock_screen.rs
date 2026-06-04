@@ -132,13 +132,13 @@ fn visualize_escapes(text: &str) -> String {
 fn escape_to_label(seq: &str) -> String {
     match seq {
         "\x1b[0m" => "{reset}".into(),
-        "\x1b[1m" => "{bold}".into(),
-        "\x1b[22m" => "{/bold}".into(),
+        "\x1b[1m" => "{b}".into(), // bold
+        "\x1b[22m" => "{/b}".into(),
         "\x1b[3m" => "{italic}".into(),
-        "\x1b[4m" => "{underline}".into(),
-        "\x1b[24m" => "{/underline}".into(),
-        "\x1b[7m" => "{reverse}".into(),
-        "\x1b[27m" => "{/reverse}".into(),
+        "\x1b[4m" => "{line}".into(), // underline
+        "\x1b[24m" => "{/line}".into(),
+        "\x1b[7m" => "{rev}".into(), // reverse
+        "\x1b[27m" => "{/rev}".into(),
         "\x1b[30m" => "{black}".into(),
         "\x1b[31m" => "{red}".into(),
         "\x1b[32m" => "{green}".into(),

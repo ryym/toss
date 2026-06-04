@@ -37,20 +37,20 @@ bcde
 /█
 -----
 [EVENT]:char:a
-01234{reverse}{bold}a{/reverse}{/bold}>
+01234{rev}{b}a{/rev}{/b}>
 bcde
 line 3
 /a█
 -----
 [EVENT]:char:b
-01234{reverse}{bold}a>
-b{/reverse}{/bold}cde
+01234{rev}{b}a>
+b{/rev}{/b}cde
 line 3
 /ab█
 -----
 [EVENT]:enter
-01234{reverse}{bold}a>
-b{/reverse}{/bold}cde
+01234{rev}{b}a>
+b{/rev}{/b}cde
 line 3
 :
 -----
@@ -87,25 +87,25 @@ bcde
 -----
 [EVENT]:char:c
 01234a>
-b{reverse}{bold}c{/reverse}{/bold}de
+b{rev}{b}c{/rev}{/b}de
 line 3
 /c█
 -----
 [EVENT]:char:d
 01234a>
-b{reverse}{bold}cd{/reverse}{/bold}e
+b{rev}{b}cd{/rev}{/b}e
 line 3
 /cd█
 -----
 [EVENT]:char:e
 01234a>
-b{reverse}{bold}cde{/reverse}{/bold}
+b{rev}{b}cde{/rev}{/b}
 line 3
 /cde█
 -----
 [EVENT]:enter
 01234a>
-b{reverse}{bold}cde{/reverse}{/bold}
+b{rev}{b}cde{/rev}{/b}
 line 3
 :
 -----
@@ -141,19 +141,19 @@ ghij
 
 -----
 [EVENT]:char:X
-abcde_{reverse}{bold}X{/reverse}{/bold}{reverse}{underline}{bold}X{/reverse}{/underline}{/bold}_f>
+abcde_{rev}{b}X{/rev}{/b}{rev}{line}{b}X{/rev}{/line}{/b}_f>
 ghij
 /X█
 
 -----
 [EVENT]:char:X
-abcde_{reverse}{bold}XX{/reverse}{/bold}_f>
+abcde_{rev}{b}XX{/rev}{/b}_f>
 ghij
 /XX█
 
 -----
 [EVENT]:enter
-abcde_{reverse}{bold}XX{/reverse}{/bold}_f>
+abcde_{rev}{b}XX{/rev}{/b}_f>
 ghij
 :
 

@@ -51,7 +51,7 @@ end
         ..Default::default()
     });
     let want = "\
-{bold}Hello{reset}
+{b}Hello{reset}
 {red}abcde{reset}>
 fgh
 end

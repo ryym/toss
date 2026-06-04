@@ -39,25 +39,25 @@ line 3
 -----
 [EVENT]:char:f
 line 3
-target {reverse}{bold}f{/reverse}{/bold}oo here
+target {rev}{b}f{/rev}{/b}oo here
 line 5
 /f█
 -----
 [EVENT]:char:o
 line 3
-target {reverse}{bold}fo{/reverse}{/bold}o here
+target {rev}{b}fo{/rev}{/b}o here
 line 5
 /fo█
 -----
 [EVENT]:char:o
 line 3
-target {reverse}{bold}foo{/reverse}{/bold} here
+target {rev}{b}foo{/rev}{/b} here
 line 5
 /foo█
 -----
 [EVENT]:enter
 line 3
-target {reverse}{bold}foo{/reverse}{/bold} here
+target {rev}{b}foo{/rev}{/b} here
 line 5
 :
 -----
@@ -110,25 +110,25 @@ line 5
 ?█
 -----
 [EVENT]:char:t
-{reverse}{bold}t{/reverse}{/bold}op line
+{rev}{b}t{/rev}{/b}op line
 line 2
 line 3
 ?t█
 -----
 [EVENT]:char:o
-{reverse}{bold}to{/reverse}{/bold}p line
+{rev}{b}to{/rev}{/b}p line
 line 2
 line 3
 ?to█
 -----
 [EVENT]:char:p
-{reverse}{bold}top{/reverse}{/bold} line
+{rev}{b}top{/rev}{/b} line
 line 2
 line 3
 ?top█
 -----
 [EVENT]:enter
-{reverse}{bold}top{/reverse}{/bold} line
+{rev}{b}top{/rev}{/b} line
 line 2
 line 3
 :
@@ -176,33 +176,33 @@ foo 2
 /█
 -----
 [EVENT]:char:f
-{reverse}{bold}f{/reverse}{/bold}oo 1
+{rev}{b}f{/rev}{/b}oo 1
 bar
-{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}oo 2
+{rev}{line}{b}f{/rev}{/line}{/b}oo 2
 /f█
 -----
 [EVENT]:char:o
-{reverse}{bold}fo{/reverse}{/bold}o 1
+{rev}{b}fo{/rev}{/b}o 1
 bar
-{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}o{/underline}{/bold}o 2
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o 2
 /fo█
 -----
 [EVENT]:char:o
-{reverse}{bold}foo{/reverse}{/bold} 1
+{rev}{b}foo{/rev}{/b} 1
 bar
-{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} 2
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
 /foo█
 -----
 [EVENT]:enter
-{reverse}{bold}foo{/reverse}{/bold} 1
+{rev}{b}foo{/rev}{/b} 1
 bar
-{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} 2
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
 :
 -----
 [EVENT]:char:n
-{reverse}{bold}foo{/reverse}{/bold} 2
+{rev}{b}foo{/rev}{/b} 2
 baz
-{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} 3
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 3
 :
 -----
 ";
@@ -246,33 +246,33 @@ foo 2
 /█
 -----
 [EVENT]:char:f
-{reverse}{bold}f{/reverse}{/bold}oo 1
+{rev}{b}f{/rev}{/b}oo 1
 bar
-{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}oo 2
+{rev}{line}{b}f{/rev}{/line}{/b}oo 2
 /f█
 -----
 [EVENT]:char:o
-{reverse}{bold}fo{/reverse}{/bold}o 1
+{rev}{b}fo{/rev}{/b}o 1
 bar
-{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}o{/underline}{/bold}o 2
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o 2
 /fo█
 -----
 [EVENT]:char:o
-{reverse}{bold}foo{/reverse}{/bold} 1
+{rev}{b}foo{/rev}{/b} 1
 bar
-{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} 2
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
 /foo█
 -----
 [EVENT]:enter
-{reverse}{bold}foo{/reverse}{/bold} 1
+{rev}{b}foo{/rev}{/b} 1
 bar
-{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} 2
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
 :
 -----
 [EVENT]:char:N
-{reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} 2
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
 baz
-{reverse}{bold}foo{/reverse}{/bold} 3
+{rev}{b}foo{/rev}{/b} 3
 :
 -----
 ";
@@ -381,43 +381,43 @@ line 4
 /█
 -----
 [EVENT]:char:t
-{reverse}{bold}t{/reverse}{/bold}arge{reverse}{underline}{bold}t{/reverse}{/underline}{/bold} here
+{rev}{b}t{/rev}{/b}arge{rev}{line}{b}t{/rev}{/line}{/b} here
 line 2
 line 3
 /t█
 -----
 [EVENT]:char:a
-{reverse}{bold}ta{/reverse}{/bold}rget here
+{rev}{b}ta{/rev}{/b}rget here
 line 2
 line 3
 /ta█
 -----
 [EVENT]:char:r
-{reverse}{bold}tar{/reverse}{/bold}get here
+{rev}{b}tar{/rev}{/b}get here
 line 2
 line 3
 /tar█
 -----
 [EVENT]:char:g
-{reverse}{bold}targ{/reverse}{/bold}et here
+{rev}{b}targ{/rev}{/b}et here
 line 2
 line 3
 /targ█
 -----
 [EVENT]:char:e
-{reverse}{bold}targe{/reverse}{/bold}t here
+{rev}{b}targe{/rev}{/b}t here
 line 2
 line 3
 /targe█
 -----
 [EVENT]:char:t
-{reverse}{bold}target{/reverse}{/bold} here
+{rev}{b}target{/rev}{/b} here
 line 2
 line 3
 /target█
 -----
 [EVENT]:enter
-{reverse}{bold}target{/reverse}{/bold} here
+{rev}{b}target{/rev}{/b} here
 line 2
 line 3
 :
@@ -455,48 +455,48 @@ line 4
     // falls after the reset, so the reset appears inside the highlighted span.
     let want = "\
 line 1
-This is {bold}Cargo{reset}.toml
+This is {b}Cargo{reset}.toml
 line 3
 :
 -----
 [EVENT]:char:/
 line 1
-This is {bold}Cargo{reset}.toml
+This is {b}Cargo{reset}.toml
 line 3
 /█
 -----
 [EVENT]:char:C
-This is {bold}{reverse}{bold}C{/reverse}{/bold}argo{reset}.toml
+This is {b}{rev}{b}C{/rev}{/b}argo{reset}.toml
 line 3
 line 4
 /C█
 -----
 [EVENT]:char:a
-This is {bold}{reverse}{bold}Ca{/reverse}{/bold}rgo{reset}.toml
+This is {b}{rev}{b}Ca{/rev}{/b}rgo{reset}.toml
 line 3
 line 4
 /Ca█
 -----
 [EVENT]:char:r
-This is {bold}{reverse}{bold}Car{/reverse}{/bold}go{reset}.toml
+This is {b}{rev}{b}Car{/rev}{/b}go{reset}.toml
 line 3
 line 4
 /Car█
 -----
 [EVENT]:char:g
-This is {bold}{reverse}{bold}Carg{/reverse}{/bold}o{reset}.toml
+This is {b}{rev}{b}Carg{/rev}{/b}o{reset}.toml
 line 3
 line 4
 /Carg█
 -----
 [EVENT]:char:o
-This is {bold}{reverse}{bold}Cargo{reset}{/reverse}{/bold}.toml
+This is {b}{rev}{b}Cargo{reset}{/rev}{/b}.toml
 line 3
 line 4
 /Cargo█
 -----
 [EVENT]:enter
-This is {bold}{reverse}{bold}Cargo{reset}{/reverse}{/bold}.toml
+This is {b}{rev}{b}Cargo{reset}{/rev}{/b}.toml
 line 3
 line 4
 :
@@ -554,69 +554,69 @@ line 3
 /█
 -----
 [EVENT]:char:l
-{reverse}{bold}l{/reverse}{/bold}ine 1
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}ine 2
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}ine 3
+{rev}{b}l{/rev}{/b}ine 1
+{rev}{line}{b}l{/rev}{/line}{/b}ine 2
+{rev}{line}{b}l{/rev}{/line}{/b}ine 3
 /l█
 -----
 [EVENT]:char:i
-{reverse}{bold}li{/reverse}{/bold}ne 1
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 2
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 3
+{rev}{b}li{/rev}{/b}ne 1
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 2
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 3
 /li█
 -----
 [EVENT]:enter
-{reverse}{bold}li{/reverse}{/bold}ne 1
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 2
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 3
+{rev}{b}li{/rev}{/b}ne 1
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 2
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 3
 :
 -----
 [EVENT]:char:j
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 2
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 3
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 4
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 2
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 3
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 4
 :
 -----
 [EVENT]:char:j
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 3
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 4
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 5
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 3
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 4
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 5
 :
 -----
 [EVENT]:char:/
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 3
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 4
-{reverse}{underline}{bold}l{/reverse}{/underline}{/bold}{underline}{bold}i{/underline}{/bold}ne 5
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 3
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 4
+{rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 5
 /█
 -----
 [EVENT]:char:n
-li{reverse}{bold}n{/reverse}{/bold}e 3
-li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}e 4
-li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}e 5
+li{rev}{b}n{/rev}{/b}e 3
+li{rev}{line}{b}n{/rev}{/line}{/b}e 4
+li{rev}{line}{b}n{/rev}{/line}{/b}e 5
 /n█
 -----
 [EVENT]:char:e
-li{reverse}{bold}ne{/reverse}{/bold} 3
-li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 4
-li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 5
+li{rev}{b}ne{/rev}{/b} 3
+li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 4
+li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 5
 /ne█
 -----
 [EVENT]:enter
-li{reverse}{bold}ne{/reverse}{/bold} 3
-li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 4
-li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 5
+li{rev}{b}ne{/rev}{/b} 3
+li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 4
+li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 5
 :
 -----
 [EVENT]:char:j
-li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 4
-li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 5
-li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 6
+li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 4
+li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 5
+li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 6
 :
 -----
 [EVENT]:char:k
-li{reverse}{bold}ne{/reverse}{/bold} 3
-li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 4
-li{reverse}{underline}{bold}n{/reverse}{/underline}{/bold}{underline}{bold}e{/underline}{/bold} 5
+li{rev}{b}ne{/rev}{/b} 3
+li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 4
+li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 5
 :
 -----
 ";
@@ -654,25 +654,25 @@ line 3
 /█
 -----
 [EVENT]:char:f
-{reverse}{bold}f{/reverse}{/bold}oo bar {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}oo baz {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}oo
+{rev}{b}f{/rev}{/b}oo bar {rev}{line}{b}f{/rev}{/line}{/b}oo baz {rev}{line}{b}f{/rev}{/line}{/b}oo
 line 2
 line 3
 /f█
 -----
 [EVENT]:char:o
-{reverse}{bold}fo{/reverse}{/bold}o bar {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}o{/underline}{/bold}o baz {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}o{/underline}{/bold}o
+{rev}{b}fo{/rev}{/b}o bar {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o baz {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o
 line 2
 line 3
 /fo█
 -----
 [EVENT]:char:o
-{reverse}{bold}foo{/reverse}{/bold} bar {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} baz {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold}
+{rev}{b}foo{/rev}{/b} bar {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} baz {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b}
 line 2
 line 3
 /foo█
 -----
 [EVENT]:enter
-{reverse}{bold}foo{/reverse}{/bold} bar {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold} baz {reverse}{underline}{bold}f{/reverse}{/underline}{/bold}{underline}{bold}oo{/underline}{/bold}
+{rev}{b}foo{/rev}{/b} bar {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} baz {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b}
 line 2
 line 3
 :
@@ -733,49 +733,49 @@ line 4
 [EVENT]:char:t
 line 3
 line 4
-{reverse}{bold}t{/reverse}{/bold}arge{reverse}{underline}{bold}t{/reverse}{/underline}{/bold} foo here
+{rev}{b}t{/rev}{/b}arge{rev}{line}{b}t{/rev}{/line}{/b} foo here
 line 6
 /t█
 -----
 [EVENT]:char:a
 line 3
 line 4
-{reverse}{bold}ta{/reverse}{/bold}rget foo here
+{rev}{b}ta{/rev}{/b}rget foo here
 line 6
 /ta█
 -----
 [EVENT]:char:r
 line 3
 line 4
-{reverse}{bold}tar{/reverse}{/bold}get foo here
+{rev}{b}tar{/rev}{/b}get foo here
 line 6
 /tar█
 -----
 [EVENT]:char:g
 line 3
 line 4
-{reverse}{bold}targ{/reverse}{/bold}et foo here
+{rev}{b}targ{/rev}{/b}et foo here
 line 6
 /targ█
 -----
 [EVENT]:char:e
 line 3
 line 4
-{reverse}{bold}targe{/reverse}{/bold}t foo here
+{rev}{b}targe{/rev}{/b}t foo here
 line 6
 /targe█
 -----
 [EVENT]:char:t
 line 3
 line 4
-{reverse}{bold}target{/reverse}{/bold} foo here
+{rev}{b}target{/rev}{/b} foo here
 line 6
 /target█
 -----
 [EVENT]:enter
 line 3
 line 4
-{reverse}{bold}target{/reverse}{/bold} foo here
+{rev}{b}target{/rev}{/b} foo here
 line 6
 :
 -----
@@ -834,14 +834,14 @@ line 4
 [EVENT]:char:9
 line 7
 line 8
-line {reverse}{bold}9{/reverse}{/bold}
+line {rev}{b}9{/rev}{/b}
 line 10
 /9█
 -----
 [EVENT]:enter
 line 7
 line 8
-line {reverse}{bold}9{/reverse}{/bold}
+line {rev}{b}9{/rev}{/b}
 line 10
 :
 -----
@@ -850,13 +850,13 @@ line 10
 line 6
 line 7
 line 8
-line {reverse}{bold}9{/reverse}{/bold}
+line {rev}{b}9{/rev}{/b}
 :
 -----
 [EVENT]:char:j
 line 7
 line 8
-line {reverse}{bold}9{/reverse}{/bold}
+line {rev}{b}9{/rev}{/b}
 line 10
 :
 -----
@@ -911,14 +911,14 @@ line 4
 [EVENT]:char:9
 line 7
 line 8
-line {reverse}{bold}9{/reverse}{/bold}
+line {rev}{b}9{/rev}{/b}
 line 10
 /9█
 -----
 [EVENT]:enter
 line 7
 line 8
-line {reverse}{bold}9{/reverse}{/bold}
+line {rev}{b}9{/rev}{/b}
 line 10
 :
 -----
@@ -926,7 +926,7 @@ line 10
 line 6
 line 7
 line 8
-line {reverse}{bold}9{/reverse}{/bold}
+line {rev}{b}9{/rev}{/b}
 :
 -----
 [EVENT]:char:k
@@ -940,7 +940,7 @@ line 8
 line 6
 line 7
 line 8
-line {reverse}{bold}9{/reverse}{/bold}
+line {rev}{b}9{/rev}{/b}
 :
 -----
 ";
