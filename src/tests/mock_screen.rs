@@ -134,19 +134,11 @@ fn escape_to_label(seq: &str) -> String {
         "\x1b[0m" => "{reset}".into(),
         "\x1b[1m" => "{b}".into(), // bold
         "\x1b[22m" => "{/b}".into(),
-        "\x1b[3m" => "{italic}".into(),
         "\x1b[4m" => "{line}".into(), // underline
         "\x1b[24m" => "{/line}".into(),
         "\x1b[7m" => "{rev}".into(), // reverse
         "\x1b[27m" => "{/rev}".into(),
-        "\x1b[30m" => "{black}".into(),
         "\x1b[31m" => "{red}".into(),
-        "\x1b[32m" => "{green}".into(),
-        "\x1b[33m" => "{yellow}".into(),
-        "\x1b[34m" => "{blue}".into(),
-        "\x1b[35m" => "{magenta}".into(),
-        "\x1b[36m" => "{cyan}".into(),
-        "\x1b[37m" => "{white}".into(),
         _ => format!("{{ESC:{}}}", seq.escape_debug()),
     }
 }
