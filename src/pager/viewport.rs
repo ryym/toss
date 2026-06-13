@@ -131,8 +131,12 @@ impl Viewport {
         let padding = height
             .saturating_sub(1)
             .min(target.max(height.saturating_sub(rows_after.len())));
-        let rows_before =
-            rows::list_backward(doc, self.size.width, DocPos::Before(&rows_after[0]), padding);
+        let rows_before = rows::list_backward(
+            doc,
+            self.size.width,
+            DocPos::Before(&rows_after[0]),
+            padding,
+        );
 
         let final_anchor_row_index = rows_before.len();
         let mut combined: Vec<Row> = rows_before;

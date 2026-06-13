@@ -174,7 +174,9 @@ line 7
     assert_eq!(screen.out(), want);
 }
 
-// When the cursor is still within the viewport, n jumps normally.
+// When the cursor is still within the viewport, n moves to the next match with
+// minimal scrolling: the next match was just off the bottom, so it scrolls one
+// row to land "A 4" on the bottom edge rather than jumping it to the top.
 #[test]
 fn no_reanchor_when_cursor_visible() {
     let content = "\
@@ -194,7 +196,7 @@ line 6
             key('A'),
             enter(),
             key('k'), // Scroll up 1. Cursor ("A 2") is still visible.
-            key('n'), // Cursor visible, so normal jump to "A 4".
+            key('n'), // Cursor visible; "A 4" is just off the bottom, scroll 1 to reveal it.
         ],
         ..Default::default()
     });
@@ -229,9 +231,9 @@ line 3
 :
 -----
 [EVENT]:char:n
+{rev}{line}{b}A{/rev}{/line}{/b} 2
+line 3
 {rev}{b}A{/rev}{/b} 4
-line 5
-line 6
 :
 -----
 ";

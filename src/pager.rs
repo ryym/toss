@@ -498,7 +498,7 @@ impl Pager {
         );
         log::debug!("Jump to next match: {next:?}");
         if let Some(pos) = next {
-            let update = self.jump_to(pos.line_index());
+            let update = self.reveal_match(&pos, direction);
             if let Some(s) = self.search.as_mut() {
                 s.current = Some(pos);
                 return Some(update);
@@ -506,6 +506,74 @@ impl Pager {
         }
 
         None
+    }
+
+    /// Reveal the given match with minimal scrolling.
+    /// If the match is already visible on screen, nothing scrolls and only the
+    /// highlight is refreshed. Otherwise the page scrolls just enough to bring the
+    /// match to the bottom edge (when it is below the viewport) or the top edge
+    /// (when above), without animation.
+    fn reveal_match(&mut self, pos: &MatchPosition, nav_dir: SearchDirection) -> PageUpdate {
+        let anchor = self.match_row_pos(pos);
+
+        // Already visible: move the cursor only, refreshing the highlight.
+        let visible_rows = self.contiguous_rows().to_vec();
+        if is_match_visible(&mut self.doc, pos, &visible_rows) {
+            return PageUpdate::Partial(None);
+        }
+
+        let height = self.viewport.size().height;
+        let scrolloff = self.scrolloff();
+        let last = self
+            .viewport
+            .rows()
+            .last()
+            .expect("viewport is never empty");
+        let below = (last.line_index(), last.wrap_index()) < anchor;
+
+        if below {
+            // Land at the bottom edge. The bottom band is independent of the heading
+            // height, so place first, then resolve the heading for the new top line.
+            let target = landing_index(nav_dir, below, 0, height, scrolloff);
+            self.viewport.anchor_row_at(&mut self.doc, anchor, target);
+
+            let top_line = self.viewport.rows()[self.header.height()].line_index();
+            self.heading.resolve(&mut self.doc, top_line);
+            self.push_up_heading_if_needed();
+        } else {
+            // Land at the top edge. Mirror `jump_to`: resolve the heading at the
+            // anchor line first to fix the overlay height, then place the match
+            // right below the overlay.
+            let anchor_line = anchor.0;
+            self.heading.resolve(&mut self.doc, anchor_line);
+            let overlay = if self.heading.contains(anchor_line) {
+                self.header.height()
+            } else {
+                self.total_header_height()
+            };
+            let target = landing_index(nav_dir, below, overlay, height, scrolloff);
+            self.viewport.anchor_row_at(&mut self.doc, anchor, target);
+        }
+
+        PageUpdate::Full
+    }
+
+    /// Resolve which wrap row of the line holds the given match.
+    /// Returns `(line_index, wrap_index)`.
+    fn match_row_pos(&mut self, pos: &MatchPosition) -> (usize, usize) {
+        let width = self.viewport.size().width();
+        let wrap_index = self
+            .doc
+            .line(pos.line_index())
+            .map(|line| {
+                let raw_start = line.match_raw_range(pos).start;
+                line.wrap(width)
+                    .iter()
+                    .find(|r| r.raw_range().contains(&raw_start))
+                    .map_or(0, |r| r.wrap_index())
+            })
+            .unwrap_or(0);
+        (pos.line_index(), wrap_index)
     }
 }
 

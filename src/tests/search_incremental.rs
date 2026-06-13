@@ -219,9 +219,9 @@ bar
 :
 -----
 [EVENT]:char:n
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 1
+bar
 {rev}{b}foo{/rev}{/b} 2
-baz
-{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 3
 :
 -----
 ";
