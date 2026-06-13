@@ -43,13 +43,13 @@ pub struct SearchState {
 
 /// Specifies the starting position when searching across a [`Document`].
 /// The direction is specified separately via [`SearchDirection`].
-pub enum SearchFrom<'a> {
+pub enum SearchFrom {
     /// Search from the line at the given index onward.
     Line(usize),
     /// Search from the given [`Row`] onward. Only [`SearchDirection::Forward`] is supported.
-    Row(&'a Row),
+    Row(Row),
     /// Search after the given match. The match itself is excluded.
-    NextOf(&'a MatchPosition),
+    NextOf(MatchPosition),
 }
 
 /// Find the next match from `from` in the given direction.
@@ -230,7 +230,7 @@ mod tests {
             search_document(
                 &mut doc,
                 &query,
-                SearchFrom::NextOf(&border),
+                SearchFrom::NextOf(border.clone()),
                 SearchDirection::Forward,
             ),
             pos(1, 6..8)
@@ -247,7 +247,7 @@ mod tests {
             search_document(
                 &mut doc,
                 &query,
-                SearchFrom::NextOf(&border),
+                SearchFrom::NextOf(border.clone()),
                 SearchDirection::Forward,
             ),
             pos(2, 3..5)
@@ -265,7 +265,7 @@ mod tests {
             search_document(
                 &mut doc,
                 &query,
-                SearchFrom::NextOf(&border),
+                SearchFrom::NextOf(border.clone()),
                 SearchDirection::Forward,
             ),
             pos(1, 0..2)
@@ -281,7 +281,7 @@ mod tests {
             search_document(
                 &mut doc,
                 &query,
-                SearchFrom::NextOf(&border),
+                SearchFrom::NextOf(border.clone()),
                 SearchDirection::Backward,
             ),
             pos(1, 6..8)
@@ -299,7 +299,7 @@ mod tests {
             search_document(
                 &mut doc,
                 &query,
-                SearchFrom::NextOf(&border),
+                SearchFrom::NextOf(border.clone()),
                 SearchDirection::Backward,
             ),
             pos(1, 6..8)
@@ -319,7 +319,7 @@ mod tests {
             search_document(
                 &mut doc,
                 &query,
-                SearchFrom::Row(&rows[1]),
+                SearchFrom::Row(rows[1].clone()),
                 SearchDirection::Forward,
             ),
             pos(0, 2..4)

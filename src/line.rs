@@ -107,14 +107,14 @@ impl MatchPosition {
 /// Behavior is undefined if a [`Row`] or [`MatchPosition`] for a different
 /// line index is passed.
 #[derive(Debug)]
-pub enum SearchLineFrom<'a> {
+pub enum SearchLineFrom {
     Start,
     /// Search from the given [`Row`] onward.
-    Row(&'a Row),
+    Row(Row),
     /// Search after the given match. The match itself is excluded.
-    NextOf(&'a MatchPosition),
+    NextOf(MatchPosition),
     /// Search backward before the given match. The match itself is excluded.
-    PrevOf(&'a MatchPosition),
+    PrevOf(MatchPosition),
 }
 
 /// A single line of text from the document.
@@ -264,7 +264,7 @@ impl Line {
     fn matches_iter<'a>(
         &'a self,
         query: &'a Regex,
-        from: SearchLineFrom<'a>,
+        from: SearchLineFrom,
     ) -> Box<dyn Iterator<Item = MatchPosition> + 'a> {
         let matches = query
             .find_iter(&self.plain)
@@ -276,15 +276,16 @@ impl Line {
         match from {
             SearchLineFrom::Start => Box::new(matches),
             SearchLineFrom::NextOf(border) => {
-                Box::new(matches.skip_while(|m| m.plain_range.start < border.plain_range.end))
+                Box::new(matches.skip_while(move |m| m.plain_range.start < border.plain_range.end))
             }
             SearchLineFrom::PrevOf(border) => {
-                Box::new(matches.take_while(|m| m.plain_range.end <= border.plain_range.start))
+                Box::new(matches.take_while(move |m| m.plain_range.end <= border.plain_range.start))
             }
-            SearchLineFrom::Row(row) => Box::new(
-                matches
-                    .skip_while(|m| self.plain_to_raw[m.plain_range.start] < row.raw_range.start),
-            ),
+            SearchLineFrom::Row(row) => {
+                Box::new(matches.skip_while(move |m| {
+                    self.plain_to_raw[m.plain_range.start] < row.raw_range.start
+                }))
+            }
         }
     }
 
@@ -534,7 +535,7 @@ mod tests {
         let query = Regex::new("ab").unwrap();
         let border = match_pos(0, 6..8); // The middle "ab".
         assert_eq!(
-            collect_from(&line, &query, SearchLineFrom::NextOf(&border)),
+            collect_from(&line, &query, SearchLineFrom::NextOf(border.clone())),
             vec![match_pos(0, 12..14)]
         );
     }
@@ -547,7 +548,7 @@ mod tests {
         let query = Regex::new("ab").unwrap();
         let border = match_pos(0, 0..2);
         assert_eq!(
-            collect_from(&line, &query, SearchLineFrom::NextOf(&border)),
+            collect_from(&line, &query, SearchLineFrom::NextOf(border.clone())),
             vec![match_pos(0, 2..4)]
         );
     }
@@ -558,7 +559,7 @@ mod tests {
         let query = Regex::new("ab").unwrap();
         let border = match_pos(0, 6..8);
         assert_eq!(
-            collect_from(&line, &query, SearchLineFrom::PrevOf(&border)),
+            collect_from(&line, &query, SearchLineFrom::PrevOf(border.clone())),
             vec![match_pos(0, 0..2)]
         );
     }
@@ -571,7 +572,7 @@ mod tests {
         let query = Regex::new("ab").unwrap();
         let border = match_pos(0, 2..4);
         assert_eq!(
-            collect_from(&line, &query, SearchLineFrom::PrevOf(&border)),
+            collect_from(&line, &query, SearchLineFrom::PrevOf(border.clone())),
             vec![match_pos(0, 0..2)]
         );
     }
@@ -584,7 +585,7 @@ mod tests {
         let rows = line.wrap(5);
         // Row 0 starts at raw 0, so all matches are kept.
         assert_eq!(
-            collect_from(&line, &query, SearchLineFrom::Row(&rows[0])),
+            collect_from(&line, &query, SearchLineFrom::Row(rows[0].clone())),
             vec![
                 match_pos(0, 0..2),
                 match_pos(0, 2..4),
@@ -595,7 +596,7 @@ mod tests {
         );
         // Row 1 starts at raw 5, so matches whose start maps to raw < 5 are skipped.
         assert_eq!(
-            collect_from(&line, &query, SearchLineFrom::Row(&rows[1])),
+            collect_from(&line, &query, SearchLineFrom::Row(rows[1].clone())),
             vec![match_pos(0, 6..8), match_pos(0, 8..10)]
         );
     }
@@ -613,7 +614,7 @@ mod tests {
         // plain_range 0..2 → raw 4..6 (skipped), 4..6 → raw 8..13 (skipped at start=8),
         // 6..8 → raw 13..15 (kept), 8..10 → raw 15..17 (kept).
         assert_eq!(
-            collect_from(&line, &query, SearchLineFrom::Row(&rows[1])),
+            collect_from(&line, &query, SearchLineFrom::Row(rows[1].clone())),
             vec![match_pos(0, 6..8), match_pos(0, 8..10)]
         );
     }
@@ -633,7 +634,7 @@ mod tests {
         let query = Regex::new("ab").unwrap();
         let border = match_pos(0, 0..2);
         assert_eq!(
-            line.find_first_match_from(&query, SearchLineFrom::NextOf(&border)),
+            line.find_first_match_from(&query, SearchLineFrom::NextOf(border.clone())),
             Some(match_pos(0, 6..8))
         );
         assert_eq!(
@@ -648,7 +649,7 @@ mod tests {
         let query = Regex::new("ab").unwrap();
         let border = match_pos(0, 12..14);
         assert_eq!(
-            line.find_last_match_from(&query, SearchLineFrom::PrevOf(&border)),
+            line.find_last_match_from(&query, SearchLineFrom::PrevOf(border.clone())),
             Some(match_pos(0, 6..8))
         );
         assert_eq!(

@@ -516,12 +516,13 @@ fn find_next_match_position(
         && is_match_visible(doc, current, &visible_rows)
     {
         log::debug!("search '{query}': match in viewport, search next match");
-        (SearchFrom::NextOf(current), direction)
+        (SearchFrom::NextOf(current.clone()), direction)
     } else {
         // When the current match is not in the viewport,
         // jump to the first match in the viewport regardless of direction.
         log::debug!("search '{query}': match not in viewport, search the first match in viewport");
-        (SearchFrom::Row(&visible_rows[0]), SearchDirection::Forward)
+        let top_row = visible_rows[0].clone();
+        (SearchFrom::Row(top_row), SearchDirection::Forward)
     };
     search::search_document(doc, query, search_from, direction)
 }
