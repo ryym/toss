@@ -236,43 +236,19 @@ impl Pager {
             line_index = 0;
         }
 
-        // Remember the position before the move so we can determine the final scroll amount.
-        let prev_viewport_top = self.viewport.rows()[0].clone();
-        let prev_line_pos = self.viewport.row_index(line_index, 0);
+        let jump_distance = JumpDistance::from(&self.viewport, line_index);
 
         self.heading.resolve(&mut self.doc, line_index);
-
         let jump_offset = if self.heading.contains(line_index) {
             self.header.height()
         } else {
             self.total_header_height()
         };
-        let new_line_pos = self
+        let resolved_line_pos = self
             .viewport
             .jump_to(&mut self.doc, line_index, jump_offset);
 
-        if prev_viewport_top < self.viewport.rows()[0] {
-            // If this is a downward jump and the destination was within the original viewport,
-            // we can treat this update as a scroll rather than a jump.
-            if let Some(prev_line_pos) = prev_line_pos {
-                let num_rows = new_line_pos.abs_diff(prev_line_pos);
-                PageUpdate::Partial(Scroll::new(Direction::Down, num_rows))
-            } else {
-                PageUpdate::Full
-            }
-        } else {
-            // If this is an upward jump and the original top row of the viewport is still within
-            // the new viewport, we can treat this update as a scroll rather than a jump.
-            let prev_viewport_top_new_pos = self.viewport.row_index(
-                prev_viewport_top.line_index(),
-                prev_viewport_top.wrap_index(),
-            );
-            if let Some(pos) = prev_viewport_top_new_pos {
-                PageUpdate::Partial(Scroll::new(Direction::Up, pos))
-            } else {
-                PageUpdate::Full
-            }
-        }
+        jump_distance.compute(&self.viewport, resolved_line_pos)
     }
 
     /// Jump to the end of the document so that the last line is at the bottom.
@@ -521,6 +497,47 @@ impl Pager {
             .iter()
             .any(|r| r.line_index() == pos.line_index() && r.raw_range().contains(&raw_offset));
         if is_in_page { Some(pos.clone()) } else { None }
+    }
+}
+
+/// A struct to calculate a proper [`PageUpdate`] for a jump.
+struct JumpDistance {
+    prev_viewport_top: Row,
+    prev_line_pos: Option<usize>,
+}
+
+impl JumpDistance {
+    fn from(viewport: &Viewport, jump_target: usize) -> Self {
+        // Remember the position before the jump so we can determine the final scroll amount.
+        Self {
+            prev_viewport_top: viewport.rows()[0].clone(),
+            prev_line_pos: viewport.row_index(jump_target, 0),
+        }
+    }
+
+    fn compute(self, viewport: &Viewport, resolved_jump_target_pos: usize) -> PageUpdate {
+        if self.prev_viewport_top < viewport.rows()[0] {
+            // If this is a downward jump and the destination was within the original viewport,
+            // we can treat this update as a scroll rather than a jump.
+            if let Some(prev_line_pos) = self.prev_line_pos {
+                let num_rows = resolved_jump_target_pos.abs_diff(prev_line_pos);
+                PageUpdate::Partial(Scroll::new(Direction::Down, num_rows))
+            } else {
+                PageUpdate::Full
+            }
+        } else {
+            // If this is an upward jump and the original top row of the viewport is still within
+            // the new viewport, we can treat this update as a scroll rather than a jump.
+            let prev_viewport_top_new_pos = viewport.row_index(
+                self.prev_viewport_top.line_index(),
+                self.prev_viewport_top.wrap_index(),
+            );
+            if let Some(pos) = prev_viewport_top_new_pos {
+                PageUpdate::Partial(Scroll::new(Direction::Up, pos))
+            } else {
+                PageUpdate::Full
+            }
+        }
     }
 }
 
