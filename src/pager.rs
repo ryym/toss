@@ -171,6 +171,15 @@ impl Pager {
         self.header.height() + self.heading.height()
     }
 
+    /// Number of rows kept between a revealed match and the screen edge when a
+    /// search jump (`n` / `N`) scrolls. Currently always `0` (land on the edge).
+    /// When `scrolloff` becomes configurable, replace this with the option value
+    /// (clamped to `(content_height - 1) / 2`); [`landing_index`] already takes it
+    /// as a parameter, so nothing else needs to change.
+    fn scrolloff(&self) -> usize {
+        0
+    }
+
     /// Returns the height of the display area (the number of rows) excluding the header region.
     pub fn content_height(&self) -> usize {
         self.viewport.rows().len() - self.total_header_height()
@@ -500,6 +509,31 @@ impl Pager {
     }
 }
 
+/// Compute the viewport row index where a revealed match should land.
+///
+/// `overlay` is the number of rows hidden behind the sticky header/heading,
+/// `height` is the viewport height, and `scrolloff` is the number of rows kept
+/// between the match and the screen edge on landing (vim's `scrolloff`).
+/// A match that sits below the current viewport lands near the bottom; one above
+/// it lands near the top. `nav_dir` is kept for documentation and future use even
+/// though the result currently depends only on `below`.
+fn landing_index(
+    nav_dir: SearchDirection,
+    below: bool,
+    overlay: usize,
+    height: usize,
+    scrolloff: usize,
+) -> usize {
+    let top_band = overlay + scrolloff;
+    let bottom_band = (height.saturating_sub(1)).saturating_sub(scrolloff);
+    match (nav_dir, below) {
+        (SearchDirection::Forward, true) => bottom_band, // normal downward scroll
+        (SearchDirection::Forward, false) => top_band,   // forward wrapped to the start
+        (SearchDirection::Backward, false) => top_band,  // normal upward scroll
+        (SearchDirection::Backward, true) => bottom_band, // backward wrapped to the end
+    }
+}
+
 /// Find the next match to jump to.
 /// Handles re-anchoring when the current match is no longer visible in viewport.
 fn find_next_match_position(
@@ -565,6 +599,27 @@ mod tests {
     fn type_query(pager: &mut Pager, query: &str) {
         for ch in query.chars() {
             pager.update_search_query(LineEdit::AddChar(ch));
+        }
+    }
+
+    #[test]
+    fn landing_index_lands_on_edges_without_scrolloff() {
+        // overlay = 2, height = 10, scrolloff = 0.
+        // Below the viewport -> bottom edge (height - 1 = 9).
+        // Above the viewport -> top edge (overlay = 2).
+        for nav in [SearchDirection::Forward, SearchDirection::Backward] {
+            assert_eq!(landing_index(nav, true, 2, 10, 0), 9);
+            assert_eq!(landing_index(nav, false, 2, 10, 0), 2);
+        }
+    }
+
+    #[test]
+    fn landing_index_insets_by_scrolloff() {
+        // overlay = 1, height = 10, scrolloff = 3.
+        // bottom band = height - 1 - scrolloff = 6, top band = overlay + scrolloff = 4.
+        for nav in [SearchDirection::Forward, SearchDirection::Backward] {
+            assert_eq!(landing_index(nav, true, 1, 10, 3), 6);
+            assert_eq!(landing_index(nav, false, 1, 10, 3), 4);
         }
     }
 
