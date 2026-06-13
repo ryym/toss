@@ -236,7 +236,7 @@ impl Pager {
             line_index = 0;
         }
 
-        let jump_distance = JumpDistance::from(&self.viewport, line_index);
+        let jump_distance = JumpDistance::from(&self.viewport);
 
         self.heading.resolve(&mut self.doc, line_index);
         let jump_offset = if self.heading.contains(line_index) {
@@ -244,11 +244,10 @@ impl Pager {
         } else {
             self.total_header_height()
         };
-        let resolved_line_pos = self
-            .viewport
+        self.viewport
             .jump_to(&mut self.doc, line_index, jump_offset);
 
-        jump_distance.compute(&self.viewport, resolved_line_pos)
+        jump_distance.compute(&self.viewport)
     }
 
     /// Jump to the end of the document so that the last line is at the bottom.
@@ -501,41 +500,41 @@ impl Pager {
 }
 
 /// A struct to calculate a proper [`PageUpdate`] for a jump.
+///
+/// It remembers the viewport edges before a jump and, after the jump, checks whether the old
+/// and new viewports still overlap. When they do, the jump can be rendered as a scroll.
 struct JumpDistance {
-    prev_viewport_top: Row,
-    prev_line_pos: Option<usize>,
+    prev_top: Row,
+    prev_bottom: Row,
 }
 
 impl JumpDistance {
-    fn from(viewport: &Viewport, jump_target: usize) -> Self {
-        // Remember the position before the jump so we can determine the final scroll amount.
+    fn from(viewport: &Viewport) -> Self {
+        // Remember the viewport edges before the jump so we can measure the overlap afterwards.
+        let rows = viewport.rows();
         Self {
-            prev_viewport_top: viewport.rows()[0].clone(),
-            prev_line_pos: viewport.row_index(jump_target, 0),
+            prev_top: rows[0].clone(),
+            prev_bottom: rows[rows.len() - 1].clone(),
         }
     }
 
-    fn compute(self, viewport: &Viewport, resolved_jump_target_pos: usize) -> PageUpdate {
-        if self.prev_viewport_top < viewport.rows()[0] {
-            // If this is a downward jump and the destination was within the original viewport,
-            // we can treat this update as a scroll rather than a jump.
-            if let Some(prev_line_pos) = self.prev_line_pos {
-                let num_rows = resolved_jump_target_pos.abs_diff(prev_line_pos);
-                PageUpdate::Partial(Scroll::new(Direction::Down, num_rows))
-            } else {
-                PageUpdate::Full
+    fn compute(self, viewport: &Viewport) -> PageUpdate {
+        let rows = viewport.rows();
+        if self.prev_top < rows[0] {
+            // Downward jump. The old top has scrolled off, but if the old bottom row is still
+            // visible the viewports overlap, so we can render this as a downward scroll.
+            match viewport.row_index(self.prev_bottom.line_index(), self.prev_bottom.wrap_index()) {
+                Some(pos) => {
+                    PageUpdate::Partial(Scroll::new(Direction::Down, rows.len() - 1 - pos))
+                }
+                None => PageUpdate::Full,
             }
         } else {
-            // If this is an upward jump and the original top row of the viewport is still within
-            // the new viewport, we can treat this update as a scroll rather than a jump.
-            let prev_viewport_top_new_pos = viewport.row_index(
-                self.prev_viewport_top.line_index(),
-                self.prev_viewport_top.wrap_index(),
-            );
-            if let Some(pos) = prev_viewport_top_new_pos {
-                PageUpdate::Partial(Scroll::new(Direction::Up, pos))
-            } else {
-                PageUpdate::Full
+            // Upward jump (or no move). If the old top row is still within the new viewport,
+            // the viewports overlap, so we can render this as an upward scroll.
+            match viewport.row_index(self.prev_top.line_index(), self.prev_top.wrap_index()) {
+                Some(pos) => PageUpdate::Partial(Scroll::new(Direction::Up, pos)),
+                None => PageUpdate::Full,
             }
         }
     }
@@ -639,6 +638,52 @@ mod tests {
         pager.jump_to(10);
         let (snap, _doc) = pager.snapshot();
         assert_eq!(line_indices(snap.content), vec![10, 11, 12, 13]);
+    }
+
+    fn jump_scroll(update: PageUpdate) -> Option<(Direction, usize)> {
+        match update {
+            PageUpdate::Partial(Some(scroll)) => Some((scroll.direction, scroll.num_rows.get())),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn jump_to_downward_renders_as_partial_scroll_when_overlapping() {
+        // Downward jump whose target was off-screen but still overlaps near the doc end.
+        let mut pager = Pager::new(doc_lines(8), Options::default(), ScreenSize::new(20, 5));
+        pager.scroll(1);
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![1, 2, 3, 4]);
+
+        let update = pager.jump_to(6);
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![4, 5, 6, 7]);
+        // Old bottom (line 4) is still visible, so this is a 3-row downward scroll.
+        assert_eq!(jump_scroll(update), Some((Direction::Down, 3)));
+    }
+
+    #[test]
+    fn jump_to_upward_renders_as_partial_scroll_when_overlapping() {
+        let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
+        pager.jump_to(10);
+        assert_eq!(
+            line_indices(pager.snapshot().0.content),
+            vec![10, 11, 12, 13]
+        );
+
+        let update = pager.jump_to(8);
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![8, 9, 10, 11]);
+        // Old top (line 10) is still visible, so this is a 2-row upward scroll.
+        assert_eq!(jump_scroll(update), Some((Direction::Up, 2)));
+    }
+
+    #[test]
+    fn jump_to_renders_full_when_no_overlap() {
+        let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
+        let update = pager.jump_to(10);
+        assert_eq!(
+            line_indices(pager.snapshot().0.content),
+            vec![10, 11, 12, 13]
+        );
+        assert!(matches!(update, PageUpdate::Full));
     }
 
     #[test]
