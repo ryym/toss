@@ -53,7 +53,7 @@ impl Viewport {
         self.size = size;
     }
 
-    // Remove the specified number of rows from the end and prepend the same number of new rows.
+    /// Remove the specified number of rows from the end and prepend the same number of new rows.
     pub fn scroll_up(&mut self, doc: &mut Document, n_rows: usize) -> usize {
         if n_rows == 0 || self.rows.is_empty() {
             return 0;
@@ -78,7 +78,7 @@ impl Viewport {
         scroll_rows
     }
 
-    // Remove the specified number of rows from the start and append the same number of new rows.
+    /// Remove the specified number of rows from the start and append the same number of new rows.
     pub fn scroll_down(&mut self, doc: &mut Document, n_rows: usize) -> usize {
         if n_rows == 0 || self.rows.is_empty() {
             return 0;
@@ -107,9 +107,9 @@ impl Viewport {
         scroll_rows
     }
 
-    // Jump to a specific line, rebuilding the rows from there.
-    // Returns the final index of the given line within the viewport rows.
-    // If the line is near the end of the file, it may end up positioned below `row_offset`.
+    /// Jump to a specific line, rebuilding the rows from there.
+    /// Returns the final index of the given line within the viewport rows.
+    /// If the line is near the end of the file, it may end up positioned below `row_offset`.
     pub fn jump_to(&mut self, doc: &mut Document, line_index: usize, row_offset: usize) -> usize {
         let height = self.size.height;
         let rows_after_line = rows::list_forward(doc, self.size.width, (line_index, 0), height);
