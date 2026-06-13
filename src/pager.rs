@@ -469,24 +469,7 @@ impl Pager {
     /// Jump to next/previous match using the stored search state.
     /// Returns `Some` when a match was found and applied, `None` otherwise.
     pub fn jump_to_next_match(&mut self, reverse: bool) -> Option<PageUpdate> {
-        let Some(ref search) = self.search else {
-            log::debug!("Jump to next match: no active search");
-            return None;
-        };
-        let direction = if reverse {
-            search.direction.opposite()
-        } else {
-            search.direction
-        };
-        let current = &search.current;
-
-        let next = find_next_match_position(
-            self.contiguous_rows().to_vec(),
-            &mut self.doc,
-            &search.query,
-            current,
-            direction,
-        );
+        let next = self.find_next_match_position(reverse);
         log::debug!("Jump to next match: {next:?}");
         if let Some(pos) = next {
             let update = self.jump_to(pos.line_index());
@@ -498,44 +481,47 @@ impl Pager {
 
         None
     }
-}
 
-/// Find the next match to jump to.
-/// Handles re-anchoring when the current match is no longer visible in viewport.
-fn find_next_match_position(
-    visible_rows: Vec<Row>,
-    doc: &mut Document,
-    query: &Regex,
-    current: &Option<MatchPosition>,
-    direction: SearchDirection,
-) -> Option<MatchPosition> {
-    if visible_rows.is_empty() {
-        return None;
+    /// Find the next match to jump to.
+    /// Handles re-anchoring when the current match is no longer visible in viewport.
+    fn find_next_match_position(&mut self, reverse: bool) -> Option<MatchPosition> {
+        let current_in_page = self.current_match_pos_in_page();
+        let Some(ref search) = self.search else {
+            log::debug!("Jump to next match: no active search");
+            return None;
+        };
+        let (search_from, direction) = match current_in_page {
+            Some(current) => {
+                log::debug!("search '{}': current match in page", search.query);
+                let direction = if reverse {
+                    search.direction.opposite()
+                } else {
+                    search.direction
+                };
+                (SearchFrom::NextOf(current), direction)
+            }
+            None => {
+                // When the current match is not visible,
+                // jump to the first match in the page regardless of direction.
+                log::debug!("search '{}': find first match in page", search.query);
+                let top_row = self.contiguous_rows()[0].clone();
+                (SearchFrom::Row(top_row), SearchDirection::Forward)
+            }
+        };
+        search::search_document(&mut self.doc, &search.query, search_from, direction)
     }
-    let (search_from, direction) = if let Some(current) = current
-        && is_match_visible(doc, current, &visible_rows)
-    {
-        log::debug!("search '{query}': match in viewport, search next match");
-        (SearchFrom::NextOf(current.clone()), direction)
-    } else {
-        // When the current match is not in the viewport,
-        // jump to the first match in the viewport regardless of direction.
-        log::debug!("search '{query}': match not in viewport, search the first match in viewport");
-        let top_row = visible_rows[0].clone();
-        (SearchFrom::Row(top_row), SearchDirection::Forward)
-    };
-    search::search_document(doc, query, search_from, direction)
-}
 
-/// Check if a match is on a wrap row that is actually visible on screen.
-fn is_match_visible(doc: &mut Document, pos: &MatchPosition, visible_rows: &[Row]) -> bool {
-    let Some(line) = doc.line(pos.line_index()) else {
-        return false;
-    };
-    let raw_offset = line.match_raw_range(pos).start;
-    visible_rows
-        .iter()
-        .any(|r| r.line_index() == pos.line_index() && r.raw_range().contains(&raw_offset))
+    /// Return the current match position only if it is visible on screen.
+    fn current_match_pos_in_page(&mut self) -> Option<MatchPosition> {
+        let pos = self.search.as_ref().and_then(|s| s.current.as_ref())?;
+        let line = self.doc.line(pos.line_index())?;
+        let raw_offset = line.match_raw_range(pos).start;
+        let is_in_page = self
+            .contiguous_rows()
+            .iter()
+            .any(|r| r.line_index() == pos.line_index() && r.raw_range().contains(&raw_offset));
+        if is_in_page { Some(pos.clone()) } else { None }
+    }
 }
 
 #[cfg(test)]
