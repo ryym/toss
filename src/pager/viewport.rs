@@ -111,26 +111,36 @@ impl Viewport {
     // Returns the final index of the given line within the viewport rows.
     // If the line is near the end of the file, it may end up positioned below `row_offset`.
     pub fn jump_to(&mut self, doc: &mut Document, line_index: usize, row_offset: usize) -> usize {
+        self.anchor_row_at(doc, (line_index, 0), row_offset)
+    }
+
+    /// Place the wrap row identified by `anchor` (line_index, wrap_index) at the viewport
+    /// row index `target`, rebuilding the rows around it.
+    /// At document boundaries it clamps the same way as [`Self::jump_to`]
+    /// (anchoring at the bottom near the end, at the top near the start).
+    /// Returns the final row index of the anchor within the viewport rows.
+    pub fn anchor_row_at(
+        &mut self,
+        doc: &mut Document,
+        anchor: (usize, usize),
+        target: usize,
+    ) -> usize {
         let height = self.size.height;
-        let rows_after_line = rows::list_forward(doc, self.size.width, (line_index, 0), height);
+        let rows_after = rows::list_forward(doc, self.size.width, anchor, height);
 
         let padding = height
             .saturating_sub(1)
-            .min(row_offset.max(height.saturating_sub(rows_after_line.len())));
-        let rows_before_line = rows::list_backward(
-            doc,
-            self.size.width,
-            DocPos::Before(&rows_after_line[0]),
-            padding,
-        );
+            .min(target.max(height.saturating_sub(rows_after.len())));
+        let rows_before =
+            rows::list_backward(doc, self.size.width, DocPos::Before(&rows_after[0]), padding);
 
-        let final_line_row_index = rows_before_line.len();
-        let mut combined: Vec<Row> = rows_before_line;
-        combined.extend(rows_after_line);
+        let final_anchor_row_index = rows_before.len();
+        let mut combined: Vec<Row> = rows_before;
+        combined.extend(rows_after);
         combined.truncate(height);
         self.rows = combined;
 
-        final_line_row_index
+        final_anchor_row_index
     }
 
     /// Jump to the end of the document so that the last line is at the bottom.
@@ -230,6 +240,17 @@ mod tests {
         let line_pos = v.jump_to(&mut doc, 4, 0);
         assert_eq!(line_pos, 3);
         assert_eq!(pos(v.rows()), vec![(1, 0), (2, 0), (3, 0), (4, 0)]);
+    }
+
+    #[test]
+    fn anchor_row_at_places_wrap_row_at_target() {
+        // "abcdefghij" wraps to (0,0), (0,1) at width 5.
+        let mut doc = Document::from_string("x\nabcdefghij\ny\nz\n".into());
+        let mut v = Viewport::new(&mut doc, size(5, 4));
+        // Place wrap row (1, 1) at index 2.
+        let anchor_pos = v.anchor_row_at(&mut doc, (1, 1), 2);
+        assert_eq!(anchor_pos, 2);
+        assert_eq!(pos(v.rows()), vec![(0, 0), (1, 0), (1, 1), (2, 0)]);
     }
 
     #[test]
