@@ -742,6 +742,108 @@ line 3
     assert_eq!(screen.out(), want);
 }
 
+// Starting a new search after a committed one must not leave the previous
+// query's highlights during the incremental preview of the new query.
+#[test]
+fn new_search_preview_clears_previous_committed_highlight() {
+    // "bar" matches the first line so the preview jump does not scroll, while
+    // "foo" has extra (underline) matches on the lines below that stay visible.
+    let content = "\
+bar aaa foo
+foo bbb
+foo ccc
+line 4
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 4,
+        content,
+        events: vec![
+            key('/'),
+            key('f'),
+            key('o'),
+            key('o'),
+            enter(), // commit "foo"
+            key('/'),
+            key('b'),
+            key('a'),
+            key('r'),
+            esc(),
+        ],
+        ..Default::default()
+    });
+    // During the "bar" preview, the leftover "foo" matches (including the
+    // underline match on "foo ccc") must be cleared.
+    let want = "\
+bar aaa foo
+foo bbb
+foo ccc
+:
+-----
+[EVENT]:char:/
+bar aaa foo
+foo bbb
+foo ccc
+/█
+-----
+[EVENT]:char:f
+bar aaa {rev}{b}f{/rev}{/b}oo
+{rev}{line}{b}f{/rev}{/line}{/b}oo bbb
+{rev}{line}{b}f{/rev}{/line}{/b}oo ccc
+/f█
+-----
+[EVENT]:char:o
+bar aaa {rev}{b}fo{/rev}{/b}o
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o bbb
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o ccc
+/fo█
+-----
+[EVENT]:char:o
+bar aaa {rev}{b}foo{/rev}{/b}
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} bbb
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} ccc
+/foo█
+-----
+[EVENT]:enter
+bar aaa {rev}{b}foo{/rev}{/b}
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} bbb
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} ccc
+:
+-----
+[EVENT]:char:/
+bar aaa {rev}{b}foo{/rev}{/b}
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} bbb
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} ccc
+/█
+-----
+[EVENT]:char:b
+{rev}{b}b{/rev}{/b}ar aaa foo
+foo {rev}{line}{b}b{/rev}{/line}{/b}{rev}{line}{b}b{/rev}{/line}{/b}{rev}{line}{b}b{/rev}{/line}{/b}
+foo ccc
+/b█
+-----
+[EVENT]:char:a
+{rev}{b}ba{/rev}{/b}r aaa foo
+foo bbb
+foo ccc
+/ba█
+-----
+[EVENT]:char:r
+{rev}{b}bar{/rev}{/b} aaa foo
+foo bbb
+foo ccc
+/bar█
+-----
+[EVENT]:esc
+bar aaa {rev}{b}foo{/rev}{/b}
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} bbb
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} ccc
+:
+-----
+";
+    assert_eq!(screen.out(), want);
+}
+
 // Preview shows all matches on screen, not just the current one.
 // Current match (first) is reverse + bold; other matches are underline + bold
 // with their first character also reversed.

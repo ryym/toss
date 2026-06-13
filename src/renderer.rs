@@ -77,11 +77,16 @@ impl<S: Screen> Renderer<S> {
             PageUpdate::Full => self.render_full_page(doc, &page),
             PageUpdate::Partial(scroll) => self.render_partial(doc, &page, scroll),
         };
-        self.store_page_state(page.search);
+        self.store_page_state(update, page.search);
         result
     }
 
-    fn store_page_state(&mut self, search: Option<&SearchState>) {
+    /// Store some page states to make the next render effective.
+    fn store_page_state(&mut self, update: PageUpdate, search: Option<&SearchState>) {
+        // Skip if the page update is StatusOnly as it doesn't change the page content.
+        if matches!(update, PageUpdate::StatusOnly) {
+            return;
+        }
         self.last_search = search.map(|s| SearchStateRef {
             query: s.query.as_str().to_string(),
             current: s.current.clone(),
