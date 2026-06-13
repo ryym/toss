@@ -72,13 +72,22 @@ impl<S: Screen> Renderer<S> {
         update: PageUpdate,
     ) -> io::Result<()> {
         log::debug!("render: {update:?}");
-        let result = match update {
+        match update {
+            // StatusOnly does not redraw content, so the on-screen highlight state
+            // is unchanged. Skipping store_page_state keeps last_highlight_lines
+            // intact; otherwise it would be clobbered with an empty set.
             PageUpdate::StatusOnly => self.render_status_line(&page),
-            PageUpdate::Full => self.render_full_page(doc, &page),
-            PageUpdate::Partial(scroll) => self.render_partial(doc, &page, scroll),
-        };
-        self.store_page_state(page.search);
-        result
+            PageUpdate::Full => {
+                let result = self.render_full_page(doc, &page);
+                self.store_page_state(page.search);
+                result
+            }
+            PageUpdate::Partial(scroll) => {
+                let result = self.render_partial(doc, &page, scroll);
+                self.store_page_state(page.search);
+                result
+            }
+        }
     }
 
     fn store_page_state(&mut self, search: Option<&SearchState>) {
