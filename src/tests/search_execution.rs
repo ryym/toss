@@ -159,7 +159,7 @@ foo 3
             key('o'),
             key('o'),
             enter(),  // finds "foo 1" (line 0)
-            key('n'), // next: "foo 2" (line 2)
+            key('n'), // next: "foo 2" (line 2), already in page so no scroll
         ],
         ..Default::default()
     });
@@ -200,9 +200,9 @@ bar
 :
 -----
 [EVENT]:char:n
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 1
+bar
 {rev}{b}foo{/rev}{/b} 2
-baz
-{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 3
 :
 -----
 ";

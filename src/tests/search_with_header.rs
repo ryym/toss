@@ -131,16 +131,16 @@ line 2
 -----
 [EVENT]:char:n
 # Title
+line 1
+line 2
 {rev}{b}A{/rev}{/b}B
-line 4
-line 5
 :
 -----
 [EVENT]:char:n
 # Title
+line 4
 line 5
 {rev}{b}A{/rev}{/b}C
-line 6
 :
 -----
 [EVENT]:char:N
@@ -282,16 +282,16 @@ line 2
 -----
 [EVENT]:char:n
 # Section 1
+line 2
+line 3
 {rev}{b}AA{/rev}{/b}B
-line 4
-# Section 2
 :
 -----
 [EVENT]:char:n
+# Section 1
 # Section 2
 line 5
 {rev}{b}AA{/rev}{/b}C
-line 6
 :
 -----
 [EVENT]:char:N
@@ -373,14 +373,14 @@ fn search_with_heading_jump_back_one_line() {
 -----
 [EVENT]:char:n
 # Section A
+{rev}{line}{b}1{/rev}{/line}{/b}{line}{b}3{/line}{/b}0
 {rev}{b}13{/rev}{/b}1
-{rev}{line}{b}1{/rev}{/line}{/b}{line}{b}3{/line}{/b}2
 :
 -----
 [EVENT]:char:n
 # Section A
+{rev}{line}{b}1{/rev}{/line}{/b}{line}{b}3{/line}{/b}1
 {rev}{b}13{/rev}{/b}2
-{rev}{line}{b}1{/rev}{/line}{/b}{line}{b}3{/line}{/b}3
 :
 -----
 [EVENT]:char:N
@@ -475,16 +475,16 @@ line 3
 # Section 1
 description 1-1
 description 1-2
+line 5
 {rev}{b}A{/rev}{/b}B
-# Section 2
 :
 -----
 [EVENT]:char:n
+description 1-2
 # Section 2
 description 2-1
 description 2-2
 {rev}{b}A{/rev}{/b}C
-line 6
 :
 -----
 ";
@@ -562,20 +562,20 @@ line 1
 -----
 [EVENT]:char:n
 # Section {rev}{line}{b}A{/rev}{/line}{/b}1
+line 3
 {rev}{b}A{/rev}{/b}Y
-line 4
 :
 -----
 [EVENT]:char:n
+# Section {rev}{line}{b}A{/rev}{/line}{/b}1
+line 4
 # Section {rev}{b}A{/rev}{/b}2
-line 5
-{rev}{line}{b}A{/rev}{/line}{/b}Z
 :
 -----
 [EVENT]:char:n
 # Section {rev}{line}{b}A{/rev}{/line}{/b}2
+line 5
 {rev}{b}A{/rev}{/b}Z
-line 6
 :
 -----
 [EVENT]:char:N

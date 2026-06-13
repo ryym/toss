@@ -261,6 +261,30 @@ impl Pager {
         PageUpdate::Full
     }
 
+    /// Move the page so that the specified line is fully shown with its last row at the bottom.
+    /// Unlike [`Self::jump_to`], which anchors the line at the top, this anchors the whole line
+    /// at the bottom so that wherever a match sits within the line it stays visible.
+    fn jump_to_bottom(&mut self, line_index: usize) -> PageUpdate {
+        let jump_distance = JumpDistance::from(&self.viewport);
+
+        // Offset the line so its last wrap row lands on the bottom (i.e. the whole line is shown).
+        let width = self.viewport.size().width();
+        let row_count = self
+            .doc
+            .line(line_index)
+            .map(|l| l.row_count(width))
+            .unwrap_or(1);
+        let row_offset = self.viewport.size().height.saturating_sub(row_count);
+        self.viewport.jump_to(&mut self.doc, line_index, row_offset);
+
+        // Re-resolve the heading for the new top line (mirrors jump_to_end).
+        let top_line_index = self.viewport.rows()[0].line_index();
+        self.heading.resolve(&mut self.doc, top_line_index);
+        self.push_up_heading_if_needed();
+
+        jump_distance.compute(&self.viewport)
+    }
+
     /// Scroll by the given number of rows (positive = down, negative = up).
     /// Returns the resulting [`PageUpdate`] when any rows were actually scrolled.
     /// Returns `None` when there is no room to scroll.
@@ -447,7 +471,7 @@ impl Pager {
         let next = self.find_next_match_position(reverse);
         log::debug!("Jump to next match: {next:?}");
         if let Some(pos) = next {
-            let update = self.jump_to(pos.line_index());
+            let update = self.reveal_match(&pos);
             if let Some(s) = self.search.as_mut() {
                 s.current = Some(pos);
                 return Some(update);
@@ -455,6 +479,38 @@ impl Pager {
         }
 
         None
+    }
+
+    /// Move the page minimally so that the given match becomes visible.
+    /// - If the match's row is already in the page, only refresh highlights (no scroll).
+    /// - If the match is above the page, bring its line to the page top.
+    /// - If the match is below the page, bring its line to the page bottom.
+    fn reveal_match(&mut self, pos: &MatchPosition) -> PageUpdate {
+        let raw_offset = match self.doc.line(pos.line_index()) {
+            Some(line) => line.match_raw_range(pos).start,
+            None => return PageUpdate::Partial(None),
+        };
+
+        let visible = self.contiguous_rows();
+        let top = &visible[0];
+        let bottom = &visible[visible.len() - 1];
+        let target = pos.line_index();
+
+        // Compare the match's row against the page edges by (line_index, raw_offset).
+        // The match's row is off-page when it sorts before the top row or after the bottom row.
+        let above = target < top.line_index()
+            || (target == top.line_index() && raw_offset < top.raw_range().start);
+        let below = target > bottom.line_index()
+            || (target == bottom.line_index() && raw_offset >= bottom.raw_range().end);
+
+        if above {
+            self.jump_to(target)
+        } else if below {
+            self.jump_to_bottom(target)
+        } else {
+            // The match's row is within the page: just move the highlight, no scroll.
+            PageUpdate::Partial(None)
+        }
     }
 
     /// Find the next match to jump to.
@@ -569,6 +625,18 @@ mod tests {
         for ch in query.chars() {
             pager.update_search_query(LineEdit::AddChar(ch));
         }
+    }
+
+    fn submit_query(pager: &mut Pager, direction: SearchDirection, query: &str) {
+        pager.start_search_input(direction);
+        type_query(pager, query);
+        pager.submit_search();
+    }
+
+    fn current_match_line(pager: &mut Pager) -> Option<usize> {
+        let (snap, _doc) = pager.snapshot();
+        snap.search
+            .and_then(|s| s.current.as_ref().map(|m| m.line_index()))
     }
 
     #[test]
@@ -826,5 +894,82 @@ mod tests {
         let rows = pager.contiguous_rows();
         // Heading (line 0) is no longer adjacent to content.
         assert_ne!(rows[0].line_index(), 0);
+    }
+
+    #[test]
+    fn next_match_in_page_moves_highlight_without_scrolling() {
+        let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
+        submit_query(&mut pager, SearchDirection::Forward, "line");
+        // "line" matches every line; the first match is line 0 and the page is [0,1,2,3].
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![0, 1, 2, 3]);
+        assert_eq!(current_match_line(&mut pager), Some(0));
+
+        let update = pager.jump_to_next_match(false);
+        // The next match (line 1) is already in the page: no scroll, just refresh.
+        assert!(matches!(update, Some(PageUpdate::Partial(None))));
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![0, 1, 2, 3]);
+        assert_eq!(current_match_line(&mut pager), Some(1));
+    }
+
+    #[test]
+    fn next_match_below_page_anchors_line_at_bottom() {
+        let content = "a\nb\nc\nhit\ne\nf\ng\nhit\ni\nj\n";
+        let mut pager = Pager::new(
+            Document::from_string(content.into()),
+            Options::default(),
+            ScreenSize::new(20, 5),
+        );
+        // Submitting jumps to the first match (line 3) at the top: page [3,4,5,6].
+        submit_query(&mut pager, SearchDirection::Forward, "hit");
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![3, 4, 5, 6]);
+        assert_eq!(current_match_line(&mut pager), Some(3));
+
+        pager.jump_to_next_match(false);
+        // The next match (line 7) is below the page, so it is anchored at the bottom.
+        let content = line_indices(pager.snapshot().0.content);
+        assert_eq!(content, vec![4, 5, 6, 7]);
+        assert_eq!(current_match_line(&mut pager), Some(7));
+    }
+
+    #[test]
+    fn next_match_above_page_anchors_line_at_top() {
+        let content = "a\nb\nc\nhit\ne\nf\ng\nhit\ni\nj\n";
+        let mut pager = Pager::new(
+            Document::from_string(content.into()),
+            Options::default(),
+            ScreenSize::new(20, 5),
+        );
+        submit_query(&mut pager, SearchDirection::Forward, "hit");
+        pager.jump_to_next_match(false); // Move down to line 7: page [4,5,6,7].
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![4, 5, 6, 7]);
+
+        pager.jump_to_next_match(true);
+        // The previous match (line 3) is above the page, so it is anchored at the top.
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![3, 4, 5, 6]);
+        assert_eq!(current_match_line(&mut pager), Some(3));
+    }
+
+    #[test]
+    fn jump_to_bottom_shows_whole_wrapped_line() {
+        // Width 5 wraps "01234hit" into ["01234", "hit"] (2 rows).
+        let content = "a\nb\nc\nd\ne\nf\n01234hit\n";
+        let mut pager = Pager::new(
+            Document::from_string(content.into()),
+            Options::default(),
+            ScreenSize::new(5, 5),
+        );
+
+        pager.jump_to_bottom(6);
+        let (snap, _doc) = pager.snapshot();
+        // The whole wrapped line is shown, with its last wrap row at the bottom.
+        let line6_wraps: Vec<usize> = snap
+            .content
+            .iter()
+            .filter(|r| r.line_index() == 6)
+            .map(|r| r.wrap_index())
+            .collect();
+        assert_eq!(line6_wraps, vec![0, 1]);
+        let last = snap.content.last().unwrap();
+        assert_eq!((last.line_index(), last.wrap_index()), (6, 1));
     }
 }

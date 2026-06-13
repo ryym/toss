@@ -194,7 +194,7 @@ line 6
             key('A'),
             enter(),
             key('k'), // Scroll up 1. Cursor ("A 2") is still visible.
-            key('n'), // Cursor visible, so normal jump to "A 4".
+            key('n'), // "A 4" is just below the page, so scroll it up to the bottom.
         ],
         ..Default::default()
     });
@@ -229,9 +229,9 @@ line 3
 :
 -----
 [EVENT]:char:n
+{rev}{line}{b}A{/rev}{/line}{/b} 2
+line 3
 {rev}{b}A{/rev}{/b} 4
-line 5
-line 6
 :
 -----
 ";
