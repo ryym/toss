@@ -237,8 +237,14 @@ impl Pager {
         self.header.resize(&mut self.doc, &size);
         self.heading
             .resize(&mut self.doc, &size, self.header.height());
-        self.heading.resolve(&mut self.doc, 0);
-        self.viewport.refill_from_top(&mut self.doc);
+        // Resolve the heading for the current top line, which refill preserves.
+        let top_line = self
+            .viewport
+            .rows()
+            .first()
+            .map_or(0, |row| row.line_index());
+        self.heading.resolve(&mut self.doc, top_line);
+        self.viewport.refill(&mut self.doc);
         Some(PageUpdate::Full)
     }
 

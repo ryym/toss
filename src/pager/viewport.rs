@@ -43,10 +43,16 @@ impl Viewport {
         })
     }
 
-    /// Rebuild the rows from the top of the document.
-    /// Used while the first screen is still filling in from streamed input.
-    pub fn refill_from_top(&mut self, doc: &mut Document) {
-        self.rows = rows::list_forward(doc, self.size.width(), (0, 0), self.size.height());
+    /// Rebuild the rows from the current top, extending downward up to the full
+    /// height. The top row is preserved, so a scrolled position is never reset;
+    /// this only fills the space below as more lines become available (e.g. while
+    /// the first screen fills in from streamed input).
+    pub fn refill(&mut self, doc: &mut Document) {
+        let top = self
+            .rows
+            .first()
+            .map_or((0, 0), |row| (row.line_index(), row.wrap_index()));
+        self.rows = rows::list_forward(doc, self.size.width(), top, self.size.height());
     }
 
     pub fn resize(&mut self, doc: &mut Document, size: ViewportSize) {
