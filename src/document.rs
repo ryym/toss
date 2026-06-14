@@ -39,20 +39,21 @@ enum Source {
         index: LineIndex,
         cache: LineCache,
     },
-    /// All lines held in memory (for stdin or small content).
-    InMemory { lines: Vec<Line> },
-    /// Lines arriving incrementally from a background reader.
-    /// Already-received lines are held in `lines`; more may arrive via `rx`.
+    /// Lines held in memory, optionally arriving incrementally.
+    /// Already-received lines are held in `lines`. When `rx` is `Some`, more may
+    /// arrive from a background reader; when `None`, the content is final (e.g.
+    /// from a string or a fully-read reader).
     Stream {
         lines: Vec<Line>,
-        rx: Receiver<StreamMsg>,
+        rx: Option<Receiver<StreamMsg>>,
         complete: bool,
     },
 }
 
 /// Provides access to the lines of a document.
 /// For file inputs, lines are loaded on demand and cached.
-/// For stdin/string inputs, all lines are held in memory.
+/// For stdin/string inputs, lines are held in memory (arriving incrementally
+/// for stdin, all at once for strings).
 pub struct Document {
     source: Source,
 }
@@ -79,6 +80,8 @@ impl Document {
     }
 
     /// Parse a string into lines, holding everything in memory.
+    /// The resulting document is complete: no more lines will arrive.
+    #[cfg(test)]
     pub fn from_string(content: String) -> Self {
         let lines = content
             .lines()
@@ -86,7 +89,11 @@ impl Document {
             .map(|(i, s)| Line::new(i, s.to_string()))
             .collect();
         Self {
-            source: Source::InMemory { lines },
+            source: Source::Stream {
+                lines,
+                rx: None,
+                complete: true,
+            },
         }
     }
 
@@ -96,7 +103,7 @@ impl Document {
         Self {
             source: Source::Stream {
                 lines: Vec::new(),
-                rx,
+                rx: Some(rx),
                 complete: false,
             },
         }
@@ -117,6 +124,12 @@ impl Document {
         if *complete {
             return result;
         }
+        let Some(rx) = rx else {
+            // No channel attached: content is already final.
+            *complete = true;
+            result.reached_eof = true;
+            return result;
+        };
         loop {
             match rx.try_recv() {
                 Ok(StreamMsg::Lines(mut batch)) => {
@@ -152,7 +165,7 @@ impl Document {
     /// Always true for file and in-memory sources.
     pub fn is_complete(&self) -> bool {
         match &self.source {
-            Source::File { .. } | Source::InMemory { .. } => true,
+            Source::File { .. } => true,
             Source::Stream { complete, .. } => *complete,
         }
     }
@@ -161,7 +174,6 @@ impl Document {
     /// For file-backed documents, loads from disk and caches on miss.
     pub fn line(&mut self, index: usize) -> Option<&Line> {
         match &mut self.source {
-            Source::InMemory { lines } => lines.get(index),
             Source::Stream { lines, .. } => lines.get(index),
             Source::File {
                 file,
@@ -182,7 +194,6 @@ impl Document {
     /// Total number of lines in the document.
     pub fn line_count(&self) -> usize {
         match &self.source {
-            Source::InMemory { lines } => lines.len(),
             Source::Stream { lines, .. } => lines.len(),
             Source::File { index, .. } => index.line_count(),
         }
@@ -284,6 +295,17 @@ mod tests {
         assert!(r.grew);
         assert!(r.reached_eof);
         assert_eq!(doc.line_count(), 1);
+        assert!(doc.is_complete());
+    }
+
+    #[test]
+    fn from_string_is_complete_and_pump_is_noop() {
+        let mut doc = Document::from_string("a\nb".into());
+        assert!(doc.is_complete());
+        assert_eq!(doc.line_count(), 2);
+        // A string-backed document has no channel; pump must not change it.
+        assert_eq!(doc.pump(), PumpResult::default());
+        assert_eq!(doc.line_count(), 2);
         assert!(doc.is_complete());
     }
 
