@@ -1,7 +1,8 @@
 use std::fs::File;
-use std::io::{self, Read, Seek, SeekFrom};
+use std::io::{self, BufRead, Read, Seek, SeekFrom};
 use std::path::Path;
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::thread;
 
 mod line_cache;
 mod line_index;
@@ -109,6 +110,14 @@ impl Document {
         }
     }
 
+    /// Create a streaming document that reads from `reader` on a background
+    /// thread. Returns immediately; lines become available via [`Self::pump`].
+    pub fn from_stdin<R: BufRead + Send + 'static>(reader: R) -> Self {
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || read_lines(reader, tx));
+        Self::from_channel(rx)
+    }
+
     /// Drain any pending input into the document without blocking.
     /// For non-streaming sources this is a no-op.
     pub fn pump(&mut self) -> PumpResult {
@@ -196,6 +205,42 @@ impl Document {
         match &self.source {
             Source::Stream { lines, .. } => lines.len(),
             Source::File { index, .. } => index.line_count(),
+        }
+    }
+}
+
+/// Read lines from `reader` until EOF, sending each as it is parsed.
+/// Runs on a background thread. Stops early if the receiver is dropped.
+fn read_lines<R: BufRead>(mut reader: R, tx: Sender<StreamMsg>) {
+    let mut index = 0;
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        match reader.read_until(b'\n', &mut buf) {
+            Ok(0) => {
+                let _ = tx.send(StreamMsg::Eof);
+                return;
+            }
+            Ok(_) => {
+                // Strip the line terminator, handling CRLF like read_line_from_file.
+                if buf.last() == Some(&b'\n') {
+                    buf.pop();
+                }
+                if buf.last() == Some(&b'\r') {
+                    buf.pop();
+                }
+                let raw = String::from_utf8_lossy(&buf).into_owned();
+                let line = Line::new(index, raw);
+                index += 1;
+                if tx.send(StreamMsg::Lines(vec![line])).is_err() {
+                    // The document was dropped; stop reading.
+                    return;
+                }
+            }
+            Err(err) => {
+                let _ = tx.send(StreamMsg::Error(err));
+                return;
+            }
         }
     }
 }
@@ -296,6 +341,40 @@ mod tests {
         assert!(r.reached_eof);
         assert_eq!(doc.line_count(), 1);
         assert!(doc.is_complete());
+    }
+
+    /// Pump until the document reports completion, with a timeout guard so a
+    /// stuck reader thread fails the test instead of hanging forever.
+    fn pump_until_complete(doc: &mut Document) {
+        let start = std::time::Instant::now();
+        while !doc.is_complete() {
+            doc.pump();
+            if start.elapsed() > std::time::Duration::from_secs(5) {
+                panic!("stream did not complete within timeout");
+            }
+            std::thread::yield_now();
+        }
+        doc.pump();
+    }
+
+    #[test]
+    fn from_stdin_reads_all_lines() {
+        let mut doc = Document::from_stdin(io::Cursor::new(b"aaa\nbbb\nccc\n".to_vec()));
+        pump_until_complete(&mut doc);
+        assert_eq!(doc.line_count(), 3);
+        assert_eq!(doc.line(0).unwrap().raw(), "aaa");
+        assert_eq!(doc.line(1).unwrap().raw(), "bbb");
+        assert_eq!(doc.line(2).unwrap().raw(), "ccc");
+        assert!(doc.line(3).is_none());
+    }
+
+    #[test]
+    fn from_stdin_handles_no_trailing_newline_and_crlf() {
+        let mut doc = Document::from_stdin(io::Cursor::new(b"hello\r\nworld".to_vec()));
+        pump_until_complete(&mut doc);
+        assert_eq!(doc.line_count(), 2);
+        assert_eq!(doc.line(0).unwrap().raw(), "hello");
+        assert_eq!(doc.line(1).unwrap().raw(), "world");
     }
 
     #[test]
