@@ -12,6 +12,9 @@ use crate::search::SearchDirection;
 
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
+/// Poll cadence while input is still streaming in, so new lines surface promptly
+/// without the busy cost of the animation cadence.
+const FRAME_DURATION_LOADING: Duration = Duration::from_millis(16);
 
 /// Result of handling a terminal event or key input.
 enum AppAction {
@@ -49,6 +52,7 @@ impl<S: Screen> App<S> {
     }
 
     pub fn run(&mut self) -> io::Result<()> {
+        self.pager.pump_input();
         self.render(PageUpdate::Full)?;
 
         loop {
@@ -56,9 +60,10 @@ impl<S: Screen> App<S> {
                 AppAction::Quit => return Ok(()),
                 AppAction::Continue(update) => update,
             };
+            let input_update = self.pager.pump_input();
             let scroll_anim_update = self.update_scroll_animation();
 
-            if let Some(update) = scroll_anim_update.or(event_update) {
+            if let Some(update) = scroll_anim_update.or(event_update).or(input_update) {
                 self.render(update)?;
             }
         }
@@ -72,6 +77,8 @@ impl<S: Screen> App<S> {
     fn handle_terminal_event(&mut self) -> io::Result<AppAction> {
         let timeout = if self.scroll_physics.is_active() {
             FRAME_DURATION_ANIMATING
+        } else if self.pager.is_loading() {
+            FRAME_DURATION_LOADING
         } else {
             FRAME_DURATION_IDLE
         };

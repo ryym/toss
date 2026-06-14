@@ -242,6 +242,11 @@ impl Pager {
         Some(PageUpdate::Full)
     }
 
+    /// Whether more input may still arrive (the document is not yet complete).
+    pub fn is_loading(&self) -> bool {
+        !self.doc.is_complete()
+    }
+
     /// Resize the page to fit the new dimensions.
     pub fn resize(&mut self, screen_width: usize, screen_height: usize) -> PageUpdate {
         let size = ViewportSize::new(screen_width, screen_height);
