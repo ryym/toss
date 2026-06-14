@@ -141,8 +141,9 @@ impl Viewport {
 
     /// Jump to the end of the document so that the last line is at the bottom.
     pub fn jump_to_end(&mut self, doc: &mut Document) {
-        let count = self.rows.len();
-        self.rows = rows::list_backward(doc, self.size.width, DocPos::End, count);
+        // Fill up to the full height: while streaming, the viewport may not yet
+        // be full, so using the current row count would under-fill the page.
+        self.rows = rows::list_backward(doc, self.size.width, DocPos::End, self.size.height);
     }
 }
 

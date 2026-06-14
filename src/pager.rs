@@ -276,7 +276,10 @@ impl Pager {
     }
 
     /// Jump to the end of the document so that the last line is at the bottom.
+    /// For streamed input this jumps to the currently known end (non-blocking);
+    /// lines still arriving become reachable as they are pumped in.
     pub fn jump_to_end(&mut self) -> PageUpdate {
+        self.doc.pump();
         self.viewport.jump_to_end(&mut self.doc);
 
         let top_line_index = self.viewport.rows()[0].line_index();
@@ -700,6 +703,25 @@ mod tests {
         assert!(pager.pump_input().is_none());
         let (snap, _) = pager.snapshot();
         assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn jump_to_end_pumps_pending_input_first() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        tx.send(stream_msg(0, 1)).unwrap();
+        doc.pump();
+        // viewport height = 4.
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
+
+        // More lines arrive but are not pumped in yet.
+        tx.send(stream_msg(1, 9)).unwrap();
+        pager.jump_to_end();
+
+        // jump_to_end should have pumped the pending lines and landed on the
+        // currently known end (lines 0..=9, last 4 visible).
+        let (snap, _) = pager.snapshot();
+        assert_eq!(line_indices(snap.content), vec![6, 7, 8, 9]);
     }
 
     #[test]
