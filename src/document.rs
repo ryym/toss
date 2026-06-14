@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::Path;
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 mod line_cache;
 mod line_index;
@@ -10,6 +11,25 @@ use line_cache::LineCache;
 use line_index::LineIndex;
 
 const LINE_CACHE_CAPACITY: usize = 1000;
+
+/// A message sent from a background reader to a streaming [`Source`].
+pub enum StreamMsg {
+    /// A batch of newly read lines.
+    Lines(Vec<Line>),
+    /// The reader reached the end of input.
+    Eof,
+    /// The reader failed. Treated as end of input.
+    Error(io::Error),
+}
+
+/// Result of draining pending input in [`Document::pump`].
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct PumpResult {
+    /// Whether any new lines were appended.
+    pub grew: bool,
+    /// Whether the input reached its end during this pump.
+    pub reached_eof: bool,
+}
 
 /// Source of line data.
 enum Source {
@@ -21,6 +41,13 @@ enum Source {
     },
     /// All lines held in memory (for stdin or small content).
     InMemory { lines: Vec<Line> },
+    /// Lines arriving incrementally from a background reader.
+    /// Already-received lines are held in `lines`; more may arrive via `rx`.
+    Stream {
+        lines: Vec<Line>,
+        rx: Receiver<StreamMsg>,
+        complete: bool,
+    },
 }
 
 /// Provides access to the lines of a document.
@@ -63,11 +90,79 @@ impl Document {
         }
     }
 
+    /// Create a streaming document fed by a channel.
+    /// Lines arrive incrementally and are appended on [`Self::pump`].
+    pub fn from_channel(rx: Receiver<StreamMsg>) -> Self {
+        Self {
+            source: Source::Stream {
+                lines: Vec::new(),
+                rx,
+                complete: false,
+            },
+        }
+    }
+
+    /// Drain any pending input into the document without blocking.
+    /// For non-streaming sources this is a no-op.
+    pub fn pump(&mut self) -> PumpResult {
+        let Source::Stream {
+            lines,
+            rx,
+            complete,
+        } = &mut self.source
+        else {
+            return PumpResult::default();
+        };
+        let mut result = PumpResult::default();
+        if *complete {
+            return result;
+        }
+        loop {
+            match rx.try_recv() {
+                Ok(StreamMsg::Lines(mut batch)) => {
+                    if !batch.is_empty() {
+                        lines.append(&mut batch);
+                        result.grew = true;
+                    }
+                }
+                Ok(StreamMsg::Eof) => {
+                    *complete = true;
+                    result.reached_eof = true;
+                    break;
+                }
+                Ok(StreamMsg::Error(err)) => {
+                    log::warn!("Error reading streamed input: {err}");
+                    *complete = true;
+                    result.reached_eof = true;
+                    break;
+                }
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    // The reader dropped the sender without an explicit Eof.
+                    *complete = true;
+                    result.reached_eof = true;
+                    break;
+                }
+            }
+        }
+        result
+    }
+
+    /// Whether all input has been read.
+    /// Always true for file and in-memory sources.
+    pub fn is_complete(&self) -> bool {
+        match &self.source {
+            Source::File { .. } | Source::InMemory { .. } => true,
+            Source::Stream { complete, .. } => *complete,
+        }
+    }
+
     /// Get a line by index. Returns None if out of bounds.
     /// For file-backed documents, loads from disk and caches on miss.
     pub fn line(&mut self, index: usize) -> Option<&Line> {
         match &mut self.source {
             Source::InMemory { lines } => lines.get(index),
+            Source::Stream { lines, .. } => lines.get(index),
             Source::File {
                 file,
                 index: line_index,
@@ -88,6 +183,7 @@ impl Document {
     pub fn line_count(&self) -> usize {
         match &self.source {
             Source::InMemory { lines } => lines.len(),
+            Source::Stream { lines, .. } => lines.len(),
             Source::File { index, .. } => index.line_count(),
         }
     }
@@ -110,6 +206,86 @@ fn read_line_from_file(file: &mut File, index: usize, start: u64, end: u64) -> i
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::mpsc;
+
+    fn lines_msg(indices_and_text: &[(usize, &str)]) -> StreamMsg {
+        StreamMsg::Lines(
+            indices_and_text
+                .iter()
+                .map(|(i, s)| Line::new(*i, s.to_string()))
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn stream_is_incomplete_until_eof() {
+        let (tx, rx) = mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        assert!(!doc.is_complete());
+        assert_eq!(doc.line_count(), 0);
+
+        // Nothing sent yet: pump is a no-op.
+        assert_eq!(doc.pump(), PumpResult::default());
+        assert!(!doc.is_complete());
+
+        tx.send(lines_msg(&[(0, "a"), (1, "b")])).unwrap();
+        let r = doc.pump();
+        assert!(r.grew);
+        assert!(!r.reached_eof);
+        assert_eq!(doc.line_count(), 2);
+        assert_eq!(doc.line(0).unwrap().raw(), "a");
+        assert_eq!(doc.line(1).unwrap().raw(), "b");
+        assert!(!doc.is_complete());
+
+        tx.send(lines_msg(&[(2, "c")])).unwrap();
+        tx.send(StreamMsg::Eof).unwrap();
+        let r = doc.pump();
+        assert!(r.grew);
+        assert!(r.reached_eof);
+        assert_eq!(doc.line_count(), 3);
+        assert_eq!(doc.line(2).unwrap().raw(), "c");
+        assert!(doc.is_complete());
+
+        // Pump after completion is a no-op.
+        assert_eq!(doc.pump(), PumpResult::default());
+    }
+
+    #[test]
+    fn stream_drains_multiple_batches_in_one_pump() {
+        let (tx, rx) = mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        tx.send(lines_msg(&[(0, "a")])).unwrap();
+        tx.send(lines_msg(&[(1, "b")])).unwrap();
+        let r = doc.pump();
+        assert!(r.grew);
+        assert_eq!(doc.line_count(), 2);
+    }
+
+    #[test]
+    fn stream_error_is_treated_as_eof() {
+        let (tx, rx) = mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        tx.send(lines_msg(&[(0, "a")])).unwrap();
+        tx.send(StreamMsg::Error(io::Error::other("boom"))).unwrap();
+        let r = doc.pump();
+        assert!(r.grew);
+        assert!(r.reached_eof);
+        assert_eq!(doc.line_count(), 1);
+        assert!(doc.is_complete());
+    }
+
+    #[test]
+    fn stream_disconnect_without_eof_completes() {
+        let (tx, rx) = mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        tx.send(lines_msg(&[(0, "a")])).unwrap();
+        drop(tx);
+        let r = doc.pump();
+        assert!(r.grew);
+        assert!(r.reached_eof);
+        assert_eq!(doc.line_count(), 1);
+        assert!(doc.is_complete());
+    }
 
     #[test]
     fn from_string_splits_lines() {
