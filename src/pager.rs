@@ -17,7 +17,7 @@ mod heading;
 mod rows;
 mod viewport;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct ViewportSize {
     width: usize,
     height: usize,
@@ -215,6 +215,31 @@ impl Pager {
             }
         }
         true
+    }
+
+    /// Drain pending streamed input and reflect it in the page.
+    /// Returns a [`PageUpdate`] only when the visible page changed.
+    ///
+    /// While the first screen is still filling in (the viewport has not yet
+    /// reached its full height), newly arrived lines are appended from the top
+    /// anchor and the headers are rebuilt. Once the viewport is full, appended
+    /// tail lines stay below the fold and become visible on scroll, so no
+    /// redraw is needed here.
+    pub fn pump_input(&mut self) -> Option<PageUpdate> {
+        let result = self.doc.pump();
+        if !result.grew {
+            return None;
+        }
+        if self.viewport.rows().len() >= self.viewport.size().height() {
+            return None;
+        }
+        let size = *self.viewport.size();
+        self.header.resize(&mut self.doc, &size);
+        self.heading
+            .resize(&mut self.doc, &size, self.header.height());
+        self.heading.resolve(&mut self.doc, 0);
+        self.viewport.refill_from_top(&mut self.doc);
+        Some(PageUpdate::Full)
     }
 
     /// Resize the page to fit the new dimensions.
@@ -610,6 +635,14 @@ mod tests {
         Document::from_string(s)
     }
 
+    fn stream_msg(start: usize, count: usize) -> crate::document::StreamMsg {
+        crate::document::StreamMsg::Lines(
+            (0..count)
+                .map(|i| crate::line::Line::new(start + i, format!("line{}", start + i)))
+                .collect(),
+        )
+    }
+
     fn heading_opts(pattern: &str, num_lines: usize) -> HeadingOptions {
         HeadingOptions {
             pattern: Regex::new(pattern).unwrap(),
@@ -637,6 +670,46 @@ mod tests {
         let (snap, _doc) = pager.snapshot();
         snap.search
             .and_then(|s| s.current.as_ref().map(|m| m.line_index()))
+    }
+
+    #[test]
+    fn pump_input_fills_first_screen_incrementally() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        // One line must be available before constructing the pager.
+        tx.send(stream_msg(0, 1)).unwrap();
+        doc.pump();
+        // viewport height = screen_height - 1 = 4.
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
+        {
+            let (snap, _) = pager.snapshot();
+            assert_eq!(line_indices(snap.content), vec![0]);
+        }
+
+        // More lines arrive: the first screen should fill from the top.
+        tx.send(stream_msg(1, 3)).unwrap();
+        let update = pager.pump_input();
+        assert!(matches!(update, Some(PageUpdate::Full)));
+        {
+            let (snap, _) = pager.snapshot();
+            assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
+        }
+
+        // Once the viewport is full, appended tail lines do not trigger a redraw.
+        tx.send(stream_msg(4, 5)).unwrap();
+        assert!(pager.pump_input().is_none());
+        let (snap, _) = pager.snapshot();
+        assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn pump_input_returns_none_when_nothing_arrived() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        tx.send(stream_msg(0, 1)).unwrap();
+        doc.pump();
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
+        assert!(pager.pump_input().is_none());
     }
 
     #[test]

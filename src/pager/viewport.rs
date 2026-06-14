@@ -43,6 +43,12 @@ impl Viewport {
         })
     }
 
+    /// Rebuild the rows from the top of the document.
+    /// Used while the first screen is still filling in from streamed input.
+    pub fn refill_from_top(&mut self, doc: &mut Document) {
+        self.rows = rows::list_forward(doc, self.size.width(), (0, 0), self.size.height());
+    }
+
     pub fn resize(&mut self, doc: &mut Document, size: ViewportSize) {
         self.rows = rows::list_forward(
             doc,
