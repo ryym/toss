@@ -73,13 +73,6 @@ impl Document {
         })
     }
 
-    /// Read all content from a reader into memory.
-    pub fn from_reader(reader: &mut impl Read) -> io::Result<Self> {
-        let mut content = String::new();
-        reader.read_to_string(&mut content)?;
-        Ok(Self::from_string(content))
-    }
-
     /// Parse a string into lines, holding everything in memory.
     /// The resulting document is complete: no more lines will arrive.
     #[cfg(test)]
