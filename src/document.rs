@@ -15,8 +15,8 @@ const LINE_CACHE_CAPACITY: usize = 1000;
 
 /// A message sent from a background reader to a streaming [`Source`].
 pub enum StreamMsg {
-    /// A batch of newly read lines.
-    Lines(Vec<Line>),
+    /// A newly read line.
+    Line(Line),
     /// The reader reached the end of input.
     Eof,
     /// The reader failed. Treated as end of input.
@@ -134,11 +134,9 @@ impl Document {
         };
         loop {
             match rx.try_recv() {
-                Ok(StreamMsg::Lines(mut batch)) => {
-                    if !batch.is_empty() {
-                        lines.append(&mut batch);
-                        result.grew = true;
-                    }
+                Ok(StreamMsg::Line(line)) => {
+                    lines.push(line);
+                    result.grew = true;
                 }
                 Ok(StreamMsg::Eof) => {
                     *complete = true;
@@ -225,7 +223,7 @@ fn read_lines<R: BufRead>(mut reader: R, tx: Sender<StreamMsg>) {
                 let raw = String::from_utf8_lossy(&buf).into_owned();
                 let line = Line::new(index, raw);
                 index += 1;
-                if tx.send(StreamMsg::Lines(vec![line])).is_err() {
+                if tx.send(StreamMsg::Line(line)).is_err() {
                     // The document was dropped; stop reading.
                     return;
                 }
@@ -257,13 +255,11 @@ mod tests {
     use super::*;
     use std::sync::mpsc;
 
-    fn lines_msg(indices_and_text: &[(usize, &str)]) -> StreamMsg {
-        StreamMsg::Lines(
-            indices_and_text
-                .iter()
-                .map(|(i, s)| Line::new(*i, s.to_string()))
-                .collect(),
-        )
+    fn send_lines(tx: &mpsc::Sender<StreamMsg>, indices_and_text: &[(usize, &str)]) {
+        for (i, s) in indices_and_text {
+            tx.send(StreamMsg::Line(Line::new(*i, s.to_string())))
+                .unwrap();
+        }
     }
 
     #[test]
@@ -277,7 +273,7 @@ mod tests {
         assert_eq!(doc.pump(), PumpResult::default());
         assert!(!doc.is_complete());
 
-        tx.send(lines_msg(&[(0, "a"), (1, "b")])).unwrap();
+        send_lines(&tx, &[(0, "a"), (1, "b")]);
         let r = doc.pump();
         assert!(r.grew);
         assert!(!r.reached_eof);
@@ -286,7 +282,7 @@ mod tests {
         assert_eq!(doc.line(1).unwrap().raw(), "b");
         assert!(!doc.is_complete());
 
-        tx.send(lines_msg(&[(2, "c")])).unwrap();
+        send_lines(&tx, &[(2, "c")]);
         tx.send(StreamMsg::Eof).unwrap();
         let r = doc.pump();
         assert!(r.grew);
@@ -303,8 +299,8 @@ mod tests {
     fn stream_drains_multiple_batches_in_one_pump() {
         let (tx, rx) = mpsc::channel();
         let mut doc = Document::from_channel(rx);
-        tx.send(lines_msg(&[(0, "a")])).unwrap();
-        tx.send(lines_msg(&[(1, "b")])).unwrap();
+        send_lines(&tx, &[(0, "a")]);
+        send_lines(&tx, &[(1, "b")]);
         let r = doc.pump();
         assert!(r.grew);
         assert_eq!(doc.line_count(), 2);
@@ -314,7 +310,7 @@ mod tests {
     fn stream_error_is_treated_as_eof() {
         let (tx, rx) = mpsc::channel();
         let mut doc = Document::from_channel(rx);
-        tx.send(lines_msg(&[(0, "a")])).unwrap();
+        send_lines(&tx, &[(0, "a")]);
         tx.send(StreamMsg::Error(io::Error::other("boom"))).unwrap();
         let r = doc.pump();
         assert!(r.grew);
@@ -327,7 +323,7 @@ mod tests {
     fn stream_disconnect_without_eof_completes() {
         let (tx, rx) = mpsc::channel();
         let mut doc = Document::from_channel(rx);
-        tx.send(lines_msg(&[(0, "a")])).unwrap();
+        send_lines(&tx, &[(0, "a")]);
         drop(tx);
         let r = doc.pump();
         assert!(r.grew);

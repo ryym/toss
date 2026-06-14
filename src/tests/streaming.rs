@@ -8,12 +8,11 @@ use crate::options::Options;
 use crate::pager::Pager;
 use crate::screen::ScreenSize;
 
-fn lines_msg(start: usize, count: usize) -> StreamMsg {
-    StreamMsg::Lines(
-        (0..count)
-            .map(|i| Line::new(start + i, format!("line{}", start + i)))
-            .collect(),
-    )
+fn send_lines(tx: &mpsc::Sender<StreamMsg>, start: usize, count: usize) {
+    for i in 0..count {
+        let line = Line::new(start + i, format!("line{}", start + i));
+        tx.send(StreamMsg::Line(line)).unwrap();
+    }
 }
 
 /// Input that arrives after the pager has started must still be pumped into the
@@ -24,7 +23,7 @@ fn event_loop_renders_input_that_arrives_after_start() {
     let mut doc = Document::from_channel(rx);
 
     // One line must be available before constructing the pager.
-    tx.send(lines_msg(0, 1)).unwrap();
+    send_lines(&tx, 0, 1);
     doc.pump();
 
     // viewport height = screen_height - 1 = 4.
@@ -34,7 +33,7 @@ fn event_loop_renders_input_that_arrives_after_start() {
     app.set_instant_scroll();
 
     // The rest of the input becomes available only after the app has started.
-    tx.send(lines_msg(1, 9)).unwrap();
+    send_lines(&tx, 1, 9);
     tx.send(StreamMsg::Eof).unwrap();
 
     app.run().unwrap();

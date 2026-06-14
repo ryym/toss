@@ -643,12 +643,15 @@ mod tests {
         Document::from_string(s)
     }
 
-    fn stream_msg(start: usize, count: usize) -> crate::document::StreamMsg {
-        crate::document::StreamMsg::Lines(
-            (0..count)
-                .map(|i| crate::line::Line::new(start + i, format!("line{}", start + i)))
-                .collect(),
-        )
+    fn send_lines(
+        tx: &std::sync::mpsc::Sender<crate::document::StreamMsg>,
+        start: usize,
+        count: usize,
+    ) {
+        for i in 0..count {
+            let line = crate::line::Line::new(start + i, format!("line{}", start + i));
+            tx.send(crate::document::StreamMsg::Line(line)).unwrap();
+        }
     }
 
     fn heading_opts(pattern: &str, num_lines: usize) -> HeadingOptions {
@@ -685,7 +688,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         let mut doc = Document::from_channel(rx);
         // One line must be available before constructing the pager.
-        tx.send(stream_msg(0, 1)).unwrap();
+        send_lines(&tx, 0, 1);
         doc.pump();
         // viewport height = screen_height - 1 = 4.
         let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
@@ -695,7 +698,7 @@ mod tests {
         }
 
         // More lines arrive: the first screen should fill from the top.
-        tx.send(stream_msg(1, 3)).unwrap();
+        send_lines(&tx, 1, 3);
         let update = pager.pump_input();
         assert!(matches!(update, Some(PageUpdate::Full)));
         {
@@ -704,7 +707,7 @@ mod tests {
         }
 
         // Once the viewport is full, appended tail lines do not trigger a redraw.
-        tx.send(stream_msg(4, 5)).unwrap();
+        send_lines(&tx, 4, 5);
         assert!(pager.pump_input().is_none());
         let (snap, _) = pager.snapshot();
         assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
@@ -714,13 +717,13 @@ mod tests {
     fn jump_to_end_pumps_pending_input_first() {
         let (tx, rx) = std::sync::mpsc::channel();
         let mut doc = Document::from_channel(rx);
-        tx.send(stream_msg(0, 1)).unwrap();
+        send_lines(&tx, 0, 1);
         doc.pump();
         // viewport height = 4.
         let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
 
         // More lines arrive but are not pumped in yet.
-        tx.send(stream_msg(1, 9)).unwrap();
+        send_lines(&tx, 1, 9);
         pager.jump_to_end();
 
         // jump_to_end should have pumped the pending lines and landed on the
@@ -733,7 +736,7 @@ mod tests {
     fn pump_input_returns_none_when_nothing_arrived() {
         let (tx, rx) = std::sync::mpsc::channel();
         let mut doc = Document::from_channel(rx);
-        tx.send(stream_msg(0, 1)).unwrap();
+        send_lines(&tx, 0, 1);
         doc.pump();
         let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
         assert!(pager.pump_input().is_none());
