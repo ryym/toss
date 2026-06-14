@@ -1,5 +1,7 @@
 use std::sync::mpsc;
 
+use pretty_assertions::assert_eq;
+
 use super::mock_screen::MockScreen;
 use crate::app::App;
 use crate::document::{Document, StreamMsg};
@@ -37,9 +39,15 @@ fn event_loop_renders_input_that_arrives_after_start() {
     tx.send(StreamMsg::Eof).unwrap();
 
     app.run().unwrap();
-    let out = app.into_screen().out();
-
-    // The first screen should show the streamed lines, not just the initial one.
-    assert!(out.contains("line0"), "missing line0:\n{out}");
-    assert!(out.contains("line3"), "missing line3:\n{out}");
+    // The whole first screen reflects the streamed lines (0..=3), not just the
+    // single line that was available when the pager was constructed.
+    let want = "\
+line0
+line1
+line2
+line3
+:
+-----
+";
+    assert_eq!(app.into_screen().out(), want);
 }
