@@ -43,6 +43,18 @@ impl Viewport {
         })
     }
 
+    /// Rebuild the rows from the current top, extending downward up to the full
+    /// height. The top row is preserved, so a scrolled position is never reset;
+    /// this only fills the space below as more lines become available (e.g. while
+    /// the first screen fills in from streamed input).
+    pub fn refill(&mut self, doc: &mut Document) {
+        let top = self
+            .rows
+            .first()
+            .map_or((0, 0), |row| (row.line_index(), row.wrap_index()));
+        self.rows = rows::list_forward(doc, self.size.width(), top, self.size.height());
+    }
+
     pub fn resize(&mut self, doc: &mut Document, size: ViewportSize) {
         self.rows = rows::list_forward(
             doc,
@@ -135,8 +147,9 @@ impl Viewport {
 
     /// Jump to the end of the document so that the last line is at the bottom.
     pub fn jump_to_end(&mut self, doc: &mut Document) {
-        let count = self.rows.len();
-        self.rows = rows::list_backward(doc, self.size.width, DocPos::End, count);
+        // Fill up to the full height: while streaming, the viewport may not yet
+        // be full, so using the current row count would under-fill the page.
+        self.rows = rows::list_backward(doc, self.size.width, DocPos::End, self.size.height);
     }
 }
 

@@ -11,6 +11,7 @@ mod search_input;
 mod search_reanchor;
 mod search_with_header;
 mod search_wrap;
+mod streaming;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
