@@ -47,7 +47,7 @@ line 4
 line 1
 line 2
 line 3
-:
+{rev} 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -71,7 +71,7 @@ line 3
 line 1
 line 2
 line 3
-:
+{rev} 1-3/4 75%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -98,7 +98,7 @@ line 4
 line 1
 line 2
 line 3
-:
+{rev} 1-3/4 75%{/rev}
 -----
 [EVENT]:char:?
 line 1
@@ -116,7 +116,7 @@ line 3
 line 1
 line 2
 line 3
-:
+{rev} 1-3/4 75%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -142,7 +142,7 @@ line 4
 line 1
 line 2
 line 3
-:
+{rev} 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -172,7 +172,7 @@ line 3
 line 1
 line 2
 line 3
-:
+{rev} 1-3/4 75%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -208,7 +208,7 @@ line 4
 line 1
 line 2
 line 3
-:
+{rev} 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -262,7 +262,7 @@ line 3
 line 1
 line 2
 line 3
-:
+{rev} 1-3/4 75%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);

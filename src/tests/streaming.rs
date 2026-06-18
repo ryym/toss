@@ -46,7 +46,7 @@ line0
 line1
 line2
 line3
-:
+{rev}lines 1-4/10 40%{/rev}
 -----
 ";
     assert_eq!(app.into_screen().out(), want);

@@ -29,7 +29,7 @@ HEADER 1
 HEADER 2
 line 3
 line 4
-:
+{rev} 1-4/6 66%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -62,21 +62,21 @@ HEADER 1
 HEADER 2
 line 3
 line 4
-:
+{rev} 1-4/6 66%{/rev}
 -----
 [EVENT]:char:j
 HEADER 1
 HEADER 2
 line 4
 line 5
-:
+{rev} 2-5/6 83%{/rev}
 -----
 [EVENT]:char:j
 HEADER 1
 HEADER 2
 line 5
 line 6
-:
+{rev}3-6/6 100%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -109,28 +109,28 @@ HEADER 1
 HEADER 2
 line 3
 line 4
-:
+{rev} 1-4/6 66%{/rev}
 -----
 [EVENT]:char:j
 HEADER 1
 HEADER 2
 line 4
 line 5
-:
+{rev} 2-5/6 83%{/rev}
 -----
 [EVENT]:char:j
 HEADER 1
 HEADER 2
 line 5
 line 6
-:
+{rev}3-6/6 100%{/rev}
 -----
 [EVENT]:char:k
 HEADER 1
 HEADER 2
 line 4
 line 5
-:
+{rev} 2-5/6 83%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -163,7 +163,7 @@ HEADER 1
 HEADER 2
 line 3
 line 4
-:
+{rev} 1-4/5 80%{/rev}
 -----
 [EVENT]:char:k
 [EVENT]:char:k
@@ -199,21 +199,21 @@ HEADER
 line 2
 line 3
 line 4
-:
+{rev} 1-4/6 66%{/rev}
 -----
 [EVENT]:char:G
 HEADER
 line 4
 line 5
 line 6
-:
+{rev}3-6/6 100%{/rev}
 -----
 [EVENT]:char:g
 HEADER
 line 2
 line 3
 line 4
-:
+{rev} 1-4/6 66%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -247,14 +247,14 @@ HEADER
 line 2
 line 3
 line 4
-:
+{rev} 1-4/6 66%{/rev}
 -----
 [EVENT]:char:G
 HEADER
 line 4
 line 5
 line 6
-:
+{rev}3-6/6 100%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -286,7 +286,7 @@ line 5
 line 1
 line 2
 line 3
-:
+{rev} 1-3/5 60%{/rev}
 -----
 [EVENT]:char:q
 ";

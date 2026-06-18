@@ -42,7 +42,7 @@ line 5
 # Title
 line 1
 line 2
-:
+{rev}lines 1-3/6 50%{/rev}
 -----
 [EVENT]:char:/
 # Title
@@ -60,7 +60,7 @@ line 4
 # Title
 line {rev}{b}3{/rev}{/b}
 line 4
-:
+{rev}lines 3-5/6 83%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -106,7 +106,7 @@ line 6
 A
 line 1
 line 2
-:
+{rev}lines 1-4/9 44%{/rev}
 -----
 [EVENT]:char:/
 # Title
@@ -127,28 +127,28 @@ line 2
 {rev}{b}A{/rev}{/b}
 line 1
 line 2
-:
+{rev}lines 1-4/9 44%{/rev}
 -----
 [EVENT]:char:n
 # Title
 line 1
 line 2
 {rev}{b}A{/rev}{/b}B
-:
+{rev}lines 2-5/9 55%{/rev}
 -----
 [EVENT]:char:n
 # Title
 line 4
 line 5
 {rev}{b}A{/rev}{/b}C
-:
+{rev}lines 5-8/9 88%{/rev}
 -----
 [EVENT]:char:N
 # Title
 {rev}{b}A{/rev}{/b}B
 line 4
 line 5
-:
+{rev}lines 4-7/9 77%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -182,7 +182,7 @@ line 6
 # Section A
 line 1
 line 2
-:
+{rev}lines 1-3/7 42%{/rev}
 -----
 [EVENT]:char:/
 # Section A
@@ -200,7 +200,7 @@ line 4
 # Section A
 line {rev}{b}3{/rev}{/b}
 line 4
-:
+{rev}lines 3-5/7 71%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -250,7 +250,7 @@ line 6
 AAA
 line 1
 line 2
-:
+{rev}lines 1-4/11 36%{/rev}
 -----
 [EVENT]:char:/
 # Section 1
@@ -278,28 +278,28 @@ line 2
 {rev}{b}AA{/rev}{/b}A
 line 1
 line 2
-:
+{rev}lines 1-4/11 36%{/rev}
 -----
 [EVENT]:char:n
 # Section 1
 line 2
 line 3
 {rev}{b}AA{/rev}{/b}B
-:
+{rev}lines 3-6/11 54%{/rev}
 -----
 [EVENT]:char:n
 # Section 1
 # Section 2
 line 5
 {rev}{b}AA{/rev}{/b}C
-:
+{rev}lines 7-10/11 90%{/rev}
 -----
 [EVENT]:char:N
 # Section 1
 {rev}{b}AA{/rev}{/b}B
 line 4
 # Section 2
-:
+{rev}lines 5-8/11 72%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -345,7 +345,7 @@ fn search_with_heading_jump_back_one_line() {
 # Section A
 127
 128
-:
+{rev}lines 1-3/9 33%{/rev}
 -----
 [EVENT]:char:/
 # Section A
@@ -369,31 +369,31 @@ fn search_with_heading_jump_back_one_line() {
 # Section A
 {rev}{b}13{/rev}{/b}0
 {rev}{line}{b}1{/rev}{/line}{/b}{line}{b}3{/line}{/b}1
-:
+{rev}lines 4-6/9 66%{/rev}
 -----
 [EVENT]:char:n
 # Section A
 {rev}{line}{b}1{/rev}{/line}{/b}{line}{b}3{/line}{/b}0
 {rev}{b}13{/rev}{/b}1
-:
+{rev}lines 4-6/9 66%{/rev}
 -----
 [EVENT]:char:n
 # Section A
 {rev}{line}{b}1{/rev}{/line}{/b}{line}{b}3{/line}{/b}1
 {rev}{b}13{/rev}{/b}2
-:
+{rev}lines 5-7/9 77%{/rev}
 -----
 [EVENT]:char:N
 # Section A
 {rev}{b}13{/rev}{/b}1
 {rev}{line}{b}1{/rev}{/line}{/b}{line}{b}3{/line}{/b}2
-:
+{rev}lines 5-7/9 77%{/rev}
 -----
 [EVENT]:char:N
 # Section A
 {rev}{b}13{/rev}{/b}0
 {rev}{line}{b}1{/rev}{/line}{/b}{line}{b}3{/line}{/b}1
-:
+{rev}lines 4-6/9 66%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -445,7 +445,7 @@ description 1-1
 description 1-2
 line 1
 line 2
-:
+{rev}lines 1-5/17 29%{/rev}
 -----
 [EVENT]:char:/
 # Section 1
@@ -469,7 +469,7 @@ description 1-1
 description 1-2
 {rev}{b}A{/rev}{/b}
 line 3
-:
+{rev}lines 3-7/17 41%{/rev}
 -----
 [EVENT]:char:n
 # Section 1
@@ -477,7 +477,7 @@ description 1-1
 description 1-2
 line 5
 {rev}{b}A{/rev}{/b}B
-:
+{rev}lines 6-10/17 58%{/rev}
 -----
 [EVENT]:char:n
 description 1-2
@@ -485,7 +485,7 @@ description 1-2
 description 2-1
 description 2-2
 {rev}{b}A{/rev}{/b}C
-:
+{rev}lines 10-14/17 82%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -534,7 +534,7 @@ line 7
 # Section A1
 AX
 line 1
-:
+{rev}lines 1-3/12 25%{/rev}
 -----
 [EVENT]:char:/
 # Section A1
@@ -552,43 +552,43 @@ line 1
 # Section {rev}{b}A{/rev}{/b}1
 {rev}{line}{b}A{/rev}{/line}{/b}X
 line 1
-:
+{rev}lines 1-3/12 25%{/rev}
 -----
 [EVENT]:char:n
 # Section {rev}{line}{b}A{/rev}{/line}{/b}1
 {rev}{b}A{/rev}{/b}X
 line 1
-:
+{rev}lines 1-3/12 25%{/rev}
 -----
 [EVENT]:char:n
 # Section {rev}{line}{b}A{/rev}{/line}{/b}1
 line 3
 {rev}{b}A{/rev}{/b}Y
-:
+{rev}lines 4-6/12 50%{/rev}
 -----
 [EVENT]:char:n
 # Section {rev}{line}{b}A{/rev}{/line}{/b}1
 line 4
 # Section {rev}{b}A{/rev}{/b}2
-:
+{rev}lines 6-8/12 66%{/rev}
 -----
 [EVENT]:char:n
 # Section {rev}{line}{b}A{/rev}{/line}{/b}2
 line 5
 {rev}{b}A{/rev}{/b}Z
-:
+{rev}lines 8-10/12 83%{/rev}
 -----
 [EVENT]:char:N
 # Section {rev}{b}A{/rev}{/b}2
 line 5
 {rev}{line}{b}A{/rev}{/line}{/b}Z
-:
+{rev}lines 8-10/12 83%{/rev}
 -----
 [EVENT]:char:N
 # Section {rev}{line}{b}A{/rev}{/line}{/b}1
 {rev}{b}A{/rev}{/b}Y
 line 4
-:
+{rev}lines 5-7/12 58%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);

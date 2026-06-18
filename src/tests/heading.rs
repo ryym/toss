@@ -37,21 +37,21 @@ line 4
 line 1
 line 2
 line 3
-:
+{rev}lines 1-4/5 80%{/rev}
 -----
 [EVENT]:char:j
 # Section A
 line 2
 line 3
 line 4
-:
+{rev}lines 2-5/5 100%{/rev}
 -----
 [EVENT]:char:k
 # Section A
 line 1
 line 2
 line 3
-:
+{rev}lines 1-4/5 80%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -86,21 +86,21 @@ line 4
 line 1
 # Section B
 line 2
-:
+{rev}lines 1-4/6 66%{/rev}
 -----
 [EVENT]:char:j
 # Section A
 # Section B
 line 2
 line 3
-:
+{rev}lines 2-5/6 83%{/rev}
 -----
 [EVENT]:char:j
 # Section B
 line 2
 line 3
 line 4
-:
+{rev}lines 3-6/6 100%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -137,7 +137,7 @@ FIXED
 line 1
 line 2
 # Section B
-:
+{rev}lines 1-5/7 71%{/rev}
 -----
 [EVENT]:char:j
 FIXED
@@ -145,7 +145,7 @@ FIXED
 line 2
 # Section B
 line 3
-:
+{rev}lines 2-6/7 85%{/rev}
 -----
 [EVENT]:char:j
 FIXED
@@ -153,7 +153,7 @@ FIXED
 # Section B
 line 3
 line 4
-:
+{rev}lines 3-7/7 100%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -189,14 +189,14 @@ line 5
 line 1
 line 2
 # Section B
-:
+{rev}lines 1-4/7 57%{/rev}
 -----
 [EVENT]:char:G
 # Section B
 line 3
 line 4
 line 5
-:
+{rev}lines 4-7/7 100%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -229,14 +229,14 @@ line 1
 line 2
 line 3
 # Section A
-:
+{rev}lines 1-4/5 80%{/rev}
 -----
 [EVENT]:char:j
 line 2
 line 3
 # Section A
 line 4
-:
+{rev}lines 2-5/5 100%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -275,7 +275,7 @@ line 1
 line 2
 line 3
 line 4
-:
+{rev}lines 1-5/6 83%{/rev}
 -----
 [EVENT]:char:j
 # Section A
@@ -283,7 +283,7 @@ line 2
 line 3
 line 4
 line 5
-:
+{rev}lines 2-6/6 100%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -318,21 +318,21 @@ line 5
 line 1
 # Section B
 line 3
-:
+{rev}lines 1-4/6 66%{/rev}
 -----
 [EVENT]:char:j
 # Section A
 # Section B
 line 3
 line 4
-:
+{rev}lines 2-5/6 83%{/rev}
 -----
 [EVENT]:char:j
 # Section B
 line 3
 line 4
 line 5
-:
+{rev}lines 3-6/6 100%{/rev}
 -----
 [EVENT]:char:j
 [EVENT]:char:k
@@ -340,14 +340,14 @@ line 5
 # Section B
 line 3
 line 4
-:
+{rev}lines 2-5/6 83%{/rev}
 -----
 [EVENT]:char:k
 # Section A
 line 1
 # Section B
 line 3
-:
+{rev}lines 1-4/6 66%{/rev}
 -----
 [EVENT]:char:q
 ";

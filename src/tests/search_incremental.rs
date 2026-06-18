@@ -37,7 +37,7 @@ line 6
 line 1
 line 2
 foo bar
-:
+{rev}lines 1-3/6 50%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -67,7 +67,7 @@ line 5
 line 1
 line 2
 foo bar
-:
+{rev}lines 1-3/6 50%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -104,7 +104,7 @@ line 6
 line 1
 line 2
 target here
-:
+{rev}lines 1-3/6 50%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -152,7 +152,7 @@ line 5
 {rev}{b}target{/rev}{/b} here
 line 4
 line 5
-:
+{rev}lines 3-5/6 83%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -186,7 +186,7 @@ foo 3
 foo 1
 bar
 foo 2
-:
+{rev}lines 1-3/5 60%{/rev}
 -----
 [EVENT]:char:/
 foo 1
@@ -216,13 +216,13 @@ bar
 {rev}{b}foo{/rev}{/b} 1
 bar
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
-:
+{rev}lines 1-3/5 60%{/rev}
 -----
 [EVENT]:char:n
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 1
 bar
 {rev}{b}foo{/rev}{/b} 2
-:
+{rev}lines 1-3/5 60%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -259,7 +259,7 @@ target here
 line 1
 line 2
 line 3
-:
+{rev}lines 1-3/5 60%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -307,7 +307,7 @@ line 4
 line 1
 line 2
 line 3
-:
+{rev}lines 1-3/5 60%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -345,13 +345,13 @@ target here
 line 1
 line 2
 line 3
-:
+{rev}lines 1-3/5 60%{/rev}
 -----
 [EVENT]:char:j
 line 2
 line 3
 line 4
-:
+{rev}lines 2-4/5 80%{/rev}
 -----
 [EVENT]:char:/
 line 2
@@ -399,7 +399,7 @@ line 4
 line 2
 line 3
 line 4
-:
+{rev}lines 2-4/5 80%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -425,7 +425,7 @@ target here
 line 1
 line 2
 line 3
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -437,7 +437,7 @@ line 3
 line 1
 line 2
 line 3
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -470,7 +470,7 @@ line 4
 ab here
 abc there
 line 3
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 ab here
@@ -506,7 +506,7 @@ line 3
 ab here
 abc there
 line 3
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -540,7 +540,7 @@ line 4
 foo here
 line 2
 line 3
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 foo here
@@ -570,7 +570,7 @@ line 3
 {rev}{b}foo{/rev}{/b} here
 line 2
 line 3
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 {rev}{b}foo{/rev}{/b} here
@@ -582,7 +582,7 @@ line 3
 {rev}{b}foo{/rev}{/b} here
 line 2
 line 3
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -620,7 +620,7 @@ line 4
 foo here
 bar there
 line 3
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 foo here
@@ -650,7 +650,7 @@ line 3
 {rev}{b}foo{/rev}{/b} here
 bar there
 line 3
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 {rev}{b}foo{/rev}{/b} here
@@ -680,7 +680,7 @@ line 4
 {rev}{b}foo{/rev}{/b} here
 bar there
 line 3
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -706,7 +706,7 @@ line 4
 ff bar
 line 2
 line 3
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 ff bar
@@ -736,7 +736,7 @@ line 3
 ff bar
 line 2
 line 3
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -778,7 +778,7 @@ line 4
 bar aaa foo
 foo bbb
 foo ccc
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 bar aaa foo
@@ -808,7 +808,7 @@ bar aaa {rev}{b}foo{/rev}{/b}
 bar aaa {rev}{b}foo{/rev}{/b}
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} bbb
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} ccc
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 bar aaa {rev}{b}foo{/rev}{/b}
@@ -838,7 +838,7 @@ foo ccc
 bar aaa {rev}{b}foo{/rev}{/b}
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} bbb
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} ccc
-:
+{rev}lines 1-3/4 75%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -868,7 +868,7 @@ line 6
 foo first
 foo second
 foo third
-:
+{rev}lines 1-3/6 50%{/rev}
 -----
 [EVENT]:char:/
 foo first
@@ -898,7 +898,7 @@ foo third
 {rev}{b}foo{/rev}{/b} first
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} second
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} third
-:
+{rev}lines 1-3/6 50%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);

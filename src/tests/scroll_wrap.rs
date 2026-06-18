@@ -22,20 +22,20 @@ end
 short
 abcde>
 fgh
-:
+{rev}3 66%{/rev}
 -----
 [EVENT]:char:j
 abcde>
 fgh
 end
-:
+{rev} 100%{/rev}
 -----
 [EVENT]:char:j
 [EVENT]:char:k
 short
 abcde>
 fgh
-:
+{rev}3 66%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -67,14 +67,14 @@ xx
 aaa>
 bbb>
 ccc
-:
+{rev}66%{/rev}
 -----
 [EVENT]:char:j
 aaa>
 bbb>
 ccc
 yy
-:
+{rev}00%{/rev}
 -----
 [EVENT]:char:j
 [EVENT]:char:q
@@ -106,20 +106,20 @@ yy
 xx
 abcde>
 fgh
-:
+{rev}3 66%{/rev}
 -----
 [EVENT]:char:j
 abcde>
 fgh
 yy
-:
+{rev} 100%{/rev}
 -----
 [EVENT]:char:j
 [EVENT]:char:k
 xx
 abcde>
 fgh
-:
+{rev}3 66%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -148,19 +148,19 @@ abcdefgh
 line1
 line2
 abcde
-:
+{rev} 100%{/rev}
 -----
 [EVENT]:char:G
 line2
 abcde>
 fgh
-:
+{rev} 100%{/rev}
 -----
 [EVENT]:char:g
 line1
 line2
 abcde>
-:
+{rev} 100%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -191,13 +191,13 @@ end
 abcde>
 fghij>
 k
-:
+{rev}2 50%{/rev}
 -----
 [EVENT]:char:j
 fghij>
 k
 end
-:
+{rev} 100%{/rev}
 -----
 [EVENT]:char:q
 ";

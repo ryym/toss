@@ -15,6 +15,7 @@ use crate::{
 mod header;
 mod heading;
 mod rows;
+mod status_line;
 mod viewport;
 
 #[derive(Debug, Clone, Copy)]
@@ -140,17 +141,6 @@ impl Pager {
         &mut self.doc
     }
 
-    fn status_line(&self) -> String {
-        match &self.mode {
-            PagerMode::View => ":".to_string(),
-            PagerMode::SearchInput(search) => format!(
-                "{}{}",
-                search.direction.prompt(),
-                search.editor.input_with_cursor()
-            ),
-        }
-    }
-
     pub fn snapshot<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
         let search = match &self.mode {
             PagerMode::SearchInput(search) => search.draft.as_ref().or(self.search.as_ref()),
@@ -161,7 +151,7 @@ impl Pager {
             heading: self.heading.rows(),
             content: &self.viewport.rows()[self.total_header_height()..],
             height: self.viewport.size().height,
-            status_line: self.status_line(),
+            status_line: status_line::build(&self.mode, &self.viewport, &self.doc),
             search,
         };
         (snapshot, &mut self.doc)
@@ -218,34 +208,43 @@ impl Pager {
     }
 
     /// Drain pending streamed input and reflect it in the page.
-    /// Returns a [`PageUpdate`] only when the visible page changed.
     ///
     /// While the first screen is still filling in (the viewport has not yet
     /// reached its full height), newly arrived lines are appended from the top
-    /// anchor and the headers are rebuilt. Once the viewport is full, appended
-    /// tail lines stay below the fold and become visible on scroll, so no
-    /// redraw is needed here.
+    /// anchor and the headers are rebuilt, requiring a [`PageUpdate::Full`].
+    ///
+    /// Once the viewport is full, appended tail lines stay below the fold and
+    /// become visible only on scroll, so the content does not change. The status
+    /// line still must, though: its running total grows and the loading marker
+    /// turns into the final percentage at EOF. Such pumps return
+    /// [`PageUpdate::StatusOnly`]. Pumps that change nothing return `None`.
     pub fn pump_input(&mut self) -> Option<PageUpdate> {
         let result = self.doc.pump();
-        if !result.grew {
-            return None;
+
+        // Fill the first screen from the top while it is not yet full.
+        if result.grew && self.viewport.rows().len() < self.viewport.size().height() {
+            let size = *self.viewport.size();
+            self.header.resize(&mut self.doc, &size);
+            self.heading
+                .resize(&mut self.doc, &size, self.header.height());
+            // Resolve the heading for the current top line, which refill preserves.
+            let top_line = self
+                .viewport
+                .rows()
+                .first()
+                .map_or(0, |row| row.line_index());
+            self.heading.resolve(&mut self.doc, top_line);
+            self.viewport.refill(&mut self.doc);
+            return Some(PageUpdate::Full);
         }
-        if self.viewport.rows().len() >= self.viewport.size().height() {
-            return None;
+
+        // The content did not change, but a changed total or reaching EOF still
+        // requires refreshing the status line.
+        if result.grew || result.reached_eof {
+            return Some(PageUpdate::StatusOnly);
         }
-        let size = *self.viewport.size();
-        self.header.resize(&mut self.doc, &size);
-        self.heading
-            .resize(&mut self.doc, &size, self.header.height());
-        // Resolve the heading for the current top line, which refill preserves.
-        let top_line = self
-            .viewport
-            .rows()
-            .first()
-            .map_or(0, |row| row.line_index());
-        self.heading.resolve(&mut self.doc, top_line);
-        self.viewport.refill(&mut self.doc);
-        Some(PageUpdate::Full)
+
+        None
     }
 
     /// Whether more input may still arrive (the document is not yet complete).
@@ -639,6 +638,7 @@ impl JumpDistance {
 mod tests {
     use super::*;
     use crate::options::{HeadingOptions, Options};
+    use crate::pager::status_line::{STATUS_REVERSE_OFF, STATUS_REVERSE_ON};
     use regex::Regex;
 
     fn doc_lines(n: usize) -> Document {
@@ -689,6 +689,74 @@ mod tests {
             .and_then(|s| s.current.as_ref().map(|m| m.line_index()))
     }
 
+    /// View-mode status content with the reverse-video wrapper stripped, so
+    /// assertions can focus on the text. Also asserts the wrapper is present.
+    fn view_status(pager: &mut Pager) -> String {
+        let s = pager.snapshot().0.status_line;
+        s.strip_prefix(STATUS_REVERSE_ON)
+            .and_then(|s| s.strip_suffix(STATUS_REVERSE_OFF))
+            .expect("view-mode status should be reverse-wrapped")
+            .to_string()
+    }
+
+    #[test]
+    fn status_line_shows_position_for_string_source() {
+        // 5 lines, viewport height 4: content covers lines 1-4 of 5 -> 80%.
+        let mut pager = Pager::new(doc_lines(5), Options::default(), ScreenSize::new(20, 5));
+        assert_eq!(view_status(&mut pager), "lines 1-4/5 80%");
+
+        pager.scroll(1);
+        assert_eq!(view_status(&mut pager), "lines 2-5/5 100%");
+    }
+
+    #[test]
+    fn status_line_marks_loading_then_settles_on_eof() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        send_lines(&tx, 0, 1);
+        doc.pump();
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
+
+        // Still streaming: total is a growing lower bound, no percentage.
+        assert_eq!(view_status(&mut pager), "lines 1-1/1+");
+
+        // Once the rest arrives and EOF is reached, the total is final.
+        send_lines(&tx, 1, 9);
+        tx.send(crate::document::StreamMsg::Eof).unwrap();
+        pager.pump_input();
+        assert_eq!(view_status(&mut pager), "lines 1-4/10 40%");
+    }
+
+    #[test]
+    fn status_line_prefixes_file_name() {
+        let dir = std::path::Path::new(".local/test");
+        std::fs::create_dir_all(dir).unwrap();
+        let path = dir.join("status_line_name.txt");
+        std::fs::write(&path, "a\nb\nc\nd\ne\n").unwrap();
+
+        let doc = Document::from_file(&path).unwrap();
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(80, 5));
+        let name = path.display();
+        assert_eq!(view_status(&mut pager), format!("{name} lines 1-4/5 80%"));
+
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn status_line_is_reverse_in_view_but_plain_in_search_input() {
+        let mut pager = Pager::new(doc_lines(5), Options::default(), ScreenSize::new(20, 5));
+        // View mode: wrapped in reverse video.
+        let view = pager.snapshot().0.status_line;
+        assert!(view.starts_with(STATUS_REVERSE_ON) && view.ends_with(STATUS_REVERSE_OFF));
+
+        // Search input: plain, no reverse-video wrapper.
+        pager.start_search_input(SearchDirection::Forward);
+        type_query(&mut pager, "line");
+        let input = pager.snapshot().0.status_line;
+        assert!(!input.contains(STATUS_REVERSE_ON));
+        assert!(input.starts_with('/'));
+    }
+
     #[test]
     fn pump_input_fills_first_screen_incrementally() {
         let (tx, rx) = std::sync::mpsc::channel();
@@ -712,11 +780,32 @@ mod tests {
             assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
         }
 
-        // Once the viewport is full, appended tail lines do not trigger a redraw.
+        // Once the viewport is full, appended tail lines stay below the fold, so
+        // the content is unchanged, but the status line still needs refreshing for
+        // the growing total.
         send_lines(&tx, 4, 5);
-        assert!(pager.pump_input().is_none());
+        assert!(matches!(pager.pump_input(), Some(PageUpdate::StatusOnly)));
         let (snap, _) = pager.snapshot();
         assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
+
+        // A pump that drains nothing changes nothing.
+        assert!(pager.pump_input().is_none());
+    }
+
+    #[test]
+    fn pump_input_refreshes_status_on_eof_after_first_screen() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        send_lines(&tx, 0, 5);
+        doc.pump();
+        // viewport height = 4, so the first screen is already full.
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
+        assert!(pager.is_loading());
+
+        // EOF with no new line still refreshes the status line to drop the marker.
+        tx.send(crate::document::StreamMsg::Eof).unwrap();
+        assert!(matches!(pager.pump_input(), Some(PageUpdate::StatusOnly)));
+        assert!(!pager.is_loading());
     }
 
     #[test]
