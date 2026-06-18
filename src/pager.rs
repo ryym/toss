@@ -1,7 +1,6 @@
 use std::mem;
 
 use regex::Regex;
-use unicode_width::UnicodeWidthChar;
 
 use crate::{
     document::Document,
@@ -16,6 +15,7 @@ use crate::{
 mod header;
 mod heading;
 mod rows;
+mod status_line;
 mod viewport;
 
 #[derive(Debug, Clone, Copy)]
@@ -141,53 +141,6 @@ impl Pager {
         &mut self.doc
     }
 
-    fn status_line(&self) -> String {
-        let width = self.viewport.size().width();
-        match &self.mode {
-            // View mode shows the position indicator in reverse video, like `less`.
-            // Clip the plain text first (the escapes have no display width), then wrap.
-            PagerMode::View => {
-                let line = clip_status_line(&self.position_status(), width);
-                format!("{STATUS_REVERSE_ON}{line}{STATUS_REVERSE_OFF}")
-            }
-            // The search input prompt stays unstyled so the typed query is plain.
-            PagerMode::SearchInput(search) => {
-                let line = format!(
-                    "{}{}",
-                    search.direction.prompt(),
-                    search.editor.input_with_cursor()
-                );
-                clip_status_line(&line, width)
-            }
-        }
-    }
-
-    /// Build the `less`-style position indicator shown in view mode, e.g.
-    /// `src/pager.rs lines 1-31/1084 2%`. The leading name is omitted for sources
-    /// without one (stdin). While input is still streaming in, the total is not
-    /// final, so it is shown as `<count>+` with the percentage omitted.
-    /// The range covers the whole viewport, ignoring header/heading overlays.
-    fn position_status(&self) -> String {
-        let rows = self.viewport.rows();
-        let (top, bottom) = match (rows.first(), rows.last()) {
-            (Some(first), Some(last)) => (first.line_index() + 1, last.line_index() + 1),
-            _ => (0, 0),
-        };
-        let total = self.doc.line_count();
-
-        let prefix = match self.doc.name() {
-            Some(name) => format!("{name} "),
-            None => String::new(),
-        };
-
-        if self.is_loading() {
-            format!("{prefix}lines {top}-{bottom}/{total}+")
-        } else {
-            let percent = (bottom * 100).checked_div(total).unwrap_or(0);
-            format!("{prefix}lines {top}-{bottom}/{total} {percent}%")
-        }
-    }
-
     pub fn snapshot<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
         let search = match &self.mode {
             PagerMode::SearchInput(search) => search.draft.as_ref().or(self.search.as_ref()),
@@ -198,7 +151,7 @@ impl Pager {
             heading: self.heading.rows(),
             content: &self.viewport.rows()[self.total_header_height()..],
             height: self.viewport.size().height,
-            status_line: self.status_line(),
+            status_line: status_line::build(&self.mode, &self.viewport, &self.doc),
             search,
         };
         (snapshot, &mut self.doc)
@@ -640,33 +593,6 @@ impl Pager {
     }
 }
 
-/// ANSI reverse-video on/off, used to render the view-mode status line like `less`.
-const STATUS_REVERSE_ON: &str = "\x1b[7m";
-const STATUS_REVERSE_OFF: &str = "\x1b[27m";
-
-/// Clip the status line to `width` display columns, keeping the right side.
-/// The most useful information (the position and percentage) sits on the right,
-/// so when the line is too long we drop characters from the left instead.
-/// A wide character that would straddle the left edge is dropped whole, which may
-/// leave the result one column narrower than `width`.
-fn clip_status_line(line: &str, width: usize) -> String {
-    let total: usize = line.chars().map(|c| c.width().unwrap_or(0)).sum();
-    if total <= width {
-        return line.to_string();
-    }
-    let mut kept = 0;
-    let mut start = line.len();
-    for (i, ch) in line.char_indices().rev() {
-        let w = ch.width().unwrap_or(0);
-        if kept + w > width {
-            break;
-        }
-        kept += w;
-        start = i;
-    }
-    line[start..].to_string()
-}
-
 /// A struct to calculate a proper [`PageUpdate`] for a jump.
 ///
 /// It remembers the viewport edges before a jump and, after the jump, checks whether the old
@@ -712,6 +638,7 @@ impl JumpDistance {
 mod tests {
     use super::*;
     use crate::options::{HeadingOptions, Options};
+    use crate::pager::status_line::{STATUS_REVERSE_OFF, STATUS_REVERSE_ON};
     use regex::Regex;
 
     fn doc_lines(n: usize) -> Document {
@@ -828,27 +755,6 @@ mod tests {
         let input = pager.snapshot().0.status_line;
         assert!(!input.contains(STATUS_REVERSE_ON));
         assert!(input.starts_with('/'));
-    }
-
-    #[test]
-    fn clip_status_line_keeps_right_side() {
-        // Fits: returned unchanged.
-        assert_eq!(
-            clip_status_line("lines 3-30/500 2%", 20),
-            "lines 3-30/500 2%"
-        );
-        // Too long: drop from the left, keep the rightmost columns.
-        assert_eq!(clip_status_line("lines 3-30/500 2%", 14), "es 3-30/500 2%");
-        assert_eq!(clip_status_line("lines 3-30/500 2%", 4), "0 2%");
-    }
-
-    #[test]
-    fn clip_status_line_drops_straddling_wide_char() {
-        // "あ" is 2 columns wide. With width 3, only "x" (right side) plus one
-        // column of budget remain, so the wide char is dropped whole.
-        assert_eq!(clip_status_line("あx", 1), "x");
-        assert_eq!(clip_status_line("あx", 2), "x");
-        assert_eq!(clip_status_line("あx", 3), "あx");
     }
 
     #[test]
