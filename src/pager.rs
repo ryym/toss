@@ -142,15 +142,24 @@ impl Pager {
     }
 
     fn status_line(&self) -> String {
-        let line = match &self.mode {
-            PagerMode::View => self.position_status(),
-            PagerMode::SearchInput(search) => format!(
-                "{}{}",
-                search.direction.prompt(),
-                search.editor.input_with_cursor()
-            ),
-        };
-        clip_status_line(&line, self.viewport.size().width())
+        let width = self.viewport.size().width();
+        match &self.mode {
+            // View mode shows the position indicator in reverse video, like `less`.
+            // Clip the plain text first (the escapes have no display width), then wrap.
+            PagerMode::View => {
+                let line = clip_status_line(&self.position_status(), width);
+                format!("{STATUS_REVERSE_ON}{line}{STATUS_REVERSE_OFF}")
+            }
+            // The search input prompt stays unstyled so the typed query is plain.
+            PagerMode::SearchInput(search) => {
+                let line = format!(
+                    "{}{}",
+                    search.direction.prompt(),
+                    search.editor.input_with_cursor()
+                );
+                clip_status_line(&line, width)
+            }
+        }
     }
 
     /// Build the `less`-style position indicator shown in view mode, e.g.
@@ -631,6 +640,10 @@ impl Pager {
     }
 }
 
+/// ANSI reverse-video on/off, used to render the view-mode status line like `less`.
+const STATUS_REVERSE_ON: &str = "\x1b[7m";
+const STATUS_REVERSE_OFF: &str = "\x1b[27m";
+
 /// Clip the status line to `width` display columns, keeping the right side.
 /// The most useful information (the position and percentage) sits on the right,
 /// so when the line is too long we drop characters from the left instead.
@@ -749,18 +762,24 @@ mod tests {
             .and_then(|s| s.current.as_ref().map(|m| m.line_index()))
     }
 
-    fn status_line(pager: &mut Pager) -> String {
-        pager.snapshot().0.status_line
+    /// View-mode status content with the reverse-video wrapper stripped, so
+    /// assertions can focus on the text. Also asserts the wrapper is present.
+    fn view_status(pager: &mut Pager) -> String {
+        let s = pager.snapshot().0.status_line;
+        s.strip_prefix(STATUS_REVERSE_ON)
+            .and_then(|s| s.strip_suffix(STATUS_REVERSE_OFF))
+            .expect("view-mode status should be reverse-wrapped")
+            .to_string()
     }
 
     #[test]
     fn status_line_shows_position_for_string_source() {
         // 5 lines, viewport height 4: content covers lines 1-4 of 5 -> 80%.
         let mut pager = Pager::new(doc_lines(5), Options::default(), ScreenSize::new(20, 5));
-        assert_eq!(status_line(&mut pager), "lines 1-4/5 80%");
+        assert_eq!(view_status(&mut pager), "lines 1-4/5 80%");
 
         pager.scroll(1);
-        assert_eq!(status_line(&mut pager), "lines 2-5/5 100%");
+        assert_eq!(view_status(&mut pager), "lines 2-5/5 100%");
     }
 
     #[test]
@@ -772,13 +791,13 @@ mod tests {
         let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
 
         // Still streaming: total is a growing lower bound, no percentage.
-        assert_eq!(status_line(&mut pager), "lines 1-1/1+");
+        assert_eq!(view_status(&mut pager), "lines 1-1/1+");
 
         // Once the rest arrives and EOF is reached, the total is final.
         send_lines(&tx, 1, 9);
         tx.send(crate::document::StreamMsg::Eof).unwrap();
         pager.pump_input();
-        assert_eq!(status_line(&mut pager), "lines 1-4/10 40%");
+        assert_eq!(view_status(&mut pager), "lines 1-4/10 40%");
     }
 
     #[test]
@@ -791,9 +810,24 @@ mod tests {
         let doc = Document::from_file(&path).unwrap();
         let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(80, 5));
         let name = path.display();
-        assert_eq!(status_line(&mut pager), format!("{name} lines 1-4/5 80%"));
+        assert_eq!(view_status(&mut pager), format!("{name} lines 1-4/5 80%"));
 
         std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn status_line_is_reverse_in_view_but_plain_in_search_input() {
+        let mut pager = Pager::new(doc_lines(5), Options::default(), ScreenSize::new(20, 5));
+        // View mode: wrapped in reverse video.
+        let view = pager.snapshot().0.status_line;
+        assert!(view.starts_with(STATUS_REVERSE_ON) && view.ends_with(STATUS_REVERSE_OFF));
+
+        // Search input: plain, no reverse-video wrapper.
+        pager.start_search_input(SearchDirection::Forward);
+        type_query(&mut pager, "line");
+        let input = pager.snapshot().0.status_line;
+        assert!(!input.contains(STATUS_REVERSE_ON));
+        assert!(input.starts_with('/'));
     }
 
     #[test]

@@ -22,25 +22,25 @@ line 5
 line 1
 line 2
 line 3
- 1-3/5 60%
+{rev} 1-3/5 60%{/rev}
 -----
 [EVENT]:char:j
 line 2
 line 3
 line 4
- 2-4/5 80%
+{rev} 2-4/5 80%{/rev}
 -----
 [EVENT]:char:j
 line 3
 line 4
 line 5
-3-5/5 100%
+{rev}3-5/5 100%{/rev}
 -----
 [EVENT]:char:k
 line 2
 line 3
 line 4
- 2-4/5 80%
+{rev} 2-4/5 80%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -71,21 +71,21 @@ line 1
 line 2
 line 3
 line 4
- 1-4/8 50%
+{rev} 1-4/8 50%{/rev}
 -----
 [EVENT]:char:d
 line 3
 line 4
 line 5
 line 6
- 3-6/8 75%
+{rev} 3-6/8 75%{/rev}
 -----
 [EVENT]:char:u
 line 1
 line 2
 line 3
 line 4
- 1-4/8 50%
+{rev} 1-4/8 50%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -115,19 +115,19 @@ line 8
 line 1
 line 2
 line 3
- 1-3/8 37%
+{rev} 1-3/8 37%{/rev}
 -----
 [EVENT]:char:G
 line 6
 line 7
 line 8
-6-8/8 100%
+{rev}6-8/8 100%{/rev}
 -----
 [EVENT]:char:g
 line 1
 line 2
 line 3
- 1-3/8 37%
+{rev} 1-3/8 37%{/rev}
 -----
 [EVENT]:char:q
 ";
@@ -152,7 +152,7 @@ line 3
 line 1
 line 2
 line 3
-1-3/3 100%
+{rev}1-3/3 100%{/rev}
 -----
 [EVENT]:char:k
 [EVENT]:char:j

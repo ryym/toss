@@ -29,7 +29,7 @@ line 5
 line 1
 line 2
 line 3
-lines 1-3/5 60%
+{rev}lines 1-3/5 60%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -59,7 +59,7 @@ line 5
 line 3
 target {rev}{b}foo{/rev}{/b} here
 line 5
-lines 3-5/5 100%
+{rev}lines 3-5/5 100%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -95,13 +95,13 @@ line 5
 top line
 line 2
 line 3
-lines 1-3/5 60%
+{rev}lines 1-3/5 60%{/rev}
 -----
 [EVENT]:char:G
 line 3
 line 4
 line 5
-lines 3-5/5 100%
+{rev}lines 3-5/5 100%{/rev}
 -----
 [EVENT]:char:?
 line 3
@@ -131,7 +131,7 @@ line 3
 {rev}{b}top{/rev}{/b} line
 line 2
 line 3
-lines 1-3/5 60%
+{rev}lines 1-3/5 60%{/rev}
 -----
 ";
     assert_eq!(out, want);
@@ -167,7 +167,7 @@ foo 3
 foo 1
 bar
 foo 2
-lines 1-3/5 60%
+{rev}lines 1-3/5 60%{/rev}
 -----
 [EVENT]:char:/
 foo 1
@@ -197,13 +197,13 @@ bar
 {rev}{b}foo{/rev}{/b} 1
 bar
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
-lines 1-3/5 60%
+{rev}lines 1-3/5 60%{/rev}
 -----
 [EVENT]:char:n
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 1
 bar
 {rev}{b}foo{/rev}{/b} 2
-lines 1-3/5 60%
+{rev}lines 1-3/5 60%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -237,7 +237,7 @@ foo 3
 foo 1
 bar
 foo 2
-lines 1-3/5 60%
+{rev}lines 1-3/5 60%{/rev}
 -----
 [EVENT]:char:/
 foo 1
@@ -267,13 +267,13 @@ bar
 {rev}{b}foo{/rev}{/b} 1
 bar
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
-lines 1-3/5 60%
+{rev}lines 1-3/5 60%{/rev}
 -----
 [EVENT]:char:N
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
 baz
 {rev}{b}foo{/rev}{/b} 3
-lines 3-5/5 100%
+{rev}lines 3-5/5 100%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -299,7 +299,7 @@ line 4
 line 1
 line 2
 line 3
-lines 1-3/4 75%
+{rev}lines 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -329,7 +329,7 @@ line 3
 line 1
 line 2
 line 3
-lines 1-3/4 75%
+{rev}lines 1-3/4 75%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -366,13 +366,13 @@ line 5
 target here
 line 2
 line 3
-lines 1-3/5 60%
+{rev}lines 1-3/5 60%{/rev}
 -----
 [EVENT]:char:j
 line 2
 line 3
 line 4
-lines 2-4/5 80%
+{rev}lines 2-4/5 80%{/rev}
 -----
 [EVENT]:char:/
 line 2
@@ -420,7 +420,7 @@ line 3
 {rev}{b}target{/rev}{/b} here
 line 2
 line 3
-lines 1-3/5 60%
+{rev}lines 1-3/5 60%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -457,7 +457,7 @@ line 4
 line 1
 This is {b}Cargo{reset}.toml
 line 3
-lines 1-3/4 75%
+{rev}lines 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -499,7 +499,7 @@ line 4
 This is {b}{rev}{b}Cargo{reset}{/rev}{/b}.toml
 line 3
 line 4
-lines 2-4/4 100%
+{rev}lines 2-4/4 100%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -545,7 +545,7 @@ line 6
 line 1
 line 2
 line 3
-lines 1-3/6 50%
+{rev}lines 1-3/6 50%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -569,19 +569,19 @@ line 3
 {rev}{b}li{/rev}{/b}ne 1
 {rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 2
 {rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 3
-lines 1-3/6 50%
+{rev}lines 1-3/6 50%{/rev}
 -----
 [EVENT]:char:j
 {rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 2
 {rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 3
 {rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 4
-lines 2-4/6 66%
+{rev}lines 2-4/6 66%{/rev}
 -----
 [EVENT]:char:j
 {rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 3
 {rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 4
 {rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 5
-lines 3-5/6 83%
+{rev}lines 3-5/6 83%{/rev}
 -----
 [EVENT]:char:/
 {rev}{line}{b}l{/rev}{/line}{/b}{line}{b}i{/line}{/b}ne 3
@@ -605,19 +605,19 @@ li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 5
 li{rev}{b}ne{/rev}{/b} 3
 li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 4
 li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 5
-lines 3-5/6 83%
+{rev}lines 3-5/6 83%{/rev}
 -----
 [EVENT]:char:j
 li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 4
 li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 5
 li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 6
-lines 4-6/6 100%
+{rev}lines 4-6/6 100%{/rev}
 -----
 [EVENT]:char:k
 li{rev}{b}ne{/rev}{/b} 3
 li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 4
 li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 5
-lines 3-5/6 83%
+{rev}lines 3-5/6 83%{/rev}
 -----
 ";
     assert_eq!(out, want);
@@ -645,7 +645,7 @@ line 4
 foo bar foo baz foo
 line 2
 line 3
-lines 1-3/4 75%
+{rev}lines 1-3/4 75%{/rev}
 -----
 [EVENT]:char:/
 foo bar foo baz foo
@@ -675,7 +675,7 @@ line 3
 {rev}{b}foo{/rev}{/b} bar {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} baz {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b}
 line 2
 line 3
-lines 1-3/4 75%
+{rev}lines 1-3/4 75%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -721,7 +721,7 @@ line 1
 line 2
 line 3
 line 4
-lines 1-4/6 66%
+{rev}lines 1-4/6 66%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -777,7 +777,7 @@ line 3
 line 4
 {rev}{b}target{/rev}{/b} foo here
 line 6
-lines 3-6/6 100%
+{rev}lines 3-6/6 100%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -822,7 +822,7 @@ line 1
 line 2
 line 3
 line 4
-1-4/10 40%
+{rev}1-4/10 40%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -843,7 +843,7 @@ line 7
 line 8
 line {rev}{b}9{/rev}{/b}
 line 10
-10/10 100%
+{rev}10/10 100%{/rev}
 -----
 [EVENT]:char:j
 [EVENT]:char:k
@@ -851,14 +851,14 @@ line 6
 line 7
 line 8
 line {rev}{b}9{/rev}{/b}
-6-9/10 90%
+{rev}6-9/10 90%{/rev}
 -----
 [EVENT]:char:j
 line 7
 line 8
 line {rev}{b}9{/rev}{/b}
 line 10
-10/10 100%
+{rev}10/10 100%{/rev}
 -----
 ";
     assert_eq!(out, want);
@@ -899,7 +899,7 @@ line 1
 line 2
 line 3
 line 4
-1-4/10 40%
+{rev}1-4/10 40%{/rev}
 -----
 [EVENT]:char:/
 line 1
@@ -920,28 +920,28 @@ line 7
 line 8
 line {rev}{b}9{/rev}{/b}
 line 10
-10/10 100%
+{rev}10/10 100%{/rev}
 -----
 [EVENT]:char:k
 line 6
 line 7
 line 8
 line {rev}{b}9{/rev}{/b}
-6-9/10 90%
+{rev}6-9/10 90%{/rev}
 -----
 [EVENT]:char:k
 line 5
 line 6
 line 7
 line 8
-5-8/10 80%
+{rev}5-8/10 80%{/rev}
 -----
 [EVENT]:char:j
 line 6
 line 7
 line 8
 line {rev}{b}9{/rev}{/b}
-6-9/10 90%
+{rev}6-9/10 90%{/rev}
 -----
 ";
     assert_eq!(screen.out(), want);
