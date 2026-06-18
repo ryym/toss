@@ -246,34 +246,43 @@ impl Pager {
     }
 
     /// Drain pending streamed input and reflect it in the page.
-    /// Returns a [`PageUpdate`] only when the visible page changed.
     ///
     /// While the first screen is still filling in (the viewport has not yet
     /// reached its full height), newly arrived lines are appended from the top
-    /// anchor and the headers are rebuilt. Once the viewport is full, appended
-    /// tail lines stay below the fold and become visible on scroll, so no
-    /// redraw is needed here.
+    /// anchor and the headers are rebuilt, requiring a [`PageUpdate::Full`].
+    ///
+    /// Once the viewport is full, appended tail lines stay below the fold and
+    /// become visible only on scroll, so the content does not change. The status
+    /// line still must, though: its running total grows and the loading marker
+    /// turns into the final percentage at EOF. Such pumps return
+    /// [`PageUpdate::StatusOnly`]. Pumps that change nothing return `None`.
     pub fn pump_input(&mut self) -> Option<PageUpdate> {
         let result = self.doc.pump();
-        if !result.grew {
-            return None;
+
+        // Fill the first screen from the top while it is not yet full.
+        if result.grew && self.viewport.rows().len() < self.viewport.size().height() {
+            let size = *self.viewport.size();
+            self.header.resize(&mut self.doc, &size);
+            self.heading
+                .resize(&mut self.doc, &size, self.header.height());
+            // Resolve the heading for the current top line, which refill preserves.
+            let top_line = self
+                .viewport
+                .rows()
+                .first()
+                .map_or(0, |row| row.line_index());
+            self.heading.resolve(&mut self.doc, top_line);
+            self.viewport.refill(&mut self.doc);
+            return Some(PageUpdate::Full);
         }
-        if self.viewport.rows().len() >= self.viewport.size().height() {
-            return None;
+
+        // The content did not change, but a changed total or reaching EOF still
+        // requires refreshing the status line.
+        if result.grew || result.reached_eof {
+            return Some(PageUpdate::StatusOnly);
         }
-        let size = *self.viewport.size();
-        self.header.resize(&mut self.doc, &size);
-        self.heading
-            .resize(&mut self.doc, &size, self.header.height());
-        // Resolve the heading for the current top line, which refill preserves.
-        let top_line = self
-            .viewport
-            .rows()
-            .first()
-            .map_or(0, |row| row.line_index());
-        self.heading.resolve(&mut self.doc, top_line);
-        self.viewport.refill(&mut self.doc);
-        Some(PageUpdate::Full)
+
+        None
     }
 
     /// Whether more input may still arrive (the document is not yet complete).
@@ -790,7 +799,10 @@ mod tests {
     #[test]
     fn clip_status_line_keeps_right_side() {
         // Fits: returned unchanged.
-        assert_eq!(clip_status_line("lines 3-30/500 2%", 20), "lines 3-30/500 2%");
+        assert_eq!(
+            clip_status_line("lines 3-30/500 2%", 20),
+            "lines 3-30/500 2%"
+        );
         // Too long: drop from the left, keep the rightmost columns.
         assert_eq!(clip_status_line("lines 3-30/500 2%", 14), "es 3-30/500 2%");
         assert_eq!(clip_status_line("lines 3-30/500 2%", 4), "0 2%");
@@ -828,11 +840,32 @@ mod tests {
             assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
         }
 
-        // Once the viewport is full, appended tail lines do not trigger a redraw.
+        // Once the viewport is full, appended tail lines stay below the fold, so
+        // the content is unchanged, but the status line still needs refreshing for
+        // the growing total.
         send_lines(&tx, 4, 5);
-        assert!(pager.pump_input().is_none());
+        assert!(matches!(pager.pump_input(), Some(PageUpdate::StatusOnly)));
         let (snap, _) = pager.snapshot();
         assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
+
+        // A pump that drains nothing changes nothing.
+        assert!(pager.pump_input().is_none());
+    }
+
+    #[test]
+    fn pump_input_refreshes_status_on_eof_after_first_screen() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        send_lines(&tx, 0, 5);
+        doc.pump();
+        // viewport height = 4, so the first screen is already full.
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
+        assert!(pager.is_loading());
+
+        // EOF with no new line still refreshes the status line to drop the marker.
+        tx.send(crate::document::StreamMsg::Eof).unwrap();
+        assert!(matches!(pager.pump_input(), Some(PageUpdate::StatusOnly)));
+        assert!(!pager.is_loading());
     }
 
     #[test]
