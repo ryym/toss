@@ -59,12 +59,12 @@ pub trait Screen {
     fn poll_event(&mut self, timeout: std::time::Duration) -> io::Result<Option<Event>>;
 
     /// Clear a single row.
-    fn clear_row(&mut self, screen_y: u16) -> io::Result<()>;
+    fn clear_row(&mut self, screen_y: usize) -> io::Result<()>;
 
     /// Write text starting at (0, screen_y). If the text overflows the terminal
     /// width, the terminal wraps it to subsequent rows as soft wraps.
     /// Caller must clear target rows beforehand.
-    fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()>;
+    fn write_at(&mut self, screen_y: usize, text: &str) -> io::Result<()>;
 
     /// Issue a terminal scroll command to shift content in-place.
     fn scroll_terminal(&mut self, scroll: &Scroll) -> io::Result<()>;

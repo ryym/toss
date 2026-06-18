@@ -100,7 +100,7 @@ impl<S: Screen> Renderer<S> {
     }
 
     fn redraw_status_line(&mut self, page: &PageSnapshot) -> io::Result<()> {
-        let status_y = page.viewport_height() as u16;
+        let status_y = page.viewport_height();
         self.screen.clear_row(status_y)?;
         self.screen.write_at(status_y, &page.status_line)?;
         Ok(())
@@ -183,7 +183,7 @@ impl<S: Screen> Renderer<S> {
                 if matches!(&text, Cow::Owned(_)) {
                     self.current_highlight_lines.insert(line_idx);
                 }
-                self.screen.write_at((start + screen_y) as u16, &text)?;
+                self.screen.write_at(start + screen_y, &text)?;
             }
         }
         Ok(())
@@ -212,7 +212,7 @@ impl<S: Screen> Renderer<S> {
                     Cow::Owned(text) => {
                         self.current_highlight_lines.insert(line_idx);
                         self.clear_row_range(screen_y, start..i)?;
-                        self.screen.write_at((start + screen_y) as u16, &text)?;
+                        self.screen.write_at(start + screen_y, &text)?;
                     }
                     Cow::Borrowed(text) => {
                         // Skip redraw only if the line has no highlights both before and this time.
@@ -220,7 +220,7 @@ impl<S: Screen> Renderer<S> {
                             continue;
                         }
                         self.clear_row_range(screen_y, start..i)?;
-                        self.screen.write_at((start + screen_y) as u16, text)?;
+                        self.screen.write_at(start + screen_y, text)?;
                     }
                 };
             }
@@ -230,7 +230,7 @@ impl<S: Screen> Renderer<S> {
 
     fn clear_row_range(&mut self, base: usize, range: Range<usize>) -> io::Result<()> {
         for i in range {
-            self.screen.clear_row((base + i) as u16)?;
+            self.screen.clear_row(base + i)?;
         }
         Ok(())
     }

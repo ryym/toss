@@ -164,17 +164,16 @@ impl Screen for MockScreen {
         }
     }
 
-    fn clear_row(&mut self, screen_y: u16) -> io::Result<()> {
-        let y = screen_y as usize;
-        if y < self.grid.len() {
-            self.grid[y] = GridRow::new();
+    fn clear_row(&mut self, screen_y: usize) -> io::Result<()> {
+        if screen_y < self.grid.len() {
+            self.grid[screen_y] = GridRow::new();
         }
         Ok(())
     }
 
-    fn write_at(&mut self, screen_y: u16, text: &str) -> io::Result<()> {
+    fn write_at(&mut self, screen_y: usize, text: &str) -> io::Result<()> {
         let width = self.width as usize;
-        let mut y = screen_y as usize;
+        let mut y = screen_y;
         let mut col = 0;
 
         for part in ansi::parse_text(text) {
