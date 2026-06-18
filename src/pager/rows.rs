@@ -56,22 +56,25 @@ pub enum DocPos<'row> {
 /// Build a list of [`Row`]s with the given width from `start` up to `count` in the reversed order.
 pub fn list_backward(doc: &mut Document, width: usize, start: DocPos, count: usize) -> Vec<Row> {
     let (mut line_index, mut from_wrap) = match start {
-        DocPos::End => ((doc.line_count() as isize) - 1, None),
+        DocPos::End => match doc.line_count().checked_sub(1) {
+            Some(i) => (i, None),
+            None => return vec![],
+        },
         DocPos::Before(row) => {
             if row.wrap_index() == 0 {
-                if row.line_index() == 0 {
-                    return vec![];
+                match row.line_index().checked_sub(1) {
+                    Some(i) => (i, None),
+                    None => return vec![],
                 }
-                ((row.line_index() as isize) - 1, None)
             } else {
-                (row.line_index() as isize, Some(row.wrap_index() - 1))
+                (row.line_index(), Some(row.wrap_index() - 1))
             }
         }
     };
 
     let mut rows = Vec::new();
-    while rows.len() < count && line_index >= 0 {
-        let line = match doc.line(line_index as usize) {
+    while rows.len() < count {
+        let line = match doc.line(line_index) {
             Some(l) => l,
             None => break,
         };
@@ -88,7 +91,11 @@ pub fn list_backward(doc: &mut Document, width: usize, start: DocPos, count: usi
             .collect();
         rows.extend(line_rows);
         from_wrap = None;
-        line_index -= 1;
+        // Stop once we have processed the first line (index 0).
+        match line_index.checked_sub(1) {
+            Some(prev) => line_index = prev,
+            None => break,
+        }
     }
     rows.reverse();
     rows
