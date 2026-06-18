@@ -1,6 +1,7 @@
 use std::mem;
 
 use regex::Regex;
+use unicode_width::UnicodeWidthChar;
 
 use crate::{
     document::Document,
@@ -141,14 +142,15 @@ impl Pager {
     }
 
     fn status_line(&self) -> String {
-        match &self.mode {
+        let line = match &self.mode {
             PagerMode::View => ":".to_string(),
             PagerMode::SearchInput(search) => format!(
                 "{}{}",
                 search.direction.prompt(),
                 search.editor.input_with_cursor()
             ),
-        }
+        };
+        clip_status_line(&line, self.viewport.size().width())
     }
 
     pub fn snapshot<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
@@ -594,6 +596,29 @@ impl Pager {
     }
 }
 
+/// Clip the status line to `width` display columns, keeping the right side.
+/// The most useful information (the position and percentage) sits on the right,
+/// so when the line is too long we drop characters from the left instead.
+/// A wide character that would straddle the left edge is dropped whole, which may
+/// leave the result one column narrower than `width`.
+fn clip_status_line(line: &str, width: usize) -> String {
+    let total: usize = line.chars().map(|c| c.width().unwrap_or(0)).sum();
+    if total <= width {
+        return line.to_string();
+    }
+    let mut kept = 0;
+    let mut start = line.len();
+    for (i, ch) in line.char_indices().rev() {
+        let w = ch.width().unwrap_or(0);
+        if kept + w > width {
+            break;
+        }
+        kept += w;
+        start = i;
+    }
+    line[start..].to_string()
+}
+
 /// A struct to calculate a proper [`PageUpdate`] for a jump.
 ///
 /// It remembers the viewport edges before a jump and, after the jump, checks whether the old
@@ -687,6 +712,24 @@ mod tests {
         let (snap, _doc) = pager.snapshot();
         snap.search
             .and_then(|s| s.current.as_ref().map(|m| m.line_index()))
+    }
+
+    #[test]
+    fn clip_status_line_keeps_right_side() {
+        // Fits: returned unchanged.
+        assert_eq!(clip_status_line("lines 3-30/500 2%", 20), "lines 3-30/500 2%");
+        // Too long: drop from the left, keep the rightmost columns.
+        assert_eq!(clip_status_line("lines 3-30/500 2%", 14), "es 3-30/500 2%");
+        assert_eq!(clip_status_line("lines 3-30/500 2%", 4), "0 2%");
+    }
+
+    #[test]
+    fn clip_status_line_drops_straddling_wide_char() {
+        // "あ" is 2 columns wide. With width 3, only "x" (right side) plus one
+        // column of budget remain, so the wide char is dropped whole.
+        assert_eq!(clip_status_line("あx", 1), "x");
+        assert_eq!(clip_status_line("あx", 2), "x");
+        assert_eq!(clip_status_line("あx", 3), "あx");
     }
 
     #[test]
