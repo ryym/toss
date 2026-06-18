@@ -50,7 +50,7 @@ line 10
 A 1
 line 2
 line 3
-:
+lines 1-3/10 30%
 -----
 [EVENT]:char:/
 A 1
@@ -68,25 +68,25 @@ line 3
 {rev}{b}A{/rev}{/b} 1
 line 2
 line 3
-:
+lines 1-3/10 30%
 -----
 [EVENT]:char:G
 line 8
 {rev}{line}{b}A{/rev}{/line}{/b} 9
 line 10
-:
+lines 8-10/10 100%
 -----
 [EVENT]:char:n
 line 8
 {rev}{b}A{/rev}{/b} 9
 line 10
-:
+lines 8-10/10 100%
 -----
 [EVENT]:char:n
 {rev}{b}A{/rev}{/b} 1
 line 2
 line 3
-:
+lines 1-3/10 30%
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -126,7 +126,7 @@ A 8
 A 1
 line 2
 line 3
-:
+lines 1-3/8 37%
 -----
 [EVENT]:char:/
 A 1
@@ -144,31 +144,31 @@ line 3
 {rev}{b}A{/rev}{/b} 1
 line 2
 line 3
-:
+lines 1-3/8 37%
 -----
 [EVENT]:char:j
 line 2
 line 3
 line 4
-:
+lines 2-4/8 50%
 -----
 [EVENT]:char:j
 line 3
 line 4
 line 5
-:
+lines 3-5/8 62%
 -----
 [EVENT]:char:j
 line 4
 line 5
 line 6
-:
+lines 4-6/8 75%
 -----
 [EVENT]:char:n
 line 6
 line 7
 {rev}{b}A{/rev}{/b} 8
-:
+lines 6-8/8 100%
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -202,7 +202,7 @@ line 6
 line 1
 A 2
 line 3
-:
+lines 1-3/6 50%
 -----
 [EVENT]:char:/
 line 1
@@ -220,19 +220,19 @@ line 3
 {rev}{b}A{/rev}{/b} 2
 line 3
 {rev}{line}{b}A{/rev}{/line}{/b} 4
-:
+lines 2-4/6 66%
 -----
 [EVENT]:char:k
 line 1
 {rev}{b}A{/rev}{/b} 2
 line 3
-:
+lines 1-3/6 50%
 -----
 [EVENT]:char:n
 {rev}{line}{b}A{/rev}{/line}{/b} 2
 line 3
 {rev}{b}A{/rev}{/b} 4
-:
+lines 2-4/6 66%
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -270,7 +270,7 @@ A 8
 line 1
 line 2
 line 3
-:
+lines 1-3/8 37%
 -----
 [EVENT]:char:/
 line 1
@@ -288,25 +288,25 @@ line 5
 {rev}{b}A{/rev}{/b} 4
 line 5
 {rev}{line}{b}A{/rev}{/line}{/b} 6
-:
+lines 4-6/8 75%
 -----
 [EVENT]:char:G
 {rev}{line}{b}A{/rev}{/line}{/b} 6
 line 7
 {rev}{line}{b}A{/rev}{/line}{/b} 8
-:
+lines 6-8/8 100%
 -----
 [EVENT]:char:N
 {rev}{b}A{/rev}{/b} 6
 line 7
 {rev}{line}{b}A{/rev}{/line}{/b} 8
-:
+lines 6-8/8 100%
 -----
 [EVENT]:char:N
 {rev}{b}A{/rev}{/b} 4
 line 5
 {rev}{line}{b}A{/rev}{/line}{/b} 6
-:
+lines 4-6/8 75%
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -358,7 +358,7 @@ line 8
 A 1
 line 2
 line 3
-:
+lines 1-4/9 44%
 -----
 [EVENT]:char:/
 # Sec
@@ -379,28 +379,28 @@ line 3
 {rev}{b}A{/rev}{/b} 1
 line 2
 line 3
-:
+lines 1-4/9 44%
 -----
 [EVENT]:char:G
 # Sec
 line 6
 {rev}{line}{b}A{/rev}{/line}{/b} 7
 line 8
-:
+lines 6-9/9 100%
 -----
 [EVENT]:char:n
 # Sec
 line 6
 {rev}{b}A{/rev}{/b} 7
 line 8
-:
+lines 6-9/9 100%
 -----
 [EVENT]:char:n
 # Sec
 {rev}{b}A{/rev}{/b} 1
 line 2
 line 3
-:
+lines 1-4/9 44%
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -447,7 +447,7 @@ last-foo
 short
 foo12>
 foo34
-:
+3 66%
 -----
 [EVENT]:char:/
 short
@@ -477,25 +477,25 @@ end
 {rev}{b}foo{/rev}{/b}12{rev}{line}{b}>
 f{/rev}{/line}{/b}{line}{b}oo{/line}{/b}34>
 end
-:
+3 66%
 -----
 [EVENT]:char:j
 f{/rev}{/line}{/b}{line}{b}oo{/line}{/b}34>
 end
 last-
-:
+ 100%
 -----
 [EVENT]:char:j
 end
 last-{rev}{line}{b}>
 f{/rev}{/line}{/b}{line}{b}oo{/line}{/b}
-:
+ 100%
 -----
 [EVENT]:char:n
 end
 last-{rev}{b}>
 foo{/rev}{/b}
-:
+ 100%
 -----
 ";
     assert_eq!(screen.out(), want);

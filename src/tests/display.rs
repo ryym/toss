@@ -22,7 +22,7 @@ line 5
 line 1
 line 2
 line 3
-:
+ 1-3/5 60%
 -----
 [EVENT]:char:q
 ";
@@ -55,7 +55,7 @@ end
 {red}abcde{reset}>
 fgh
 end
-:
+ 100%
 -----
 [EVENT]:char:q
 ";
@@ -83,19 +83,19 @@ line 5
 line 1
 line 2
 line 3
-:
+ 1-3/5 60%
 -----
 [EVENT]:char:j
 line 2
 line 3
 line 4
-:
+ 2-4/5 80%
 -----
 [EVENT]:char:k
 line 1
 line 2
 line 3
-:
+ 1-3/5 60%
 -----
 [EVENT]:char:q
 ";

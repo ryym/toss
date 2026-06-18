@@ -28,7 +28,7 @@ line 3
 line 1
 01234a>
 bcde
-:
+/3 66%
 -----
 [EVENT]:char:/
 line 1
@@ -52,7 +52,7 @@ line 3
 01234{rev}{b}a>
 b{/rev}{/b}cde
 line 3
-:
+3 100%
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -77,7 +77,7 @@ line 3
 line 1
 01234a>
 bcde
-:
+/3 66%
 -----
 [EVENT]:char:/
 line 1
@@ -107,7 +107,7 @@ line 3
 01234a>
 b{rev}{b}cde{/rev}{/b}
 line 3
-:
+3 100%
 -----
 ";
     assert_eq!(screen.out(), want);
@@ -131,7 +131,7 @@ abcde_XX_fghij
     let want = "\
 abcde_XX_f>
 ghij
-:
+1-1/1 100%
 
 -----
 [EVENT]:char:/
@@ -155,7 +155,7 @@ ghij
 [EVENT]:enter
 abcde_{rev}{b}XX{/rev}{/b}_f>
 ghij
-:
+1-1/1 100%
 
 -----
 ";

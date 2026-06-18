@@ -143,7 +143,7 @@ impl Pager {
 
     fn status_line(&self) -> String {
         let line = match &self.mode {
-            PagerMode::View => ":".to_string(),
+            PagerMode::View => self.position_status(),
             PagerMode::SearchInput(search) => format!(
                 "{}{}",
                 search.direction.prompt(),
@@ -151,6 +151,32 @@ impl Pager {
             ),
         };
         clip_status_line(&line, self.viewport.size().width())
+    }
+
+    /// Build the `less`-style position indicator shown in view mode, e.g.
+    /// `src/pager.rs lines 1-31/1084 2%`. The leading name is omitted for sources
+    /// without one (stdin). While input is still streaming in, the total is not
+    /// final, so it is shown as `<count>+` with the percentage omitted.
+    /// The range covers the whole viewport, ignoring header/heading overlays.
+    fn position_status(&self) -> String {
+        let rows = self.viewport.rows();
+        let (top, bottom) = match (rows.first(), rows.last()) {
+            (Some(first), Some(last)) => (first.line_index() + 1, last.line_index() + 1),
+            _ => (0, 0),
+        };
+        let total = self.doc.line_count();
+
+        let prefix = match self.doc.name() {
+            Some(name) => format!("{name} "),
+            None => String::new(),
+        };
+
+        if self.is_loading() {
+            format!("{prefix}lines {top}-{bottom}/{total}+")
+        } else {
+            let percent = (bottom * 100).checked_div(total).unwrap_or(0);
+            format!("{prefix}lines {top}-{bottom}/{total} {percent}%")
+        }
     }
 
     pub fn snapshot<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
@@ -712,6 +738,53 @@ mod tests {
         let (snap, _doc) = pager.snapshot();
         snap.search
             .and_then(|s| s.current.as_ref().map(|m| m.line_index()))
+    }
+
+    fn status_line(pager: &mut Pager) -> String {
+        pager.snapshot().0.status_line
+    }
+
+    #[test]
+    fn status_line_shows_position_for_string_source() {
+        // 5 lines, viewport height 4: content covers lines 1-4 of 5 -> 80%.
+        let mut pager = Pager::new(doc_lines(5), Options::default(), ScreenSize::new(20, 5));
+        assert_eq!(status_line(&mut pager), "lines 1-4/5 80%");
+
+        pager.scroll(1);
+        assert_eq!(status_line(&mut pager), "lines 2-5/5 100%");
+    }
+
+    #[test]
+    fn status_line_marks_loading_then_settles_on_eof() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        send_lines(&tx, 0, 1);
+        doc.pump();
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
+
+        // Still streaming: total is a growing lower bound, no percentage.
+        assert_eq!(status_line(&mut pager), "lines 1-1/1+");
+
+        // Once the rest arrives and EOF is reached, the total is final.
+        send_lines(&tx, 1, 9);
+        tx.send(crate::document::StreamMsg::Eof).unwrap();
+        pager.pump_input();
+        assert_eq!(status_line(&mut pager), "lines 1-4/10 40%");
+    }
+
+    #[test]
+    fn status_line_prefixes_file_name() {
+        let dir = std::path::Path::new(".local/test");
+        std::fs::create_dir_all(dir).unwrap();
+        let path = dir.join("status_line_name.txt");
+        std::fs::write(&path, "a\nb\nc\nd\ne\n").unwrap();
+
+        let doc = Document::from_file(&path).unwrap();
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(80, 5));
+        let name = path.display();
+        assert_eq!(status_line(&mut pager), format!("{name} lines 1-4/5 80%"));
+
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

@@ -29,7 +29,7 @@ HEADER 1
 HEADER 2
 line 3
 line 4
-:
+ 1-4/6 66%
 -----
 [EVENT]:char:q
 ";
@@ -62,21 +62,21 @@ HEADER 1
 HEADER 2
 line 3
 line 4
-:
+ 1-4/6 66%
 -----
 [EVENT]:char:j
 HEADER 1
 HEADER 2
 line 4
 line 5
-:
+ 2-5/6 83%
 -----
 [EVENT]:char:j
 HEADER 1
 HEADER 2
 line 5
 line 6
-:
+3-6/6 100%
 -----
 [EVENT]:char:q
 ";
@@ -109,28 +109,28 @@ HEADER 1
 HEADER 2
 line 3
 line 4
-:
+ 1-4/6 66%
 -----
 [EVENT]:char:j
 HEADER 1
 HEADER 2
 line 4
 line 5
-:
+ 2-5/6 83%
 -----
 [EVENT]:char:j
 HEADER 1
 HEADER 2
 line 5
 line 6
-:
+3-6/6 100%
 -----
 [EVENT]:char:k
 HEADER 1
 HEADER 2
 line 4
 line 5
-:
+ 2-5/6 83%
 -----
 [EVENT]:char:q
 ";
@@ -163,7 +163,7 @@ HEADER 1
 HEADER 2
 line 3
 line 4
-:
+ 1-4/5 80%
 -----
 [EVENT]:char:k
 [EVENT]:char:k
@@ -199,21 +199,21 @@ HEADER
 line 2
 line 3
 line 4
-:
+ 1-4/6 66%
 -----
 [EVENT]:char:G
 HEADER
 line 4
 line 5
 line 6
-:
+3-6/6 100%
 -----
 [EVENT]:char:g
 HEADER
 line 2
 line 3
 line 4
-:
+ 1-4/6 66%
 -----
 [EVENT]:char:q
 ";
@@ -247,14 +247,14 @@ HEADER
 line 2
 line 3
 line 4
-:
+ 1-4/6 66%
 -----
 [EVENT]:char:G
 HEADER
 line 4
 line 5
 line 6
-:
+3-6/6 100%
 -----
 [EVENT]:char:q
 ";
@@ -286,7 +286,7 @@ line 5
 line 1
 line 2
 line 3
-:
+ 1-3/5 60%
 -----
 [EVENT]:char:q
 ";

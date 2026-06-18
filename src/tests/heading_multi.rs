@@ -38,7 +38,7 @@ description A
 line 1
 line 2
 line 3
-:
+lines 1-5/7 71%
 -----
 [EVENT]:char:j
 # Section A
@@ -46,7 +46,7 @@ description A
 line 2
 line 3
 line 4
-:
+lines 2-6/7 85%
 -----
 [EVENT]:char:j
 # Section A
@@ -54,7 +54,7 @@ description A
 line 3
 line 4
 line 5
-:
+lines 3-7/7 100%
 -----
 [EVENT]:char:q
 ";
@@ -103,7 +103,7 @@ description A
 line 1
 line 2
 line 3
-:
+lines 1-5/13 38%
 -----
 [EVENT]:char:j
 # Section A
@@ -111,7 +111,7 @@ description A
 line 2
 line 3
 line 4
-:
+lines 2-6/13 46%
 -----
 [EVENT]:char:j
 # Section A
@@ -119,7 +119,7 @@ description A
 line 3
 line 4
 # Section B
-:
+lines 3-7/13 53%
 -----
 [EVENT]:char:j
 # Section A
@@ -127,7 +127,7 @@ description A
 line 4
 # Section B
 description B
-:
+lines 4-8/13 61%
 -----
 [EVENT]:char:j
 # Section A
@@ -135,7 +135,7 @@ description A
 # Section B
 description B
 line 5
-:
+lines 5-9/13 69%
 -----
 [EVENT]:char:j
 description A
@@ -143,7 +143,7 @@ description A
 description B
 line 5
 line 6
-:
+lines 6-10/13 76%
 -----
 [EVENT]:char:j
 # Section B
@@ -151,7 +151,7 @@ description B
 line 5
 line 6
 line 7
-:
+lines 7-11/13 84%
 -----
 [EVENT]:char:q
 ";
@@ -197,7 +197,7 @@ line 6
 78
 line 1
 line 2
-:
+/10 40%
 -----
 [EVENT]:char:j
 # abcde
@@ -205,7 +205,7 @@ line 2
 78
 line 2
 line 3
-:
+/10 50%
 -----
 [EVENT]:char:j
 # abcde
@@ -213,7 +213,7 @@ line 3
 78
 line 3
 # fghig
-:
+/10 60%
 -----
 [EVENT]:char:j
 # abcde
@@ -221,7 +221,7 @@ line 3
 78
 # fghig
 0123456
-:
+/10 70%
 -----
 [EVENT]:char:j
 0123456>
@@ -229,7 +229,7 @@ line 3
 # fghig
 0123456>
 78
-:
+/10 70%
 -----
 [EVENT]:char:j
 78
@@ -237,7 +237,7 @@ line 3
 0123456>
 78
 line 4
-:
+/10 80%
 -----
 [EVENT]:char:j
 # fghig
@@ -245,7 +245,7 @@ line 4
 78
 line 4
 line 5
-:
+/10 90%
 -----
 [EVENT]:char:q
 ";
@@ -283,7 +283,7 @@ fn pattern_match_within_heading_block() {
 ## 2.0.74
 
 - Added LSP (Language Server Protocol) tool for code intelligence fe
-:
+lines 1-5/7 71%
 -----
 [EVENT]:char:j
 
@@ -291,7 +291,7 @@ fn pattern_match_within_heading_block() {
 
 - Added LSP (Language Server Protocol) tool for code intelligence fe>
 atures like go-to-definition, find references, and hover documentati
-:
+lines 2-5/7 71%
 -----
 [EVENT]:char:j
 ## 2.0.74
@@ -299,7 +299,7 @@ atures like go-to-definition, find references, and hover documentati
 - Added LSP (Language Server Protocol) tool for code intelligence fe>
 atures like go-to-definition, find references, and hover documentati
 on
-:
+lines 3-5/7 71%
 -----
 [EVENT]:char:j
 ## 2.0.74
@@ -307,7 +307,7 @@ on
 - Added LSP (Language Server Protocol) tool for code intelligence fe>
 atures like go-to-definition, find references, and hover documentati
 - Added `/terminal-setup` support for Kitty, Alacritty, Zed, and War
-:
+lines 4-6/7 85%
 -----
 [EVENT]:char:q
 ";
@@ -359,7 +359,7 @@ fn regression_wrapped_heading_switching() {
 
 - Added LSP (Language Server Protocol) tool for code intelligence fe>
 atures like go-to-definition, find references, and hover documentati
-:
+lines 1-5/12 41%
 -----
 [EVENT]:char:j
 
@@ -368,7 +368,7 @@ atures like go-to-definition, find references, and hover documentati
 - Added LSP (Language Server Protocol) tool for code intelligence fe>
 atures like go-to-definition, find references, and hover documentati>
 on
-:
+lines 2-5/12 41%
 -----
 [EVENT]:char:j
 ## 2.0.74
@@ -377,7 +377,7 @@ on
 atures like go-to-definition, find references, and hover documentati>
 on
 - Added `/terminal-setup` support for Kitty
-:
+lines 3-6/12 50%
 -----
 [EVENT]:char:j
 ## 2.0.74
@@ -386,7 +386,7 @@ on
 atures like go-to-definition, find references, and hover documentati>
 on
 
-:
+lines 4-7/12 58%
 -----
 [EVENT]:char:j
 ## 2.0.74
@@ -395,7 +395,7 @@ on
 atures like go-to-definition, find references, and hover documentati>
 on
 ## 2.0.73
-:
+lines 5-8/12 66%
 -----
 [EVENT]:char:j
 
@@ -404,7 +404,7 @@ atures like go-to-definition, find references, and hover documentati>
 on
 ## 2.0.73
 
-:
+lines 5-9/12 75%
 -----
 [EVENT]:char:j
 - Added LSP (Language Server Protocol) tool for code intelligence fe>
@@ -413,7 +413,7 @@ on
 ## 2.0.73
 
 - Added clickable `[Image #N]` links that open attached images in th
-:
+lines 5-10/12 83%
 -----
 [EVENT]:char:j
 atures like go-to-definition, find references, and hover documentati>
@@ -422,7 +422,7 @@ on
 
 - Added clickable `[Image #N]` links that open attached images in th>
 e default viewer
-:
+lines 6-10/12 83%
 -----
 [EVENT]:char:j
 on
@@ -431,7 +431,7 @@ on
 - Added clickable `[Image #N]` links that open attached images in th>
 e default viewer
 - Added alt-y yank-pop to cycle through kill ring history after ctrl
-:
+lines 7-11/12 91%
 -----
 [EVENT]:char:j
 ## 2.0.73
@@ -440,7 +440,7 @@ e default viewer
 e default viewer
 - Added alt-y yank-pop to cycle through kill ring history after ctrl>
 -y yank
-:
+lines 8-11/12 91%
 -----
 [EVENT]:char:q
 ";
@@ -490,63 +490,63 @@ pre 1
 pre 2
 # Section A
 desc 1
-:
+lines 1-4/10 40%
 -----
 [EVENT]:char:j
 pre 2
 # Section A
 desc 1
 desc 2
-:
+lines 2-5/10 50%
 -----
 [EVENT]:char:j
 # Section A
 desc 1
 desc 2
 body 1
-:
+lines 3-6/10 60%
 -----
 [EVENT]:char:j
 # Section A
 desc 1
 desc 2
 body 2
-:
+lines 4-7/10 70%
 -----
 [EVENT]:char:j
 # Section A
 desc 1
 desc 2
 body 3
-:
+lines 5-8/10 80%
 -----
 [EVENT]:char:k
 # Section A
 desc 1
 desc 2
 body 2
-:
+lines 4-7/10 70%
 -----
 [EVENT]:char:k
 # Section A
 desc 1
 desc 2
 body 1
-:
+lines 3-6/10 60%
 -----
 [EVENT]:char:k
 pre 2
 # Section A
 desc 1
 desc 2
-:
+lines 2-5/10 50%
 -----
 [EVENT]:char:k
 pre 1
 pre 2
 # Section A
 desc 1
-:
+lines 1-4/10 40%
 -----
 [EVENT]:char:q
 ";
@@ -598,63 +598,63 @@ pre 1
 pre 2
 # Section A
 desc 1
-:
+lines 1-4/12 33%
 -----
 [EVENT]:char:j
 pre 2
 # Section A
 desc 1
 desc 2
-:
+lines 2-5/12 41%
 -----
 [EVENT]:char:j
 # Section A
 desc 1
 desc 2
 desc 3
-:
+lines 3-6/12 50%
 -----
 [EVENT]:char:j
 # Section A
 desc 1
 desc 2
 desc 4
-:
+lines 4-7/12 58%
 -----
 [EVENT]:char:j
 # Section A
 desc 1
 desc 2
 desc 5
-:
+lines 5-8/12 66%
 -----
 [EVENT]:char:k
 # Section A
 desc 1
 desc 2
 desc 4
-:
+lines 4-7/12 58%
 -----
 [EVENT]:char:k
 # Section A
 desc 1
 desc 2
 desc 3
-:
+lines 3-6/12 50%
 -----
 [EVENT]:char:k
 pre 2
 # Section A
 desc 1
 desc 2
-:
+lines 2-5/12 41%
 -----
 [EVENT]:char:k
 pre 1
 pre 2
 # Section A
 desc 1
-:
+lines 1-4/12 33%
 -----
 [EVENT]:char:q
 ";

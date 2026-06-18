@@ -46,7 +46,7 @@ line0
 line1
 line2
 line3
-:
+lines 1-4/10 40%
 -----
 ";
     assert_eq!(app.into_screen().out(), want);
