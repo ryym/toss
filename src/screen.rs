@@ -15,8 +15,8 @@ pub struct ScreenSize {
 impl ScreenSize {
     pub fn new(width: u16, height: u16) -> Self {
         Self {
-            width: width as usize,
-            height: height as usize,
+            width: usize::from(width),
+            height: usize::from(height),
         }
     }
 

@@ -89,8 +89,8 @@ impl<S: Screen> App<S> {
             Event::Key(key) => Ok(self.handle_key(key)),
             Event::Resize(w, h) => {
                 log::debug!("Resize: {w}x{h}");
-                let update = self.pager.resize(w as usize, h as usize);
-                self.scroll_physics.configure(h as usize);
+                let update = self.pager.resize(usize::from(w), usize::from(h));
+                self.scroll_physics.configure(usize::from(h));
                 Ok(AppAction::Continue(Some(update)))
             }
             _ => Ok(AppAction::Continue(None)),
@@ -185,7 +185,7 @@ impl<S: Screen> App<S> {
             self.apply_scroll(total_rows)
         } else {
             log::debug!("Scroll animation impulse: rows={total_rows}");
-            self.scroll_physics.impulse(total_rows as f64);
+            self.scroll_physics.impulse(f64::from(total_rows));
             None
         }
     }
