@@ -57,6 +57,9 @@ enum Source {
 /// for stdin, all at once for strings).
 pub struct Document {
     source: Source,
+    /// Display name of the document (e.g. the file path). `None` for stdin/string
+    /// sources, which have no name.
+    name: Option<String>,
 }
 
 impl Document {
@@ -70,6 +73,7 @@ impl Document {
                 index,
                 cache: LineCache::new(LINE_CACHE_CAPACITY),
             },
+            name: Some(path.display().to_string()),
         })
     }
 
@@ -88,6 +92,7 @@ impl Document {
                 rx: None,
                 complete: true,
             },
+            name: None,
         }
     }
 
@@ -100,6 +105,7 @@ impl Document {
                 rx: Some(rx),
                 complete: false,
             },
+            name: None,
         }
     }
 
@@ -159,6 +165,12 @@ impl Document {
             }
         }
         result
+    }
+
+    /// Display name of the document (e.g. the file path), or `None` for sources
+    /// without a name such as stdin.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
 
     /// Whether all input has been read.
@@ -420,6 +432,26 @@ mod tests {
         assert_eq!(doc.line(2).unwrap().raw(), "ccc");
         assert_eq!(doc.line(1).unwrap().raw(), "bbb");
         assert!(doc.line(3).is_none());
+
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn stream_and_string_sources_have_no_name() {
+        let (_tx, rx) = mpsc::channel();
+        assert!(Document::from_channel(rx).name().is_none());
+        assert!(Document::from_string("a\nb".into()).name().is_none());
+    }
+
+    #[test]
+    fn from_file_exposes_path_as_name() {
+        let dir = Path::new(".local/test");
+        std::fs::create_dir_all(dir).unwrap();
+        let path = dir.join("test_name.txt");
+        std::fs::write(&path, "aaa\n").unwrap();
+
+        let doc = Document::from_file(&path).unwrap();
+        assert_eq!(doc.name(), Some(path.display().to_string().as_str()));
 
         std::fs::remove_file(&path).unwrap();
     }
