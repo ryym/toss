@@ -18,6 +18,7 @@ See `dev/architecture.md` for the overall design.
 ## Development
 
 - Follow `dev/conventions/rust.md` when writing Rust code.
+- Follow `dev/conventions/comments.md` when writing comments.
 - Follow `dev/conventions/git.md` when using Git.
 
 Whenever you develop, commit changes as you progress.
