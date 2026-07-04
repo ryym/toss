@@ -32,6 +32,14 @@ pub struct PumpResult {
     pub reached_eof: bool,
 }
 
+/// State of a streaming [`Source`].
+enum StreamState {
+    /// More lines may arrive from a background reader.
+    Receiving(Receiver<StreamMsg>),
+    /// All input has been received; no more lines will arrive.
+    Complete,
+}
+
 /// Source of line data.
 enum Source {
     /// Seekable file with lazy line loading.
@@ -41,13 +49,12 @@ enum Source {
         cache: LineCache,
     },
     /// Lines held in memory, optionally arriving incrementally.
-    /// Already-received lines are held in `lines`. When `rx` is `Some`, more may
-    /// arrive from a background reader; when `None`, the content is final (e.g.
-    /// from a string or a fully-read reader).
+    /// Already-received lines are held in `lines`. `state` tracks whether more
+    /// lines may still arrive from a background reader (`Receiving`) or the
+    /// content is final (`Complete`), e.g. for a string-backed document.
     Stream {
         lines: Vec<Line>,
-        rx: Option<Receiver<StreamMsg>>,
-        complete: bool,
+        state: StreamState,
     },
 }
 
@@ -89,8 +96,7 @@ impl Document {
         Self {
             source: Source::Stream {
                 lines,
-                rx: None,
-                complete: true,
+                state: StreamState::Complete,
             },
             name: None,
         }
@@ -102,8 +108,7 @@ impl Document {
         Self {
             source: Source::Stream {
                 lines: Vec::new(),
-                rx: Some(rx),
-                complete: false,
+                state: StreamState::Receiving(rx),
             },
             name: None,
         }
@@ -120,22 +125,11 @@ impl Document {
     /// Drain any pending input into the document without blocking.
     /// For non-streaming sources this is a no-op.
     pub fn pump(&mut self) -> PumpResult {
-        let Source::Stream {
-            lines,
-            rx,
-            complete,
-        } = &mut self.source
-        else {
+        let Source::Stream { lines, state } = &mut self.source else {
             return PumpResult::default();
         };
         let mut result = PumpResult::default();
-        if *complete {
-            return result;
-        }
-        let Some(rx) = rx else {
-            // No channel attached: content is already final.
-            *complete = true;
-            result.reached_eof = true;
+        let StreamState::Receiving(rx) = state else {
             return result;
         };
         loop {
@@ -145,20 +139,20 @@ impl Document {
                     result.grew = true;
                 }
                 Ok(StreamMsg::Eof) => {
-                    *complete = true;
+                    *state = StreamState::Complete;
                     result.reached_eof = true;
                     break;
                 }
                 Ok(StreamMsg::Error(err)) => {
                     log::warn!("Error reading streamed input: {err}");
-                    *complete = true;
+                    *state = StreamState::Complete;
                     result.reached_eof = true;
                     break;
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     // The reader dropped the sender without an explicit Eof.
-                    *complete = true;
+                    *state = StreamState::Complete;
                     result.reached_eof = true;
                     break;
                 }
@@ -178,7 +172,7 @@ impl Document {
     pub fn is_complete(&self) -> bool {
         match &self.source {
             Source::File { .. } => true,
-            Source::Stream { complete, .. } => *complete,
+            Source::Stream { state, .. } => matches!(state, StreamState::Complete),
         }
     }
 
