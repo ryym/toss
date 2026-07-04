@@ -155,6 +155,10 @@ impl Pager {
         &self.mode
     }
 
+    pub fn doc(&self) -> &Document {
+        &self.doc
+    }
+
     pub fn doc_mut(&mut self) -> &mut Document {
         &mut self.doc
     }
@@ -756,9 +760,9 @@ mod tests {
 
         // The reader fails after one line: the status flags the truncation
         // instead of settling on a misleading final percentage.
-        tx.send(crate::document::StreamMsg::Error(
-            std::io::Error::other("boom"),
-        ))
+        tx.send(crate::document::StreamMsg::Error(std::io::Error::other(
+            "boom",
+        )))
         .unwrap();
         pager.pump_input();
         assert_eq!(view_status(&mut pager), "lines 1-1/1 [read error]");

@@ -51,3 +51,42 @@ line3
 ";
     assert_eq!(app.into_screen().out(), want);
 }
+
+/// A read error that arrives mid-stream is surfaced through the running app so
+/// the caller can turn it into a non-zero exit. The already-read lines stay
+/// visible, but the status line flags the truncation.
+#[test]
+fn event_loop_surfaces_read_error_through_the_app() {
+    let (tx, rx) = mpsc::channel();
+    let mut doc = Document::from_channel(rx);
+    send_lines(&tx, 0, 1);
+    doc.pump();
+
+    let pager = Pager::new(doc, Options::default(), ScreenSize::new(40, 5));
+    let screen = MockScreen::new(40, 5);
+    let mut app = App::new(screen, pager).unwrap();
+    app.set_instant_scroll();
+
+    // The reader fails after the first line rather than reaching EOF.
+    send_lines(&tx, 1, 2);
+    tx.send(StreamMsg::Error(std::io::Error::other("boom")))
+        .unwrap();
+
+    app.run().unwrap();
+    // The error reached the document and remains readable after the session, so
+    // run_inner can map it to a non-zero exit.
+    assert_eq!(
+        app.doc().stream_error().map(|e| e.to_string()),
+        Some("boom".into())
+    );
+    // The already-read lines stay visible; the status flags the truncation.
+    let want = "\
+line0
+line1
+line2
+{rev}lines 1-3/3 [read error]{/rev}
+
+-----
+";
+    assert_eq!(app.into_screen().out(), want);
+}

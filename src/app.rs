@@ -51,6 +51,10 @@ impl<S: Screen> App<S> {
         self.renderer.into_screen()
     }
 
+    pub fn doc(&self) -> &crate::document::Document {
+        self.pager.doc()
+    }
+
     pub fn run(&mut self) -> io::Result<()> {
         self.pager.pump_input();
         self.render(PageUpdate::Full)?;

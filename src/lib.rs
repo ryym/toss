@@ -179,6 +179,9 @@ where
                     .map_err(|e| AppError::new(format!("Error writing to stdout: {e}"), 1))?;
             }
         }
+        if let Some(err) = stdin_read_error(pager.doc()) {
+            return Err(err);
+        }
         return Ok(None);
     }
 
@@ -189,5 +192,16 @@ where
     }
     app.run().map_err(|e| AppError::new(format!("{e}"), 1))?;
 
+    if let Some(err) = stdin_read_error(app.doc()) {
+        return Err(err);
+    }
+
     Ok(Some(app.into_screen()))
+}
+
+/// Map an abnormal stream termination to a non-zero-exit [`AppError`].
+/// Returns `None` for a clean EOF and for non-streaming sources.
+fn stdin_read_error(doc: &Document) -> Option<AppError> {
+    doc.stream_error()
+        .map(|e| AppError::new(format!("Error reading stdin: {e}"), 1))
 }
