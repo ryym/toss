@@ -55,6 +55,10 @@ enum Source {
     Stream {
         lines: Vec<Line>,
         state: StreamState,
+        /// Set when the background reader failed. The input is still marked
+        /// complete (no more lines will arrive), but this records that the end
+        /// was abnormal so callers can distinguish truncation from a clean EOF.
+        error: Option<io::Error>,
     },
 }
 
@@ -97,6 +101,7 @@ impl Document {
             source: Source::Stream {
                 lines,
                 state: StreamState::Complete,
+                error: None,
             },
             name: None,
         }
@@ -109,6 +114,7 @@ impl Document {
             source: Source::Stream {
                 lines: Vec::new(),
                 state: StreamState::Receiving(rx),
+                error: None,
             },
             name: None,
         }
@@ -125,7 +131,12 @@ impl Document {
     /// Drain any pending input into the document without blocking.
     /// For non-streaming sources this is a no-op.
     pub fn pump(&mut self) -> PumpResult {
-        let Source::Stream { lines, state } = &mut self.source else {
+        let Source::Stream {
+            lines,
+            state,
+            error,
+        } = &mut self.source
+        else {
             return PumpResult::default();
         };
         let mut result = PumpResult::default();
@@ -145,6 +156,7 @@ impl Document {
                 }
                 Ok(StreamMsg::Error(err)) => {
                     log::warn!("Error reading streamed input: {err}");
+                    *error = Some(err);
                     *state = StreamState::Complete;
                     result.reached_eof = true;
                     break;
@@ -173,6 +185,16 @@ impl Document {
         match &self.source {
             Source::File { .. } => true,
             Source::Stream { state, .. } => matches!(state, StreamState::Complete),
+        }
+    }
+
+    /// The error that ended a streamed input, if it ended abnormally.
+    /// `None` for a clean EOF and for file/in-memory sources. Orthogonal to
+    /// [`Self::is_complete`], which stays `true` once the input has ended either way.
+    pub fn stream_error(&self) -> Option<&io::Error> {
+        match &self.source {
+            Source::Stream { error, .. } => error.as_ref(),
+            Source::File { .. } => None,
         }
     }
 
@@ -313,7 +335,7 @@ mod tests {
     }
 
     #[test]
-    fn stream_error_is_treated_as_eof() {
+    fn stream_error_completes_but_is_retained() {
         let (tx, rx) = mpsc::channel();
         let mut doc = Document::from_channel(rx);
         send_lines(&tx, &[(0, "a")]);
@@ -322,7 +344,24 @@ mod tests {
         assert!(r.grew);
         assert!(r.reached_eof);
         assert_eq!(doc.line_count(), 1);
+        // The input ended, but abnormally: the error is retained so callers can
+        // distinguish truncation from a clean EOF.
         assert!(doc.is_complete());
+        assert_eq!(
+            doc.stream_error().map(|e| e.to_string()),
+            Some("boom".into())
+        );
+    }
+
+    #[test]
+    fn clean_eof_leaves_no_error() {
+        let (tx, rx) = mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        send_lines(&tx, &[(0, "a")]);
+        tx.send(StreamMsg::Eof).unwrap();
+        doc.pump();
+        assert!(doc.is_complete());
+        assert!(doc.stream_error().is_none());
     }
 
     #[test]
