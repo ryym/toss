@@ -219,15 +219,7 @@ fn read_lines<R: BufRead>(mut reader: R, tx: Sender<StreamMsg>) {
                 return;
             }
             Ok(_) => {
-                // Strip the line terminator, handling CRLF like read_line_from_file.
-                if buf.last() == Some(&b'\n') {
-                    buf.pop();
-                }
-                if buf.last() == Some(&b'\r') {
-                    buf.pop();
-                }
-                let raw = String::from_utf8_lossy(&buf).into_owned();
-                let line = Line::new(index, raw);
+                let line = decode_line(&buf, index);
                 index += 1;
                 if tx.send(StreamMsg::Line(line)).is_err() {
                     // The document was dropped; stop reading.
@@ -248,12 +240,20 @@ fn read_line_from_file(file: &mut File, index: usize, start: u64, end: u64) -> i
     let mut buf = vec![0u8; len];
     file.seek(SeekFrom::Start(start))?;
     file.read_exact(&mut buf)?;
-    // Handle possible \r at end (CRLF line endings).
-    if buf.last() == Some(&b'\r') {
-        buf.pop();
+    Ok(decode_line(&buf, index))
+}
+
+/// Decode a raw line byte range into a [`Line`], stripping a trailing line
+/// terminator (`\n`, `\r`, or `\r\n`) and lossily decoding the rest as UTF-8.
+fn decode_line(mut bytes: &[u8], index: usize) -> Line {
+    if bytes.last() == Some(&b'\n') {
+        bytes = &bytes[..bytes.len() - 1];
     }
-    let raw = String::from_utf8_lossy(&buf).into_owned();
-    Ok(Line::new(index, raw))
+    if bytes.last() == Some(&b'\r') {
+        bytes = &bytes[..bytes.len() - 1];
+    }
+    let raw = String::from_utf8_lossy(bytes).into_owned();
+    Line::new(index, raw)
 }
 
 #[cfg(test)]
