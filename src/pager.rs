@@ -50,6 +50,24 @@ pub enum PageUpdate {
     StatusOnly,
 }
 
+impl PageUpdate {
+    /// Combine two page updates into the one with the widest redraw coverage
+    /// (`Full ⊇ Partial ⊇ StatusOnly`).
+    pub fn combine(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Full, _) | (_, Self::Full) => Self::Full,
+            (Self::Partial(a), Self::Partial(b)) => match (a, b) {
+                (Some(_), Some(_)) => Self::Full,
+                (a, b) => Self::Partial(a.or(b)),
+            },
+            (Self::Partial(s), Self::StatusOnly) | (Self::StatusOnly, Self::Partial(s)) => {
+                Self::Partial(s)
+            }
+            (Self::StatusOnly, Self::StatusOnly) => Self::StatusOnly,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PageSnapshot<'pager> {
     pub header: &'pager [Row],
@@ -1146,6 +1164,116 @@ mod tests {
         // The previous match (line 3) is above the page, so it is anchored at the top.
         assert_eq!(line_indices(pager.snapshot().0.content), vec![3, 4, 5, 6]);
         assert_eq!(current_match_line(&mut pager), Some(3));
+    }
+
+    #[test]
+    fn combine_full_dominates_anything() {
+        let scroll = Scroll::new(Direction::Down, 3);
+        assert!(matches!(
+            PageUpdate::Full.combine(PageUpdate::StatusOnly),
+            PageUpdate::Full
+        ));
+        assert!(matches!(
+            PageUpdate::StatusOnly.combine(PageUpdate::Full),
+            PageUpdate::Full
+        ));
+        assert!(matches!(
+            PageUpdate::Full.combine(PageUpdate::Partial(scroll)),
+            PageUpdate::Full
+        ));
+        assert!(matches!(
+            PageUpdate::Partial(scroll).combine(PageUpdate::Full),
+            PageUpdate::Full
+        ));
+        assert!(matches!(
+            PageUpdate::Full.combine(PageUpdate::Full),
+            PageUpdate::Full
+        ));
+    }
+
+    #[test]
+    fn combine_partial_and_status_only_preserves_scroll_payload() {
+        let scroll = Scroll::new(Direction::Up, 2);
+        assert!(matches!(
+            PageUpdate::Partial(scroll).combine(PageUpdate::StatusOnly),
+            PageUpdate::Partial(Some(s)) if s.num_rows.get() == 2 && s.direction == Direction::Up
+        ));
+        assert!(matches!(
+            PageUpdate::StatusOnly.combine(PageUpdate::Partial(scroll)),
+            PageUpdate::Partial(Some(s)) if s.num_rows.get() == 2 && s.direction == Direction::Up
+        ));
+
+        // Also holds when the partial carries no scroll (highlight-only refresh).
+        assert!(matches!(
+            PageUpdate::Partial(None).combine(PageUpdate::StatusOnly),
+            PageUpdate::Partial(None)
+        ));
+        assert!(matches!(
+            PageUpdate::StatusOnly.combine(PageUpdate::Partial(None)),
+            PageUpdate::Partial(None)
+        ));
+    }
+
+    #[test]
+    fn combine_status_only_pair_stays_status_only() {
+        assert!(matches!(
+            PageUpdate::StatusOnly.combine(PageUpdate::StatusOnly),
+            PageUpdate::StatusOnly
+        ));
+    }
+
+    #[test]
+    fn combine_two_no_scroll_partials_stays_partial_none() {
+        assert!(matches!(
+            PageUpdate::Partial(None).combine(PageUpdate::Partial(None)),
+            PageUpdate::Partial(None)
+        ));
+    }
+
+    #[test]
+    fn combine_two_scroll_bearing_partials_falls_back_to_full() {
+        let a = Scroll::new(Direction::Down, 1);
+        let b = Scroll::new(Direction::Up, 2);
+        assert!(matches!(
+            PageUpdate::Partial(a).combine(PageUpdate::Partial(b)),
+            PageUpdate::Full
+        ));
+        // Even identical-looking scrolls fall back to Full (conservative rule).
+        let c = Scroll::new(Direction::Down, 1);
+        let d = Scroll::new(Direction::Down, 1);
+        assert!(matches!(
+            PageUpdate::Partial(c).combine(PageUpdate::Partial(d)),
+            PageUpdate::Full
+        ));
+    }
+
+    #[test]
+    fn combine_scroll_partial_with_no_scroll_partial_keeps_scroll() {
+        let scroll = Scroll::new(Direction::Down, 3);
+        assert!(matches!(
+            PageUpdate::Partial(scroll).combine(PageUpdate::Partial(None)),
+            PageUpdate::Partial(Some(s)) if s.num_rows.get() == 3 && s.direction == Direction::Down
+        ));
+        assert!(matches!(
+            PageUpdate::Partial(None).combine(PageUpdate::Partial(scroll)),
+            PageUpdate::Partial(Some(s)) if s.num_rows.get() == 3 && s.direction == Direction::Down
+        ));
+    }
+
+    #[test]
+    fn combine_is_commutative() {
+        let scroll = Scroll::new(Direction::Down, 4);
+        let pairs = [
+            (PageUpdate::Full, PageUpdate::StatusOnly),
+            (PageUpdate::Partial(scroll), PageUpdate::StatusOnly),
+            (PageUpdate::Partial(None), PageUpdate::Partial(None)),
+            (PageUpdate::StatusOnly, PageUpdate::StatusOnly),
+        ];
+        for (a, b) in pairs {
+            let ab = format!("{:?}", a.combine(b));
+            let ba = format!("{:?}", b.combine(a));
+            assert_eq!(ab, ba, "combine should be commutative for {a:?} / {b:?}");
+        }
     }
 
     #[test]

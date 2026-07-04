@@ -63,7 +63,11 @@ impl<S: Screen> App<S> {
             let input_update = self.pager.pump_input();
             let scroll_anim_update = self.update_scroll_animation();
 
-            if let Some(update) = scroll_anim_update.or(event_update).or(input_update) {
+            let update = [scroll_anim_update, event_update, input_update]
+                .into_iter()
+                .flatten()
+                .reduce(|a, b| a.combine(b));
+            if let Some(update) = update {
                 self.render(update)?;
             }
         }
