@@ -29,8 +29,9 @@ pub(super) fn build(mode: &PagerMode, viewport: &Viewport, doc: &Document) -> St
 /// Build the `less`-style position indicator, e.g. `src/pager.rs lines 1-31/1084 2%`.
 /// The leading name is omitted for sources without one (stdin). While input is still
 /// streaming in, the total is not final, so it is shown as `<count>+` with the
-/// percentage omitted. The range covers the whole viewport, ignoring header/heading
-/// overlays.
+/// percentage omitted. If the input ended with a read error, `[read error]` is shown
+/// in place of the percentage to flag that the content is truncated. The range covers
+/// the whole viewport, ignoring header/heading overlays.
 fn position(viewport: &Viewport, doc: &Document) -> String {
     let rows = viewport.rows();
     let (top, bottom) = match (rows.first(), rows.last()) {
@@ -44,7 +45,11 @@ fn position(viewport: &Viewport, doc: &Document) -> String {
         None => String::new(),
     };
 
-    if doc.is_complete() {
+    if doc.stream_error().is_some() {
+        // The input ended abnormally: the shown lines are a truncation, not the
+        // whole input, so flag it instead of a (misleading) final percentage.
+        format!("{prefix}lines {top}-{bottom}/{total} [read error]")
+    } else if doc.is_complete() {
         let percent = (bottom * 100).checked_div(total).unwrap_or(0);
         format!("{prefix}lines {top}-{bottom}/{total} {percent}%")
     } else {

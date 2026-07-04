@@ -747,6 +747,24 @@ mod tests {
     }
 
     #[test]
+    fn status_line_flags_read_error_instead_of_percentage() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        send_lines(&tx, 0, 1);
+        doc.pump();
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(40, 5));
+
+        // The reader fails after one line: the status flags the truncation
+        // instead of settling on a misleading final percentage.
+        tx.send(crate::document::StreamMsg::Error(
+            std::io::Error::other("boom"),
+        ))
+        .unwrap();
+        pager.pump_input();
+        assert_eq!(view_status(&mut pager), "lines 1-1/1 [read error]");
+    }
+
+    #[test]
     fn status_line_prefixes_file_name() {
         let dir = std::path::Path::new(".local/test");
         std::fs::create_dir_all(dir).unwrap();
