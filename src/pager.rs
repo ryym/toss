@@ -223,18 +223,13 @@ impl Pager {
 
         // Fill the first screen from the top while it is not yet full.
         if result.grew && self.viewport.rows().len() < self.viewport.size().height() {
-            let size = *self.viewport.size();
-            self.header.resize(&mut self.doc, &size);
-            self.heading
-                .resize(&mut self.doc, &size, self.header.height());
-            // Resolve the heading for the current top line, which refill preserves.
+            self.relayout_page(*self.viewport.size());
             let top_line = self
                 .viewport
                 .rows()
                 .first()
                 .map_or(0, |row| row.line_index());
             self.heading.resolve(&mut self.doc, top_line);
-            self.viewport.refill(&mut self.doc);
             return Some(PageUpdate::Full);
         }
 
@@ -255,11 +250,18 @@ impl Pager {
     /// Resize the page to fit the new dimensions.
     pub fn resize(&mut self, screen_width: usize, screen_height: usize) -> PageUpdate {
         let size = ViewportSize::new(screen_width, screen_height);
+        self.relayout_page(size);
+        PageUpdate::Full
+    }
+
+    /// Rebuild the header, heading, and viewport for `size`, keeping the
+    /// current top anchor. Used both for terminal resizes and for filling in
+    /// the first screen as streamed input arrives.
+    fn relayout_page(&mut self, size: ViewportSize) {
         self.header.resize(&mut self.doc, &size);
         self.heading
             .resize(&mut self.doc, &size, self.header.height());
         self.viewport.resize(&mut self.doc, size);
-        PageUpdate::Full
     }
 
     /// Move the page so that the specified line comes to the top.

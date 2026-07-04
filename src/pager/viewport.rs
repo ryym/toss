@@ -44,24 +44,16 @@ impl Viewport {
     }
 
     /// Rebuild the rows from the current top, extending downward up to the full
-    /// height. The top row is preserved, so a scrolled position is never reset;
-    /// this only fills the space below as more lines become available (e.g. while
-    /// the first screen fills in from streamed input).
-    pub fn refill(&mut self, doc: &mut Document) {
+    /// height for the given `size`. The top row is preserved, so a scrolled
+    /// position is never reset; this only fills the space below as more lines
+    /// become available (e.g. while the first screen fills in from streamed
+    /// input) or the size changes (e.g. on a terminal resize).
+    pub fn resize(&mut self, doc: &mut Document, size: ViewportSize) {
         let top = self
             .rows
             .first()
             .map_or((0, 0), |row| (row.line_index(), row.wrap_index()));
-        self.rows = rows::list_forward(doc, self.size.width(), top, self.size.height());
-    }
-
-    pub fn resize(&mut self, doc: &mut Document, size: ViewportSize) {
-        self.rows = rows::list_forward(
-            doc,
-            size.width(),
-            (self.rows[0].line_index(), self.rows[0].wrap_index()),
-            size.height(),
-        );
+        self.rows = rows::list_forward(doc, size.width(), top, size.height());
         self.size = size;
     }
 
@@ -263,5 +255,15 @@ mod tests {
         v.resize(&mut doc, size(10, 4));
         assert_eq!(v.rows()[0].line_index(), 2);
         assert_eq!(v.rows().len(), 4);
+    }
+
+    #[test]
+    fn resize_does_not_panic_when_rows_are_empty() {
+        let mut doc = Document::from_string("".into());
+        let mut v = Viewport::new(&mut doc, size(10, 3));
+        assert!(v.rows().is_empty());
+
+        v.resize(&mut doc, size(10, 4));
+        assert!(v.rows().is_empty());
     }
 }
