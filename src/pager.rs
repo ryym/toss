@@ -637,9 +637,12 @@ impl JumpDistance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::document::StreamMsg;
+    use crate::line::Line;
     use crate::options::{HeadingOptions, Options};
     use crate::pager::status_line::{STATUS_REVERSE_OFF, STATUS_REVERSE_ON};
     use regex::Regex;
+    use std::sync::mpsc;
 
     fn doc_lines(n: usize) -> Document {
         let s = (0..n)
@@ -649,14 +652,10 @@ mod tests {
         Document::from_string(s)
     }
 
-    fn send_lines(
-        tx: &std::sync::mpsc::Sender<crate::document::StreamMsg>,
-        start: usize,
-        count: usize,
-    ) {
+    fn send_lines(tx: &mpsc::Sender<StreamMsg>, start: usize, count: usize) {
         for i in 0..count {
-            let line = crate::line::Line::new(start + i, format!("line{}", start + i));
-            tx.send(crate::document::StreamMsg::Line(line)).unwrap();
+            let line = Line::new(start + i, format!("line{}", start + i));
+            tx.send(StreamMsg::Line(line)).unwrap();
         }
     }
 
