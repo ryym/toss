@@ -116,7 +116,7 @@ impl Document {
 
     /// Create a streaming document that reads from `reader` on a background
     /// thread. Returns immediately; lines become available via [`Self::pump`].
-    pub fn from_stdin<R: BufRead + Send + 'static>(reader: R) -> Self {
+    pub fn from_reader<R: BufRead + Send + 'static>(reader: R) -> Self {
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || read_lines(reader, tx));
         Self::from_channel(rx)
@@ -353,8 +353,8 @@ mod tests {
     }
 
     #[test]
-    fn from_stdin_reads_all_lines() {
-        let mut doc = Document::from_stdin(io::Cursor::new(b"aaa\nbbb\nccc\n".to_vec()));
+    fn from_reader_reads_all_lines() {
+        let mut doc = Document::from_reader(io::Cursor::new(b"aaa\nbbb\nccc\n".to_vec()));
         pump_until_complete(&mut doc);
         assert_eq!(doc.line_count(), 3);
         assert_eq!(doc.line(0).unwrap().raw(), "aaa");
@@ -364,8 +364,8 @@ mod tests {
     }
 
     #[test]
-    fn from_stdin_handles_no_trailing_newline_and_crlf() {
-        let mut doc = Document::from_stdin(io::Cursor::new(b"hello\r\nworld".to_vec()));
+    fn from_reader_handles_no_trailing_newline_and_crlf() {
+        let mut doc = Document::from_reader(io::Cursor::new(b"hello\r\nworld".to_vec()));
         pump_until_complete(&mut doc);
         assert_eq!(doc.line_count(), 2);
         assert_eq!(doc.line(0).unwrap().raw(), "hello");

@@ -151,7 +151,7 @@ where
             .map_err(|e| AppError::new(format!("Error reading {}: {e}", path.display()), 1))?
     } else if !cfg.stdin_is_terminal {
         log::debug!("Read from stdin");
-        Document::from_stdin(stdin)
+        Document::from_reader(stdin)
     } else {
         return Err(AppError::new("Usage: toss <file> OR command | toss", 1));
     };
