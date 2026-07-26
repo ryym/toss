@@ -1,3 +1,4 @@
+// See README.md in this directory for the MockScreen-based test approach.
 mod display;
 mod header;
 mod heading;
