@@ -503,18 +503,17 @@ impl Pager {
     /// Does nothing and keeps the search input mode active if the current raw input
     /// is not a valid regex, so the user can keep editing it.
     pub fn submit_search(&mut self) -> PageUpdate {
-        let PagerMode::SearchInput(mode) = &self.mode else {
+        let PagerMode::SearchInput(mode) = &mut self.mode else {
             return PageUpdate::StatusOnly;
         };
         if !mode.draft.is_submittable() {
             return PageUpdate::StatusOnly;
         }
-        if let PagerMode::SearchInput(mode) = mem::take(&mut self.mode)
-            && let SearchDraft::Valid(draft) = mode.draft
-        {
+        if let SearchDraft::Valid(draft) = mem::replace(&mut mode.draft, SearchDraft::Empty) {
             log::debug!("Submit search: query={:?}", draft.query.as_str());
             self.search = Some(draft);
         }
+        self.mode = PagerMode::View;
         PageUpdate::StatusOnly
     }
 
