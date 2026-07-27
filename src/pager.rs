@@ -100,11 +100,39 @@ pub struct SearchInputMode {
     editor: LineEditor,
     /// Top line where search started, for searching and restoring on cancel.
     start_line_index: usize,
-    /// Live search state before finalizing a search query. Keeps the last valid
-    /// state while the raw input is an invalid non-empty regex.
-    draft: Option<SearchState>,
-    /// Whether the raw input is submittable: either empty or a valid regex.
-    is_query_valid: bool,
+    draft: SearchDraft,
+}
+
+/// Live search state derived from the raw search input, before finalizing a query.
+enum SearchDraft {
+    /// Input is empty; there is no draft state to preview.
+    Empty,
+    /// Input compiled; the state matches the current input.
+    Valid(SearchState),
+    /// Input does not compile; preview stays frozen at the last valid state, if any.
+    Invalid(Option<SearchState>),
+}
+
+impl SearchDraft {
+    fn is_submittable(&self) -> bool {
+        !matches!(self, SearchDraft::Invalid(_))
+    }
+
+    fn preview(&self) -> Option<&SearchState> {
+        match self {
+            SearchDraft::Valid(s) => Some(s),
+            SearchDraft::Invalid(Some(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn into_preview(self) -> Option<SearchState> {
+        match self {
+            SearchDraft::Valid(s) => Some(s),
+            SearchDraft::Invalid(s) => s,
+            SearchDraft::Empty => None,
+        }
+    }
 }
 
 /// Centrally manages the pagination state.
@@ -168,7 +196,7 @@ impl Pager {
 
     pub fn snapshot<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
         let search = match &self.mode {
-            PagerMode::SearchInput(search) => search.draft.as_ref().or(self.search.as_ref()),
+            PagerMode::SearchInput(search) => search.draft.preview().or(self.search.as_ref()),
             _ => self.search.as_ref(),
         };
         let snapshot = PageSnapshot {
@@ -466,8 +494,7 @@ impl Pager {
             direction,
             editor,
             start_line_index,
-            draft: None,
-            is_query_valid: true,
+            draft: SearchDraft::Empty,
         });
         PageUpdate::StatusOnly
     }
@@ -479,11 +506,11 @@ impl Pager {
         let PagerMode::SearchInput(mode) = &self.mode else {
             return PageUpdate::StatusOnly;
         };
-        if !mode.is_query_valid {
+        if !mode.draft.is_submittable() {
             return PageUpdate::StatusOnly;
         }
-        if let PagerMode::SearchInput(mut mode) = mem::take(&mut self.mode)
-            && let Some(draft) = mode.draft.take()
+        if let PagerMode::SearchInput(mode) = mem::take(&mut self.mode)
+            && let SearchDraft::Valid(draft) = mode.draft
         {
             log::debug!("Submit search: query={:?}", draft.query.as_str());
             self.search = Some(draft);
@@ -511,10 +538,7 @@ impl Pager {
         let input = mode.editor.input();
 
         if input.is_empty() {
-            mode.draft = None;
-            // An empty input is a valid "no query" state, not an invalid regex,
-            // so Enter can still submit it (committing nothing).
-            mode.is_query_valid = true;
+            mode.draft = SearchDraft::Empty;
             return PageUpdate::Partial(None);
         }
 
@@ -522,10 +546,10 @@ impl Pager {
         // a syntactically invalid regex. Freeze the preview at its last valid state
         // instead of clearing it, so the search results don't flicker away.
         let Ok(re) = Regex::new(&input) else {
-            mode.is_query_valid = false;
+            let frozen = mem::replace(&mut mode.draft, SearchDraft::Empty).into_preview();
+            mode.draft = SearchDraft::Invalid(frozen);
             return PageUpdate::StatusOnly;
         };
-        mode.is_query_valid = true;
 
         let matched = search::search_document(
             &mut self.doc,
@@ -536,7 +560,7 @@ impl Pager {
         log::debug!("Search preview: query={input:?}, result={matched:?}");
 
         let current_line_index = matched.as_ref().map(|m| m.line_index());
-        mode.draft = Some(SearchState {
+        mode.draft = SearchDraft::Valid(SearchState {
             query: re,
             direction: mode.direction,
             current: matched,
