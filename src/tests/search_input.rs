@@ -1,7 +1,7 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test_screen};
+use super::{TestCase, backspace, enter, esc, key, run_test_screen};
 
 fn left() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))
@@ -9,18 +9,6 @@ fn left() -> Event {
 
 fn right() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))
-}
-
-fn esc() -> Event {
-    Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
-}
-
-fn enter() -> Event {
-    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-}
-
-fn backspace() -> Event {
-    Event::Key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE))
 }
 
 // Typing / enters search mode and shows "/" on the status line.

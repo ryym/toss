@@ -1,19 +1,6 @@
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test_screen};
-
-fn esc() -> Event {
-    Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
-}
-
-fn enter() -> Event {
-    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-}
-
-fn backspace() -> Event {
-    Event::Key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE))
-}
+use super::{TestCase, backspace, enter, esc, key, run_test_screen};
 
 // Metacharacters in the input are interpreted as regex syntax, not literal text.
 #[test]

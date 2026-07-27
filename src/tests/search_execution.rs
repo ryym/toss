@@ -1,11 +1,6 @@
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test_screen};
-
-fn enter() -> Event {
-    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-}
+use super::{TestCase, enter, key, run_test_screen};
 
 // Forward search: /foo + Enter jumps to the line containing "foo"
 // and highlights the match with reverse video.

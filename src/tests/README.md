@@ -9,8 +9,8 @@ checks what a user would actually see and do.
 
 Build a `TestCase` (content, screen size, key `events`) and pass it to
 `run_test_screen`, then compare `screen.out()` against an expected string.
-See `mod.rs` for `TestCase`/`run_test_screen`/`key`, and `search_incremental.rs`
-for extra event helpers (`esc`, `enter`, `backspace`, ...).
+See `mod.rs` for `TestCase`/`run_test_screen` and shared event helpers
+(`key`, `esc`, `enter`, `backspace`).
 
 `streaming.rs` bypasses `run_test_screen` and drives `App`/`MockScreen`
 directly, since it needs to push lines through a channel between app

@@ -1,12 +1,7 @@
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test_screen};
+use super::{TestCase, enter, key, run_test_screen};
 use crate::options::{HeadingOptions, Options};
-
-fn enter() -> Event {
-    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-}
 
 fn heading_opts(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
     Some(HeadingOptions {

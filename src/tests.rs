@@ -29,6 +29,18 @@ pub fn key(ch: char) -> Event {
     Event::Key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE))
 }
 
+pub fn esc() -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+}
+
+pub fn enter() -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+}
+
+pub fn backspace() -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE))
+}
+
 pub struct TestCase {
     pub content: &'static str,
     pub screen_width: u16,
