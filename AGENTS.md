@@ -28,8 +28,10 @@ When you finish work, all your changes must be committed.
 
 ```bash
 cargo check  # Run typecheck
-cargo test   # Run tests
 cargo fmt    # Run formatter
+
+# Use this for testing instead of `cargo test`
+scripts/test
 
 # Run linter with auto fix
 cargo clippy --fix --allow dirty

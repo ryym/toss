@@ -8,7 +8,7 @@ pre-commit:
     - run: cargo clippy -- --deny warnings --allow unused
       glob:
         - "*.rs"
-    - run: cargo test --quiet
+    - run: scripts/test --quiet
       glob:
         - "src/*"
         - "Cargo.toml"

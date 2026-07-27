@@ -37,7 +37,7 @@ Within a snapshot row:
   needs a style not listed here.
 
 When updating expected output after an intentional behavior change, run
-`cargo test` and diff the `pretty_assertions` output rather than
+`scripts/test` and diff the `pretty_assertions` output rather than
 hand-editing the expected string — it's easy to get the escape labels or
 `-----` separators subtly wrong by hand.
 

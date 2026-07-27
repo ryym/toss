@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# A test script that forcefully cancel the test on timeout.
+
+max_duration=5
+timeout $max_duration cargo test "$@"
+exit_code=$?
+
+if [ $exit_code -eq 124 ]; then
+    echo "TIMEOUT: cargo test did not complete in $max_duration seconds" >&2
+fi
+exit $exit_code
