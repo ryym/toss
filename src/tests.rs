@@ -10,6 +10,7 @@ mod search_execution;
 mod search_incremental;
 mod search_input;
 mod search_reanchor;
+mod search_regex;
 mod search_with_header;
 mod search_wrap;
 mod streaming;

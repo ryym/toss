@@ -100,8 +100,11 @@ pub struct SearchInputMode {
     editor: LineEditor,
     /// Top line where search started, for searching and restoring on cancel.
     start_line_index: usize,
-    /// Live search state before finalizing a search query.
+    /// Live search state before finalizing a search query. Keeps the last valid
+    /// state while the raw input is an invalid non-empty regex.
     draft: Option<SearchState>,
+    /// Whether the raw input is submittable: either empty or a valid regex.
+    is_query_valid: bool,
 }
 
 /// Centrally manages the pagination state.
@@ -464,12 +467,21 @@ impl Pager {
             editor,
             start_line_index,
             draft: None,
+            is_query_valid: true,
         });
         PageUpdate::StatusOnly
     }
 
     /// Commit the current search input.
+    /// Does nothing and keeps the search input mode active if the current raw input
+    /// is not a valid regex, so the user can keep editing it.
     pub fn submit_search(&mut self) -> PageUpdate {
+        let PagerMode::SearchInput(mode) = &self.mode else {
+            return PageUpdate::StatusOnly;
+        };
+        if !mode.is_query_valid {
+            return PageUpdate::StatusOnly;
+        }
         if let PagerMode::SearchInput(mut mode) = mem::take(&mut self.mode)
             && let Some(draft) = mode.draft.take()
         {
@@ -500,10 +512,21 @@ impl Pager {
 
         if input.is_empty() {
             mode.draft = None;
+            // An empty input is a valid "no query" state, not an invalid regex,
+            // so Enter can still submit it (committing nothing).
+            mode.is_query_valid = true;
             return PageUpdate::Partial(None);
         }
 
-        let re = Regex::new(&regex::escape(&input)).unwrap();
+        // While the input is mid-edit (e.g. right after typing `(` or `[`), it is often
+        // a syntactically invalid regex. Freeze the preview at its last valid state
+        // instead of clearing it, so the search results don't flicker away.
+        let Ok(re) = Regex::new(&input) else {
+            mode.is_query_valid = false;
+            return PageUpdate::StatusOnly;
+        };
+        mode.is_query_valid = true;
+
         let matched = search::search_document(
             &mut self.doc,
             &re,
