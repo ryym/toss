@@ -30,7 +30,7 @@ line 6
         screen_width: 20,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('f'), key('o'), key('o'), esc()],
+        events: vec![key('/'), key('f'), key('o'), key('o'), esc(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -69,6 +69,7 @@ line 2
 foo bar
 {rev}lines 1-3/6 50%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -97,6 +98,7 @@ line 6
             key('e'),
             key('t'),
             enter(),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -154,6 +156,7 @@ line 4
 line 5
 {rev}lines 3-5/6 83%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -179,6 +182,7 @@ foo 3
             key('o'),
             enter(),
             key('n'), // next: foo 2
+            key('q'),
         ],
         ..Default::default()
     });
@@ -224,6 +228,7 @@ bar
 {rev}{b}foo{/rev}{/b} 2
 {rev}lines 1-3/5 60%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -251,6 +256,7 @@ target here
             key('e'),
             key('t'),
             esc(),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -309,6 +315,7 @@ line 2
 line 3
 {rev}lines 1-3/5 60%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -337,6 +344,7 @@ target here
             key('e'),
             key('t'),
             esc(),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -401,6 +409,7 @@ line 3
 line 4
 {rev}lines 2-4/5 80%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -418,7 +427,7 @@ target here
         screen_width: 20,
         screen_height: 4,
         content,
-        events: vec![key('/'), backspace()],
+        events: vec![key('/'), backspace(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -439,6 +448,7 @@ line 2
 line 3
 {rev}lines 1-3/4 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -463,6 +473,7 @@ line 4
             key('c'),
             backspace(), // "ab" again
             esc(),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -508,6 +519,7 @@ abc there
 line 3
 {rev}lines 1-3/4 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -533,6 +545,7 @@ line 4
             enter(), // commit "foo"
             key('/'),
             enter(), // empty search, should keep previous "foo" highlight
+            key('q'),
         ],
         ..Default::default()
     });
@@ -584,6 +597,7 @@ line 2
 line 3
 {rev}lines 1-3/4 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -612,6 +626,7 @@ line 4
             key('a'),
             key('r'),
             esc(), // cancel "bar" search
+            key('q'),
         ],
         ..Default::default()
     });
@@ -682,6 +697,7 @@ bar there
 line 3
 {rev}lines 1-3/4 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -699,7 +715,7 @@ line 4
         screen_width: 20,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('f'), key('f'), key('f'), esc()],
+        events: vec![key('/'), key('f'), key('f'), key('f'), esc(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -738,6 +754,7 @@ line 2
 line 3
 {rev}lines 1-3/4 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -769,6 +786,7 @@ line 4
             key('a'),
             key('r'),
             esc(),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -840,6 +858,7 @@ bar aaa {rev}{b}foo{/rev}{/b}
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} ccc
 {rev}lines 1-3/4 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -861,7 +880,7 @@ line 6
         screen_width: 30,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('f'), key('o'), key('o'), enter()],
+        events: vec![key('/'), key('f'), key('o'), key('o'), enter(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -900,6 +919,7 @@ foo third
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} third
 {rev}lines 1-3/6 50%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }

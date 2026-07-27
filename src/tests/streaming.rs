@@ -2,6 +2,7 @@ use std::sync::mpsc;
 
 use pretty_assertions::assert_eq;
 
+use super::key;
 use super::mock_screen::MockScreen;
 use crate::app::App;
 use crate::document::{Document, StreamMsg};
@@ -30,7 +31,8 @@ fn event_loop_renders_input_that_arrives_after_start() {
 
     // viewport height = screen_height - 1 = 4.
     let pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
-    let screen = MockScreen::new(20, 5);
+    let mut screen = MockScreen::new(20, 5);
+    screen.set_events(vec![key('q')]);
     let mut app = App::new(screen, pager).unwrap();
     app.set_instant_scroll();
 
@@ -48,6 +50,7 @@ line2
 line3
 {rev}lines 1-4/10 40%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(app.into_screen().out(), want);
 }
@@ -63,7 +66,8 @@ fn event_loop_surfaces_read_error_through_the_app() {
     doc.pump();
 
     let pager = Pager::new(doc, Options::default(), ScreenSize::new(40, 5));
-    let screen = MockScreen::new(40, 5);
+    let mut screen = MockScreen::new(40, 5);
+    screen.set_events(vec![key('q')]);
     let mut app = App::new(screen, pager).unwrap();
     app.set_instant_scroll();
 
@@ -87,6 +91,7 @@ line2
 {rev}lines 1-3/3 [read error]{/rev}
 
 -----
+[EVENT]:char:q
 ";
     assert_eq!(app.into_screen().out(), want);
 }

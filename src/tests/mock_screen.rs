@@ -1,6 +1,6 @@
 use std::io;
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent};
 use unicode_width::UnicodeWidthChar;
 
 use crate::ansi;
@@ -157,10 +157,7 @@ impl Screen for MockScreen {
             }
             Ok(Some(event))
         } else {
-            Ok(Some(Event::Key(KeyEvent::new(
-                KeyCode::Char('q'),
-                KeyModifiers::NONE,
-            ))))
+            panic!("MockScreen ran out of scripted events without the app quitting");
         }
     }
 

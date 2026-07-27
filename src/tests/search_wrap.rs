@@ -21,7 +21,7 @@ line 3
         screen_width: 6,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('a'), key('b'), enter()],
+        events: vec![key('/'), key('a'), key('b'), enter(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -54,6 +54,7 @@ b{/rev}{/b}cde
 line 3
 {rev}3 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -70,7 +71,7 @@ line 3
         screen_width: 6,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('c'), key('d'), key('e'), enter()],
+        events: vec![key('/'), key('c'), key('d'), key('e'), enter(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -109,6 +110,7 @@ b{rev}{b}cde{/rev}{/b}
 line 3
 {rev}3 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -125,7 +127,7 @@ abcde_XX_fghij
         screen_width: 10,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('X'), key('X'), enter()],
+        events: vec![key('/'), key('X'), key('X'), enter(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -158,6 +160,7 @@ ghij
 {rev}1-1/1 100%{/rev}
 
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }

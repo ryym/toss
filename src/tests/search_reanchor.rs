@@ -43,6 +43,7 @@ line 10
             key('G'), // Jump to end — cursor ("A 1") goes off-screen.
             key('n'), // Re-anchors to "A 9" (first visible match). No scroll.
             key('n'), // Jumps from "A 9" forward, wrapping to "A 1".
+            key('q'),
         ],
         ..Default::default()
     });
@@ -88,6 +89,7 @@ line 2
 line 3
 {rev}lines 1-3/10 30%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -119,6 +121,7 @@ A 8
             key('j'),
             key('j'),
             key('n'), // Searches forward from viewport top, finds "A 8".
+            key('q'),
         ],
         ..Default::default()
     });
@@ -170,6 +173,7 @@ line 7
 {rev}{b}A{/rev}{/b} 8
 {rev}lines 6-8/8 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -195,6 +199,7 @@ line 6
             enter(),
             key('k'), // Scroll up 1. Cursor ("A 2") is still visible.
             key('n'), // "A 4" is just below the page, so scroll it up to the bottom.
+            key('q'),
         ],
         ..Default::default()
     });
@@ -234,6 +239,7 @@ line 3
 {rev}{b}A{/rev}{/b} 4
 {rev}lines 2-4/6 66%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -262,6 +268,7 @@ A 8
             key('G'), // Jump to end — cursor ("A 4") goes off-screen.
             key('N'), // Re-anchors to first visible match.
             key('N'), // Jumps backward from the re-anchored position.
+            key('q'),
         ],
         ..Default::default()
     });
@@ -308,6 +315,7 @@ line 5
 {rev}{line}{b}A{/rev}{/line}{/b} 6
 {rev}lines 4-6/8 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -349,6 +357,7 @@ line 8
             key('n'),
             // n: jump from "A 7" forward, wrapping to "A 1".
             key('n'),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -402,6 +411,7 @@ line 2
 line 3
 {rev}lines 1-4/9 44%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -440,6 +450,7 @@ last-foo
             // Wrap row 2 of line 1 ("end") has no match.
             // Line 2 wrap row 1 ("foo") has the match → re-anchor there.
             key('n'),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -497,6 +508,7 @@ last-{rev}{b}>
 foo{/rev}{/b}
 {rev} 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }

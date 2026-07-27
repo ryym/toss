@@ -22,7 +22,7 @@ line 5
         screen_width: 20,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('f'), key('o'), key('o'), enter()],
+        events: vec![key('/'), key('f'), key('o'), key('o'), enter(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -61,6 +61,7 @@ target {rev}{b}foo{/rev}{/b} here
 line 5
 {rev}lines 3-5/5 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -87,6 +88,7 @@ line 5
             key('o'),
             key('p'),
             enter(),
+            key('q'),
         ],
         ..Default::default()
     })
@@ -133,6 +135,7 @@ line 2
 line 3
 {rev}lines 1-3/5 60%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(out, want);
 }
@@ -160,6 +163,7 @@ foo 3
             key('o'),
             enter(),  // finds "foo 1" (line 0)
             key('n'), // next: "foo 2" (line 2), already in page so no scroll
+            key('q'),
         ],
         ..Default::default()
     });
@@ -205,6 +209,7 @@ bar
 {rev}{b}foo{/rev}{/b} 2
 {rev}lines 1-3/5 60%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -230,6 +235,7 @@ foo 3
             key('o'),
             enter(),  // finds "foo 1" (line 0)
             key('N'), // previous (backward): wraps to "foo 3" (line 4)
+            key('q'),
         ],
         ..Default::default()
     });
@@ -275,6 +281,7 @@ baz
 {rev}{b}foo{/rev}{/b} 3
 {rev}lines 3-5/5 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -292,7 +299,7 @@ line 4
         screen_width: 20,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('z'), key('z'), key('z'), enter()],
+        events: vec![key('/'), key('z'), key('z'), key('z'), enter(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -331,6 +338,7 @@ line 2
 line 3
 {rev}lines 1-3/4 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -359,6 +367,7 @@ line 5
             key('e'),
             key('t'),
             enter(), // should wrap around to "target here" at line 0
+            key('q'),
         ],
         ..Default::default()
     });
@@ -422,6 +431,7 @@ line 2
 line 3
 {rev}lines 1-3/5 60%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -447,6 +457,7 @@ line 4
             key('g'),
             key('o'),
             enter(),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -501,6 +512,7 @@ line 3
 line 4
 {rev}lines 2-4/4 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -537,6 +549,7 @@ line 6
             // Navigate and verify new highlights.
             key('j'),
             key('k'),
+            key('q'),
         ],
         ..Default::default()
     })
@@ -619,6 +632,7 @@ li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 4
 li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 5
 {rev}lines 3-5/6 83%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(out, want);
 }
@@ -638,7 +652,7 @@ line 4
         screen_width: 30,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('f'), key('o'), key('o'), enter()],
+        events: vec![key('/'), key('f'), key('o'), key('o'), enter(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -677,6 +691,7 @@ line 2
 line 3
 {rev}lines 1-3/4 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -711,6 +726,7 @@ line 6
             key('e'),
             key('t'),
             enter(),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -779,6 +795,7 @@ line 4
 line 6
 {rev}lines 3-6/6 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -813,6 +830,7 @@ line 10
             key('k'),
             // Scroll down works now.
             key('j'),
+            key('q'),
         ],
         ..Default::default()
     })
@@ -860,6 +878,7 @@ line {rev}{b}9{/rev}{/b}
 line 10
 {rev}10/10 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(out, want);
 }
@@ -891,6 +910,7 @@ line 10
             key('k'),
             key('k'),
             key('j'),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -943,6 +963,7 @@ line 8
 line {rev}{b}9{/rev}{/b}
 {rev}6-9/10 90%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }

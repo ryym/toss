@@ -35,7 +35,7 @@ line 5
             header: 1,
             ..Default::default()
         },
-        events: vec![key('/'), key('3'), enter()],
+        events: vec![key('/'), key('3'), enter(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -62,6 +62,7 @@ line {rev}{b}3{/rev}{/b}
 line 4
 {rev}lines 3-5/6 83%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -98,6 +99,7 @@ line 6
             key('n'),
             key('n'),
             key('N'),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -150,6 +152,7 @@ line 4
 line 5
 {rev}lines 4-7/9 77%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -175,7 +178,7 @@ line 6
             heading: heading_opts("^# ", 1),
             ..Default::default()
         },
-        events: vec![key('/'), key('3'), enter()],
+        events: vec![key('/'), key('3'), enter(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -202,6 +205,7 @@ line {rev}{b}3{/rev}{/b}
 line 4
 {rev}lines 3-5/7 71%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -242,6 +246,7 @@ line 6
             key('n'),
             // Jump back
             key('N'),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -301,6 +306,7 @@ line 4
 # Section 2
 {rev}lines 5-8/11 72%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -338,6 +344,7 @@ fn search_with_heading_jump_back_one_line() {
             // Jump back
             key('N'),
             key('N'),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -395,6 +402,7 @@ fn search_with_heading_jump_back_one_line() {
 {rev}{line}{b}1{/rev}{/line}{/b}{line}{b}3{/line}{/b}1
 {rev}lines 4-6/9 66%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -436,6 +444,7 @@ line 8
             // Jump
             key('n'),
             key('n'),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -487,6 +496,7 @@ description 2-2
 {rev}{b}A{/rev}{/b}C
 {rev}lines 10-14/17 82%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -527,6 +537,7 @@ line 7
             key('n'),
             key('N'),
             key('N'),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -590,6 +601,7 @@ line 5
 line 4
 {rev}lines 5-7/12 58%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }

@@ -38,7 +38,7 @@ line 4
         screen_width: 10,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('a'), key('b'), esc()],
+        events: vec![key('/'), key('a'), key('b'), esc(), key('q')],
         ..Default::default()
     });
     // No match for "a" or "ab" so position stays the same.
@@ -73,6 +73,7 @@ line 2
 line 3
 {rev} 1-3/4 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -91,7 +92,7 @@ line 4
         screen_width: 10,
         screen_height: 4,
         content,
-        events: vec![key('?'), key('x'), enter()],
+        events: vec![key('?'), key('x'), enter(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -118,6 +119,7 @@ line 2
 line 3
 {rev} 1-3/4 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -135,7 +137,7 @@ line 4
         screen_width: 10,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('a'), key('b'), backspace(), esc()],
+        events: vec![key('/'), key('a'), key('b'), backspace(), esc(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -174,6 +176,7 @@ line 2
 line 3
 {rev} 1-3/4 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -201,6 +204,7 @@ line 4
             key('x'),
             right(),
             esc(),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -264,6 +268,7 @@ line 2
 line 3
 {rev} 1-3/4 75%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
