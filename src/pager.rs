@@ -533,7 +533,11 @@ impl Pager {
             return PageUpdate::StatusOnly;
         };
 
+        let changes_text = edit.changes_text();
         mode.editor.edit(edit);
+        if !changes_text {
+            return PageUpdate::StatusOnly;
+        }
         let input = mode.editor.input();
 
         if input.is_empty() {
@@ -1161,6 +1165,22 @@ mod tests {
         let (snap, _doc) = pager.snapshot();
         let search = snap.search.expect("draft search should override committed");
         assert_eq!(search.query.as_str(), "line8");
+    }
+
+    #[test]
+    fn cursor_move_in_search_input_does_not_rerun_search() {
+        let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
+        pager.start_search_input(SearchDirection::Forward);
+        type_query(&mut pager, "line5");
+        assert_eq!(current_match_line(&mut pager), Some(5));
+
+        let update = pager.update_search_query(LineEdit::MoveCursorLeft);
+        assert!(matches!(update, PageUpdate::StatusOnly));
+        assert_eq!(current_match_line(&mut pager), Some(5));
+
+        let update = pager.update_search_query(LineEdit::MoveCursorRight);
+        assert!(matches!(update, PageUpdate::StatusOnly));
+        assert_eq!(current_match_line(&mut pager), Some(5));
     }
 
     #[test]
