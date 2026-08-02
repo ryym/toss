@@ -1,11 +1,6 @@
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test_screen};
-
-fn enter() -> Event {
-    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-}
+use super::{TestCase, enter, key, run_test_screen};
 
 // Search match spans across the wrap boundary.
 // The line "01234abcde" wraps at width 6 into "01234a" and "bcde".

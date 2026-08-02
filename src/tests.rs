@@ -10,6 +10,7 @@ mod search_execution;
 mod search_incremental;
 mod search_input;
 mod search_reanchor;
+mod search_regex;
 mod search_with_header;
 mod search_wrap;
 mod streaming;
@@ -26,6 +27,18 @@ use mock_screen::MockScreen;
 
 pub fn key(ch: char) -> Event {
     Event::Key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE))
+}
+
+pub fn esc() -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+}
+
+pub fn enter() -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+}
+
+pub fn backspace() -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE))
 }
 
 pub struct TestCase {

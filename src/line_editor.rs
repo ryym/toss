@@ -9,6 +9,16 @@ pub enum LineEdit {
     MoveCursorRight,
 }
 
+impl LineEdit {
+    /// Whether this edit can change the raw input text, as opposed to only the cursor.
+    pub fn changes_text(&self) -> bool {
+        match self {
+            LineEdit::AddChar(_) | LineEdit::DeleteCharBeforeCursor => true,
+            LineEdit::MoveCursorLeft | LineEdit::MoveCursorRight => false,
+        }
+    }
+}
+
 /// Single-line text editor for the search prompt.
 pub struct LineEditor {
     input: Vec<char>,
@@ -162,5 +172,13 @@ mod tests {
         editor.edit(LineEdit::DeleteCharBeforeCursor);
         assert_eq!(editor.input(), "");
         assert_eq!(editor.cursor, 0);
+    }
+
+    #[test]
+    fn changes_text_reflects_whether_input_can_change() {
+        assert!(LineEdit::AddChar('a').changes_text());
+        assert!(LineEdit::DeleteCharBeforeCursor.changes_text());
+        assert!(!LineEdit::MoveCursorLeft.changes_text());
+        assert!(!LineEdit::MoveCursorRight.changes_text());
     }
 }

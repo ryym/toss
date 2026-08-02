@@ -147,6 +147,15 @@ impl<S: Screen> Renderer<S> {
         if !is_search_same {
             let screen_y = header_height + ranges.remaining.start;
             self.refresh_rows(doc, &page.content[ranges.remaining], page.search, screen_y)?;
+        } else {
+            // These rows are not redrawn, so their highlight state on screen is unchanged.
+            // Carry it forward, otherwise the next render would wrongly think they are
+            // unhighlighted and skip clearing them once the search state actually changes.
+            for row in &page.content[ranges.remaining] {
+                if self.last_highlight_lines.contains(&row.line_index()) {
+                    self.current_highlight_lines.insert(row.line_index());
+                }
+            }
         }
 
         // Refresh headers and the status line.

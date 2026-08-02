@@ -355,4 +355,51 @@ mod tests {
             None
         );
     }
+
+    // Zero-width matches (e.g. `a*` matching an empty string) must not cause
+    // an infinite loop; the regex crate advances by one byte on empty matches.
+    #[test]
+    fn zero_width_match_does_not_hang() {
+        let mut doc = make_doc(&["bbb", "aaa"]);
+        let query = Regex::new("a*").unwrap();
+        assert_eq!(
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::Line(1),
+                SearchDirection::Forward
+            ),
+            pos(1, 0..3)
+        );
+    }
+
+    #[test]
+    fn zero_width_match_does_not_hang_backward() {
+        let mut doc = make_doc(&["bbb", "aaa"]);
+        let query = Regex::new("a*").unwrap();
+        assert_eq!(
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::Line(1),
+                SearchDirection::Backward
+            ),
+            pos(1, 0..3)
+        );
+    }
+
+    #[test]
+    fn document_match_at_line_end() {
+        let mut doc = make_doc(&["xxa", "bbb"]);
+        let query = Regex::new("a$").unwrap();
+        assert_eq!(
+            search_document(
+                &mut doc,
+                &query,
+                SearchFrom::Line(0),
+                SearchDirection::Forward
+            ),
+            pos(0, 2..3)
+        );
+    }
 }

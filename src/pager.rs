@@ -100,8 +100,39 @@ pub struct SearchInputMode {
     editor: LineEditor,
     /// Top line where search started, for searching and restoring on cancel.
     start_line_index: usize,
-    /// Live search state before finalizing a search query.
-    draft: Option<SearchState>,
+    draft: SearchDraft,
+}
+
+/// Live search state derived from the raw search input, before finalizing a query.
+enum SearchDraft {
+    /// Input is empty; there is no draft state to preview.
+    Empty,
+    /// Input compiled; the state matches the current input.
+    Valid(SearchState),
+    /// Input does not compile; preview stays frozen at the last valid state, if any.
+    Invalid(Option<SearchState>),
+}
+
+impl SearchDraft {
+    fn is_submittable(&self) -> bool {
+        !matches!(self, SearchDraft::Invalid(_))
+    }
+
+    fn preview(&self) -> Option<&SearchState> {
+        match self {
+            SearchDraft::Valid(s) => Some(s),
+            SearchDraft::Invalid(Some(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn into_preview(self) -> Option<SearchState> {
+        match self {
+            SearchDraft::Valid(s) => Some(s),
+            SearchDraft::Invalid(s) => s,
+            SearchDraft::Empty => None,
+        }
+    }
 }
 
 /// Centrally manages the pagination state.
@@ -165,7 +196,7 @@ impl Pager {
 
     pub fn snapshot<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
         let search = match &self.mode {
-            PagerMode::SearchInput(search) => search.draft.as_ref().or(self.search.as_ref()),
+            PagerMode::SearchInput(search) => search.draft.preview().or(self.search.as_ref()),
             _ => self.search.as_ref(),
         };
         let snapshot = PageSnapshot {
@@ -463,19 +494,26 @@ impl Pager {
             direction,
             editor,
             start_line_index,
-            draft: None,
+            draft: SearchDraft::Empty,
         });
         PageUpdate::StatusOnly
     }
 
     /// Commit the current search input.
+    /// Does nothing and keeps the search input mode active if the current raw input
+    /// is not a valid regex, so the user can keep editing it.
     pub fn submit_search(&mut self) -> PageUpdate {
-        if let PagerMode::SearchInput(mut mode) = mem::take(&mut self.mode)
-            && let Some(draft) = mode.draft.take()
-        {
+        let PagerMode::SearchInput(mode) = &mut self.mode else {
+            return PageUpdate::StatusOnly;
+        };
+        if !mode.draft.is_submittable() {
+            return PageUpdate::StatusOnly;
+        }
+        if let SearchDraft::Valid(draft) = mem::replace(&mut mode.draft, SearchDraft::Empty) {
             log::debug!("Submit search: query={:?}", draft.query.as_str());
             self.search = Some(draft);
         }
+        self.mode = PagerMode::View;
         PageUpdate::StatusOnly
     }
 
@@ -495,15 +533,27 @@ impl Pager {
             return PageUpdate::StatusOnly;
         };
 
+        let changes_text = edit.changes_text();
         mode.editor.edit(edit);
+        if !changes_text {
+            return PageUpdate::StatusOnly;
+        }
         let input = mode.editor.input();
 
         if input.is_empty() {
-            mode.draft = None;
+            mode.draft = SearchDraft::Empty;
             return PageUpdate::Partial(None);
         }
 
-        let re = Regex::new(&regex::escape(&input)).unwrap();
+        // While the input is mid-edit (e.g. right after typing `(` or `[`), it is often
+        // a syntactically invalid regex. Freeze the preview at its last valid state
+        // instead of clearing it, so the search results don't flicker away.
+        let Ok(re) = Regex::new(&input) else {
+            let frozen = mem::replace(&mut mode.draft, SearchDraft::Empty).into_preview();
+            mode.draft = SearchDraft::Invalid(frozen);
+            return PageUpdate::StatusOnly;
+        };
+
         let matched = search::search_document(
             &mut self.doc,
             &re,
@@ -513,7 +563,7 @@ impl Pager {
         log::debug!("Search preview: query={input:?}, result={matched:?}");
 
         let current_line_index = matched.as_ref().map(|m| m.line_index());
-        mode.draft = Some(SearchState {
+        mode.draft = SearchDraft::Valid(SearchState {
             query: re,
             direction: mode.direction,
             current: matched,
@@ -1115,6 +1165,22 @@ mod tests {
         let (snap, _doc) = pager.snapshot();
         let search = snap.search.expect("draft search should override committed");
         assert_eq!(search.query.as_str(), "line8");
+    }
+
+    #[test]
+    fn cursor_move_in_search_input_does_not_rerun_search() {
+        let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
+        pager.start_search_input(SearchDirection::Forward);
+        type_query(&mut pager, "line5");
+        assert_eq!(current_match_line(&mut pager), Some(5));
+
+        let update = pager.update_search_query(LineEdit::MoveCursorLeft);
+        assert!(matches!(update, PageUpdate::StatusOnly));
+        assert_eq!(current_match_line(&mut pager), Some(5));
+
+        let update = pager.update_search_query(LineEdit::MoveCursorRight);
+        assert!(matches!(update, PageUpdate::StatusOnly));
+        assert_eq!(current_match_line(&mut pager), Some(5));
     }
 
     #[test]
