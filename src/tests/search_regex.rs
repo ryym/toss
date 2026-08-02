@@ -14,7 +14,7 @@ line 3
         screen_width: 20,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('a'), key('.'), key('c'), esc()],
+        events: vec![key('/'), key('a'), key('.'), key('c'), esc(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -53,6 +53,7 @@ abc
 line 3
 {rev}lines 1-3/3 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -79,6 +80,7 @@ line 3
             key('o'),
             key(')'),
             esc(),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -130,6 +132,7 @@ foo bar
 line 3
 {rev}lines 1-3/3 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -155,6 +158,7 @@ line 3
             key('('),
             backspace(),
             esc(),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -206,6 +210,7 @@ foo bar
 line 3
 {rev}lines 1-3/3 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -231,6 +236,7 @@ line 3
             key('('),
             enter(), // ignored: input "foo(" is invalid
             esc(),
+            key('q'),
         ],
         ..Default::default()
     });
@@ -282,6 +288,7 @@ foo bar
 line 3
 {rev}lines 1-3/3 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
@@ -298,7 +305,7 @@ line 3
         screen_width: 20,
         screen_height: 4,
         content,
-        events: vec![key('/'), key('a'), key('*'), esc()],
+        events: vec![key('/'), key('a'), key('*'), esc(), key('q')],
         ..Default::default()
     });
     let want = "\
@@ -331,6 +338,7 @@ aaa
 line 3
 {rev}lines 1-3/3 100%{/rev}
 -----
+[EVENT]:char:q
 ";
     assert_eq!(screen.out(), want);
 }
