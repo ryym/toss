@@ -910,3 +910,108 @@ foo third
 ";
     assert_eq!(screen.out(), want);
 }
+
+// Highlights on rows that a scroll leaves untouched are still cleared once the
+// search query changes.
+#[test]
+fn highlights_clear_on_rows_untouched_by_a_previous_scroll() {
+    let content = "\
+foo 1
+foo 2
+foo 3
+foo 4
+foo 5
+foo 6
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 5,
+        content,
+        events: vec![
+            key('/'),
+            key('f'),
+            key('o'),
+            key('o'),
+            enter(),
+            key('j'),
+            key('/'),
+            key('z'),
+            enter(),
+            key('q'),
+        ],
+        ..Default::default()
+    });
+    let want = "\
+foo 1
+foo 2
+foo 3
+foo 4
+{rev}lines 1-4/6 66%{/rev}
+-----
+[EVENT]:char:/
+foo 1
+foo 2
+foo 3
+foo 4
+/█
+-----
+[EVENT]:char:f
+{rev}{b}f{/rev}{/b}oo 1
+{rev}{line}{b}f{/rev}{/line}{/b}oo 2
+{rev}{line}{b}f{/rev}{/line}{/b}oo 3
+{rev}{line}{b}f{/rev}{/line}{/b}oo 4
+/f█
+-----
+[EVENT]:char:o
+{rev}{b}fo{/rev}{/b}o 1
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o 2
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o 3
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o 4
+/fo█
+-----
+[EVENT]:char:o
+{rev}{b}foo{/rev}{/b} 1
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 3
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 4
+/foo█
+-----
+[EVENT]:enter
+{rev}{b}foo{/rev}{/b} 1
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 3
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 4
+{rev}lines 1-4/6 66%{/rev}
+-----
+[EVENT]:char:j
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 3
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 4
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 5
+{rev}lines 2-5/6 83%{/rev}
+-----
+[EVENT]:char:/
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 3
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 4
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 5
+/█
+-----
+[EVENT]:char:z
+foo 2
+foo 3
+foo 4
+foo 5
+/z█
+-----
+[EVENT]:enter
+foo 2
+foo 3
+foo 4
+foo 5
+{rev}lines 2-5/6 83%{/rev}
+-----
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}
