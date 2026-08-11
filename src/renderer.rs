@@ -145,22 +145,22 @@ impl<S: Screen> Renderer<S> {
             self.draw_rows(doc, &page.content[ranges.new_rows], page.search, screen_y)?;
         }
 
-        // If the search state has changed, refresh other rows as well.
         let is_search_same = match (&self.last_search, page.search) {
             (Some(prev), Some(current)) => prev == current,
             (None, None) => true,
             _ => false,
         };
-        if !is_search_same {
-            let screen_y = header_height + ranges.remaining.start;
-            self.refresh_rows(doc, &page.content[ranges.remaining], page.search, screen_y)?;
-        } else {
+        if is_search_same {
             // These rows are not redrawn, so carry their highlight state forward.
             for row in &page.content[ranges.remaining] {
                 if self.last_highlight_lines.contains(&row.line_index()) {
                     self.current_highlight_lines.insert(row.line_index());
                 }
             }
+        } else {
+            // The search state has changed, so refresh other rows as well.
+            let screen_y = header_height + ranges.remaining.start;
+            self.refresh_rows(doc, &page.content[ranges.remaining], page.search, screen_y)?;
         }
 
         // Refresh headers and the status line.
