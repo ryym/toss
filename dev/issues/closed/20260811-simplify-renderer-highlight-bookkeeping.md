@@ -1,9 +1,43 @@
 ---
 type: maintenance
-status: todo
+status: cancelled
 opened_at: 2026-08-01T07:21:37Z
 tags: [renderer]
 ---
+
+## Reason for Cancel
+
+The plan below does not actually simplify the renderer, and it lengthens the lifetime of the
+state it touches. Cancelled in favour of keeping the two-set scheme.
+
+- **The implicit invariant is not removed, only relocated.** The plan's own wording is that
+  "every path that draws a line without a highlight must remove it explicitly". That is the
+  same class of unenforced obligation as the carry-forward it deletes, and it is carried by
+  more code: today only a row-*skipping* path owes anything (one site, in `render_partial`),
+  whereas afterwards every row-*drawing* path does (`draw_rows` and `refresh_rows`, steps 2
+  and 3).
+- **It is a net addition of code and concepts.** Removed: a `mem::take` and a five-line loop.
+  Added: a removal branch in `draw_rows`, a rewrite of `refresh_rows`, and a whole pruning
+  mechanism — a threshold constant, a widened `store_page_state` signature, and a visible-line
+  set. Memory growth is a concern that does not exist under the current scheme; the plan
+  introduces it and then spends code containing it.
+- **The state gets weaker semantics and a longer life.** `current_highlight_lines` today means
+  "highlights drawn this frame" and nothing else, so its correctness is checkable by reading
+  `draw_rows`/`refresh_rows`. A persistent set's value at any moment depends on the whole
+  history of renders, and its intended meaning ("lines currently highlighted on screen") only
+  holds if pruning runs. Trading a frame-scoped fact for a history-dependent one is the wrong
+  direction, even where the two-set version costs a few more lines.
+- **The problem being solved is hypothetical.** The Overview states it is not a live bug; it
+  guards future row-skipping paths only. That is not worth the above.
+
+What was salvaged instead:
+
+- The scroll-route regression test from the plan was added as
+  `search_incremental::highlights_clear_on_rows_untouched_by_a_previous_scroll`, closing the
+  coverage gap the Overview identified. It is verified to fail if `render_partial`'s
+  carry-forward loop is removed.
+- The invariant is now documented on the field declarations in `src/renderer.rs`, since it
+  cannot be expressed in the types.
 
 ## Overview
 
