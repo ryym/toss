@@ -35,7 +35,14 @@ impl PartialEq<SearchState> for SearchStateRef {
 pub struct Renderer<S: Screen> {
     screen: S,
     last_search: Option<SearchStateRef>,
+    /// Lines shown with a highlight on screen as of the previous render.
     last_highlight_lines: HashSet<usize>,
+    /// Lines shown with a highlight on screen as of the render in progress.
+    /// Starts empty every render and becomes `last_highlight_lines` at the end of it.
+    ///
+    /// INVARIANT: a render must populate this for every highlighted row on screen, including
+    /// rows it chose not to redraw. Missing an entry makes the next render believe the row is
+    /// unhighlighted and skip clearing it, leaving a stale highlight behind.
     current_highlight_lines: HashSet<usize>,
 }
 
@@ -148,9 +155,7 @@ impl<S: Screen> Renderer<S> {
             let screen_y = header_height + ranges.remaining.start;
             self.refresh_rows(doc, &page.content[ranges.remaining], page.search, screen_y)?;
         } else {
-            // These rows are not redrawn, so their highlight state on screen is unchanged.
-            // Carry it forward, otherwise the next render would wrongly think they are
-            // unhighlighted and skip clearing them once the search state actually changes.
+            // These rows are not redrawn, so carry their highlight state forward.
             for row in &page.content[ranges.remaining] {
                 if self.last_highlight_lines.contains(&row.line_index()) {
                     self.current_highlight_lines.insert(row.line_index());
