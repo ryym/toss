@@ -4,6 +4,7 @@ mod header;
 mod heading;
 mod heading_multi;
 mod mock_screen;
+mod resize;
 mod scroll;
 mod scroll_wrap;
 mod search_execution;
