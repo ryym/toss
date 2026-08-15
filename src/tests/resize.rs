@@ -159,3 +159,243 @@ short
 ";
     assert_eq!(screen.out(), want);
 }
+
+// Scrolling up after growing the screen while at the end of the document should
+// move the status line to the new bottom row and leave no stale copy behind.
+#[test]
+fn repro_grow_at_end_then_scroll_up() {
+    let content = "\
+line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content,
+        events: vec![
+            key('G'),
+            resize(10, 8),
+            key('k'),
+            key('k'),
+            key('k'),
+            key('q'),
+        ],
+        ..Default::default()
+    });
+    let want = "\
+line 1
+line 2
+line 3
+{rev}1-3/10 30%{/rev}
+-----
+[EVENT]:char:G
+line 8
+line 9
+line 10
+{rev}10/10 100%{/rev}
+-----
+[EVENT]:resize:10x8
+line 8
+line 9
+line 10
+{rev}10/10 100%{/rev}
+
+
+
+
+-----
+[EVENT]:char:k
+line 7
+line 8
+line 9
+{rev}7-9/10 90%{/rev}
+{rev}10/10 100%{/rev}
+
+
+
+-----
+[EVENT]:char:k
+line 6
+line 7
+line 8
+{rev}6-8/10 80%{/rev}
+{rev}7-9/10 90%{/rev}
+{rev}10/10 100%{/rev}
+
+
+-----
+[EVENT]:char:k
+line 5
+line 6
+line 7
+{rev}5-7/10 70%{/rev}
+{rev}6-8/10 80%{/rev}
+{rev}7-9/10 90%{/rev}
+{rev}10/10 100%{/rev}
+
+-----
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}
+
+// Growing the screen while at the end of the document should re-anchor the top
+// upward to fill the newly available rows, keeping the last line pinned at the
+// bottom instead of leaving blank space below it. Further scrolling up from
+// there is then ordinary scrolling.
+#[test]
+// BUG: See the `repro_grow_at_end_then_scroll_up` case.
+#[should_panic]
+fn resize_at_end_fills_screen_from_above() {
+    let content = "\
+line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content,
+        events: vec![
+            key('G'),
+            resize(10, 8),
+            key('k'),
+            key('k'),
+            key('k'),
+            key('q'),
+        ],
+        ..Default::default()
+    });
+    let want = "\
+line 1
+line 2
+line 3
+{rev}1-3/10 30%{/rev}
+-----
+[EVENT]:char:G
+line 8
+line 9
+line 10
+{rev}10/10 100%{/rev}
+-----
+[EVENT]:resize:10x8
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10
+{rev}4-10/10 100%{/rev}
+-----
+[EVENT]:char:k
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+{rev}3-9/10 90%{/rev}
+-----
+[EVENT]:char:k
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8
+{rev}2-8/10 80%{/rev}
+-----
+[EVENT]:char:k
+line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+{rev}1-7/10 70%{/rev}
+-----
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}
+
+// Growing the screen past the document's total size should show the whole
+// document, padded with blank rows below. From there, both directions are
+// already fully shown, so scrolling either way does nothing.
+#[test]
+// BUG: See the `repro_grow_at_end_then_scroll_up` case.
+#[should_panic]
+fn resize_screen_larger_than_document_shows_whole_document() {
+    let content = "\
+line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 10,
+        screen_height: 4,
+        content,
+        events: vec![key('G'), resize(10, 15), key('k'), key('j'), key('q')],
+        ..Default::default()
+    });
+    let want = "\
+line 1
+line 2
+line 3
+{rev}1-3/10 30%{/rev}
+-----
+[EVENT]:char:G
+line 8
+line 9
+line 10
+{rev}10/10 100%{/rev}
+-----
+[EVENT]:resize:10x15
+line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10
+{rev}10/10 100%{/rev}
+
+
+
+
+-----
+[EVENT]:char:k
+[EVENT]:char:j
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}
