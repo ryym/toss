@@ -41,6 +41,10 @@ pub fn backspace() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE))
 }
 
+pub fn resize(width: u16, height: u16) -> Event {
+    Event::Resize(width, height)
+}
+
 pub struct TestCase {
     pub content: &'static str,
     pub screen_width: u16,

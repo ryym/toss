@@ -96,6 +96,17 @@ impl MockScreen {
         self.entries.push(OutputEntry::Event(text));
     }
 
+    /// Simulate a terminal resize: update the tracked size and the grid to match,
+    /// then log the event so it shows up in the output like a key event does.
+    fn log_resize(&mut self, width: u16, height: u16) {
+        self.width = width;
+        self.height = height;
+        self.grid.resize(height as usize, GridRow::new());
+        self.entries.push(OutputEntry::Event(format!(
+            "[EVENT]:resize:{width}x{height}\n"
+        )));
+    }
+
     fn take_snapshot(&mut self) {
         let mut snap = String::new();
         for row in &self.grid {
@@ -152,8 +163,10 @@ impl Screen for MockScreen {
         if self.event_index < self.events.len() {
             let event = self.events[self.event_index].clone();
             self.event_index += 1;
-            if let Event::Key(ref key) = event {
-                self.log_key(key);
+            match &event {
+                Event::Key(key) => self.log_key(key),
+                Event::Resize(w, h) => self.log_resize(*w, *h),
+                _ => {}
             }
             Ok(Some(event))
         } else {
