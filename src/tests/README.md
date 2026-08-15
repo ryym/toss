@@ -10,7 +10,7 @@ checks what a user would actually see and do.
 Build a `TestCase` (content, screen size, key `events`) and pass it to
 `run_test_screen`, then compare `screen.out()` against an expected string.
 See `mod.rs` for `TestCase`/`run_test_screen` and shared event helpers
-(`key`, `esc`, `enter`, `backspace`).
+(`key`, `esc`, `enter`, `backspace`, `resize`).
 
 `streaming.rs` bypasses `run_test_screen` and drives `App`/`MockScreen`
 directly, since it needs to push lines through a channel between app
@@ -20,10 +20,11 @@ construction and `run()`.
 
 The log alternates between input and output:
 
-- `[EVENT]:...` — one line per key event as it is consumed (e.g.
-  `[EVENT]:char:j`, `[EVENT]:esc`). Unhandled key codes log as
-  `[EVENT]:ERROR:unexpected:...`, which will fail a diff loudly rather than
-  silently passing.
+- `[EVENT]:...` — one line per key or resize event as it is consumed (e.g.
+  `[EVENT]:char:j`, `[EVENT]:esc`, `[EVENT]:resize:10x6`). Unhandled key codes
+  log as `[EVENT]:ERROR:unexpected:...`, which will fail a diff loudly rather
+  than silently passing. A resize event also updates `MockScreen`'s tracked
+  size and grid to match, simulating a real terminal resize.
 - A grid snapshot — one line per screen row, taken whenever the app flushes
   the screen. Rows are separated by a `-----` line.
 
