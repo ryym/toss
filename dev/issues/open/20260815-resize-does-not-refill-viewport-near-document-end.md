@@ -38,6 +38,20 @@ underlying bug affects them as well:
   document's total size should show the whole document with blank padding below it, and further
   scrolling in either direction should then be a no-op.
 
+With `--header`, the same shortfall panics instead of only corrupting the display. Jumping to
+the end of a 10-line document on a 10x4 screen with `header: 5`, then resizing to 10x15, leaves
+3 viewport rows while the rebuilt header claims 5:
+
+```
+thread '...' panicked at src/pager.rs:205:43:
+range start index 5 out of range for slice of length 3
+```
+
+`PageSnapshot::content` slices `&self.viewport.rows()[self.total_header_height()..]`
+(`src/pager.rs:205`), and `Pager::content_height` (`src/pager.rs:219`) would underflow the same
+way. Restoring the invariant below fixes this too, since a re-anchored viewport always holds at
+least as many rows as the header does.
+
 ## Root Cause
 
 `Viewport::resize` (`src/pager/viewport.rs:51-58`) keeps the current top row and fills downward
