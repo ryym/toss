@@ -128,6 +128,10 @@ swap creates no new dependency.
 - Coordinate with `dev/issues/open/20260815-resize-does-not-refill-viewport-near-document-end.md`.
   - It plans to make the viewport's top row move during a resize, which makes re-resolving the
     heading mandatory.
+- The expected outputs assume a resize keeps anchoring the viewport's top row. Anchoring the
+  first *visible* row instead was considered and cancelled in
+  `dev/issues/closed/20260816-preserve-visible-frame-on-resize.md`; re-deriving the push-up is
+  required either way.
 - Cost: `resolve` scans backward from the top line to `min_line_index` and stops at the first
   match, so a document with no heading above the current position means a full scan on every
   resize. The existing `jump_to` path already carries the same cost, so this adds no new class
