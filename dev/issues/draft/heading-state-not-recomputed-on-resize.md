@@ -43,6 +43,10 @@ diff today; the fix drops the attributes.
   - `--heading-lines 3` on 20x4 (which caps the heading at 2 rows) grown to 20x10.
   - The heading stays `# A` / `a1` although there is now room for `a2`.
 
+`resize_when_document_fits_entirely_in_header` in the same file is not a symptom but a guard: it
+passes today and locks the `rows().len() == header.height()` boundary that the fix has to keep
+safe (see "Why `top_line` is an `Option`").
+
 ## Root Cause
 
 **`Heading::resize` rebuilds only `h.rows`; `h.line_range` and `h.offset` are left stale.**
@@ -82,11 +86,26 @@ cannot be produced.**
   - `resolve` makes the second one dead work: `find_heading` rebuilds `line_range`, `rows` and
     `offset` from scratch.
 - Replace `Heading::resize` with
-  `Heading::relayout(doc, size, global_header_height, top_line)` = config update + `resolve`.
+  `Heading::relayout(doc, size, global_header_height, top_line: Option<usize>)`
+  = config update + `resolve`.
   - Pairing them at the call site would work too, but only as a convention to remember. With a
     single entry point the inconsistent state is not reachable.
-  - A standalone `resize` then no longer exists, so clamping `offset` defensively is
-    unnecessary; a `debug_assert!(offset <= rows.len())` in `Heading::rows` is enough.
+
+```rust
+/// `top_line` is the first viewport line below the global header.
+/// `None` means there is no such line, so no heading can be resolved.
+pub fn relayout(
+    &mut self,
+    doc: &mut Document,
+    size: &ViewportSize,
+    global_header_height: usize,
+    top_line: Option<usize>,
+) {
+    self.config = HeadingConfig::new(size, global_header_height);
+    self.current = top_line
+        .and_then(|line| self.find_heading(doc, self.config.min_line_index..(line + 1)));
+}
+```
 
 ### Call order in `Pager::relayout_page`
 
@@ -97,7 +116,11 @@ rebuilt, so the current heading-before-viewport order has to be swapped:
 fn relayout_page(&mut self, size: ViewportSize) {
     self.header.resize(&mut self.doc, &size);   // determines min_line_index
     self.viewport.resize(&mut self.doc, size);  // determines the new top line
-    let top_line = /* new top row's line index */;
+    let top_line = self
+        .viewport
+        .rows()
+        .get(self.header.height())
+        .map(|row| row.line_index());
     self.heading
         .relayout(&mut self.doc, &size, self.header.height(), top_line);
     self.push_up_heading_if_needed();
@@ -106,6 +129,37 @@ fn relayout_page(&mut self, size: ViewportSize) {
 
 `Viewport` is unaware of header and heading rows by design (see the `Pager` doc comment), so the
 swap creates no new dependency.
+
+### Why `top_line` is an `Option`
+
+The heading sticks to the first viewport line *below* the global header, so the reference row is
+`viewport.rows()[header.height()]` — not `rows()[0]`, which the global header covers. Resolving
+against `rows()[0]` would pick a heading from an earlier section whenever a new one starts within
+the covered rows. (`rows()[total_header_height()]` cannot be used: the heading's own height is
+what is being computed.) `Pager::scroll_up` / `scroll_down` already use `rows()[header.height()]`;
+`Pager::pump_input` uses `rows().first()`, which this change also corrects.
+
+That index can be out of bounds, so it must not be indexed raw:
+
+- `rows().len() == header.height()` — the viewport holds nothing but header rows, e.g. a document
+  short enough to fit entirely in the header, or a streaming document whose arrived lines are all
+  header lines. Covered by `tests::heading_resize::resize_when_document_fits_entirely_in_header`.
+- `rows().len() < header.height()` — reachable only while the viewport is under-filled near the
+  document end, which panics in `Pager::snapshot` before reaching here. That is
+  `dev/issues/open/20260815-resize-does-not-refill-viewport-near-document-end.md`, not this issue.
+
+`None` is the honest answer in those cases: with no content row below the header there is nothing
+for a heading to stick to, so `current` is unset. Falling back to line 0 would give the same
+result — the search range `min_line_index..1` is empty whenever the fallback applies — but only
+by coincidence, so the `Option` states it instead.
+
+`relayout` must still be called even when `top_line` is `None`, for `config`: `width`,
+`max_heading_height` and `min_line_index` all change with the new size, and skipping the call
+would leave exactly the half-updated state this issue is about.
+
+Note that `max_heading_height` is `0` whenever the global header is capped
+(`header.height() == viewport height - 1`), and `find_heading` returns `None` on a
+`max_heading_height` of 0. So no heading exists while the header is capped, at any top line.
 
 ### `push_up_heading_if_needed` is still required
 
@@ -125,6 +179,11 @@ swap creates no new dependency.
 
 - Remove the duplicate resolve in the streaming path: `Pager::pump_input`
   (`src/pager.rs:278-286`) goes through `relayout_page` as well.
+- `relayout_page` gains `push_up_heading_if_needed`, so the streaming path runs it too. It is a
+  no-op there: that branch only runs while the viewport is under-filled, which means the whole
+  known document fits and the heading starts at the top row. Adding the call is safe even where
+  it is not a no-op — `Heading::push_up` assigns the offset rather than accumulating it, and the
+  amount is derived from the current viewport rows on every call.
 - Coordinate with `dev/issues/open/20260815-resize-does-not-refill-viewport-near-document-end.md`.
   - It plans to make the viewport's top row move during a resize, which makes re-resolving the
     heading mandatory.
@@ -136,5 +195,37 @@ swap creates no new dependency.
   match, so a document with no heading above the current position means a full scan on every
   resize. The existing `jump_to` path already carries the same cost, so this adds no new class
   of work.
+- **Fix `dev/issues/draft/heading-min-line-index-uses-header-row-count.md` first.** It is a
+  prerequisite, not just a signature collision: `min_line_index` is `Header::height()`, a row
+  count, so narrowing the terminal until a header line wraps raises it past a heading that is
+  not in the header at all, and `relayout` then drops that heading. Today's `resize` never
+  drops a heading, so the defect is invisible until this change lands. With `min_line_index`
+  fed `Header::num_lines` it is constant across resizes and the case cannot arise.
 - Drop the `#[should_panic]` attributes from `src/tests/heading_resize.rs`; the cases already
   hold the expected output.
+- Update `heading.rs::resize_rebuilds_rows_at_new_width`: it calls `Heading::resize` directly,
+  which no longer exists. Add unit cases for `relayout` with `top_line: None` and for a
+  `top_line` whose heading is narrower than the previous one.
+
+## Appendix: `resolve` never drops a heading that should stay
+
+Why replacing `resize` with `relayout` cannot make a heading disappear when it should not.
+Nothing here calls for extra work; it is recorded because the change turns "the heading always
+survives a resize" into "the heading is re-derived", which is the kind of step a reviewer will
+want checked rather than asserted.
+
+`resize` keeps the current heading unconditionally; `relayout` re-runs `find_heading` and unsets
+it when nothing is found. That can only unset a heading the new layout should not show.
+
+Let `S` be the current heading's start line. `is_heading_start` reads only the document and
+`options` (`src/pager/heading.rs:169-187`), neither of which a resize changes, so `S` is still a
+heading start afterwards. `find_heading` therefore returns `S` — or a nearer one, which is the
+point of re-resolving — whenever `S` falls in `min_line_index..(top_line + 1)`. Only two things
+can put `S` outside that range:
+
+- `max_heading_height == 0`, where `find_heading` returns early. This holds exactly while the
+  global header is capped, i.e. when no row is left for a heading, so unsetting is correct.
+- `min_line_index > S`. With `min_line_index` fed `Header::num_lines` it never changes on a
+  resize, so this cannot happen. It can with today's row count — see the prerequisite above.
+
+`top_line` cannot exclude `S`: a sticky heading sits at or above the viewport's top line.
