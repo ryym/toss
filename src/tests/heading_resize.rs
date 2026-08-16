@@ -266,6 +266,49 @@ body b1
     assert_eq!(screen.out(), want);
 }
 
+/// Lines inside the global header never become a heading, even when they match the
+/// pattern. Here the header covers the whole document, so no heading is shown at any
+/// screen size.
+#[test]
+fn resize_when_document_fits_entirely_in_header() {
+    let content = "\
+# A
+h2
+h3
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 5,
+        content,
+        options: Options {
+            header: 3,
+            heading: heading_opts_n("^# ", 1),
+            ..Default::default()
+        },
+        events: vec![resize(20, 7), key('q')],
+        ..Default::default()
+    });
+    let want = "\
+# A
+h2
+h3
+{rev}lines 1-3/3 100%{/rev}
+
+-----
+[EVENT]:resize:20x7
+# A
+h2
+h3
+{rev}lines 1-3/3 100%{/rev}
+
+
+
+-----
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}
+
 const WRAP_CONTENT: &str = "\
 # A
 sub a
