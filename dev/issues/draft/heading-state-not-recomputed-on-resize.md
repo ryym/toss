@@ -7,74 +7,41 @@ tags: [resize, heading]
 
 **A resize re-wraps the sticky heading but never recomputes the rest of its state.**
 
-Two symptoms follow, both requiring `--heading`:
+Three symptoms follow, all requiring `--heading`:
 
 - **Panic** — shrinking the terminal while the heading is pushed up panics with
   `range start index N out of range for slice of length M`.
-- **Stale heading** — a heading resolved while the terminal was small stays truncated after the
-  terminal grows, showing fewer lines than `--heading-lines`.
+- **Stale push-up** — the heading stays pushed up by the amount computed for the old size, so it
+  is rendered from the wrong row and content rows leak in below it.
+- **Stale line range** — a heading resolved while the terminal was small stays truncated after
+  the terminal grows, showing fewer lines than `--heading-lines`.
 
 ## Reproduction
 
-Both cases use this document with `--heading '^# '`:
+`src/tests/heading_resize.rs` drives each symptom with a `MockScreen` script. Every case
+encodes the *expected* output and is marked `#[should_panic]`, since the bug makes it panic or
+diff today; the fix drops the attributes.
 
-```
-# A
-a1
-a2
-a3
-body a1
-body a2
-# B
-b1
-b2
-b3
-body b1
-body b2
-tail
-```
-
-### Panic
-
-Setup:
-
-- `--heading-lines 4`, 20x8 screen
-- scroll down 5 rows — `# B` reaches the second overlay row, so the heading is pushed up by 3
-- shrink to 20x3
-
-```rust
-run_test_screen(TestCase {
-    screen_width: 20,
-    screen_height: 8,
-    content: CONTENT,
-    options: Options {
-        heading: Some(heading_opts("^# ", 4)),
-        ..Default::default()
-    },
-    events: vec![key('j'), key('j'), key('j'), key('j'), key('j'), resize(20, 3), key('q')],
-    ..Default::default()
-});
-```
-
-```
-thread '...' panicked at src/pager/heading.rs:72:31:
-range start index 3 out of range for slice of length 1
-```
-
-### Stale heading
-
-Setup:
-
-- `--heading-lines 3`, 20x4 screen — viewport height 3, so `max_heading_height` is 2
-- scroll down 2 rows
-- grow to 20x10
-
-```rust
-events: vec![key('j'), key('j'), resize(20, 10), key('q')],
-```
-
-Result: the heading stays `# A` / `a1`, although a 20x10 screen has room for the configured 3
-lines (`# A` / `a1` / `a2`).
+- **`shrink_after_push_up_rebuilds_heading`** — the panic.
+  - `--heading-lines 4` on 20x8, scrolled until `# B` pushes the heading up by 3, then shrunk to
+    20x3 where only 1 heading row fits.
+  - ```
+    thread '...' panicked at src/pager/heading.rs:72:31:
+    range start index 3 out of range for slice of length 1
+    ```
+- **`shrink_recomputes_push_up_offset`** — stale push-up on a height change.
+  - `--heading-lines 4` on 20x8, scrolled until the heading is pushed up by 1, then shrunk to
+    20x5 where the heading is capped to 3 rows and no longer reaches `# B`.
+  - Shows `a1` / `a2` / `body a2` / `# B` instead of `# A` / `a1` / `a2` / `# B`.
+  - The test carries a comment explaining why the expected output starts at `# A`.
+- **`width_change_recomputes_push_up_offset`** — stale push-up with the heading size unchanged.
+  - `--heading-lines 2` on 12x7 narrowed to 8x7. The heading stays 2 rows, but the body line
+    above `# B` rewraps, moving `# B` out of the overlay area.
+  - Shows `sub a` / `y 1` / `# B` instead of `# A` / `sub a` / `# B`: the heading stays pushed up
+    and the tail of the rewrapped line leaks in.
+- **`grow_restores_full_heading_height`** — stale line range.
+  - `--heading-lines 3` on 20x4 (which caps the heading at 2 rows) grown to 20x10.
+  - The heading stays `# A` / `a1` although there is now room for `a2`.
 
 ## Root Cause
 
@@ -165,4 +132,5 @@ swap creates no new dependency.
   match, so a document with no heading above the current position means a full scan on every
   resize. The existing `jump_to` path already carries the same cost, so this adds no new class
   of work.
-- Add e2e cases in `src/tests/heading.rs` for both symptoms.
+- Drop the `#[should_panic]` attributes from `src/tests/heading_resize.rs`; the cases already
+  hold the expected output.
