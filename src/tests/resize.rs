@@ -126,7 +126,10 @@ line 5
 // the grid and shrinking it back, checking no stale rows leak from a previous size.
 #[test]
 fn width_change_reflows_wrapped_lines() {
-    let content = "abcdefgh\nshort\n";
+    let content = "\
+abcdefgh
+short
+";
     let screen = run_test_screen(TestCase {
         screen_width: 5,
         screen_height: 5,

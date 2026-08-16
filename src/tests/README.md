@@ -12,6 +12,17 @@ Build a `TestCase` (content, screen size, key `events`) and pass it to
 See `mod.rs` for `TestCase`/`run_test_screen` and shared event helpers
 (`key`, `esc`, `enter`, `backspace`, `resize`).
 
+Bind the document to a `content` variable before the `TestCase` and write it as
+a raw multi-line string rather than embedding `\n`, so the test source shows the
+document exactly as it appears on screen:
+
+```rust
+let content = "\
+line 1
+line 2
+";
+```
+
 `streaming.rs` bypasses `run_test_screen` and drives `App`/`MockScreen`
 directly, since it needs to push lines through a channel between app
 construction and `run()`.
