@@ -292,10 +292,6 @@ line 5
 
 /// A heading right below a wrapped header still becomes sticky when scrolled past.
 #[test]
-// BUG: the wrapped header line counts as 2 rows, and that row count is used as the
-// lowest line index that may become a heading, so `# A` on line 1 is skipped and
-// no heading is shown.
-#[should_panic]
 fn heading_just_below_wrapped_header_line() {
     let content = "\
 HEADERLINE!

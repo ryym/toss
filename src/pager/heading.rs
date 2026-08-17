@@ -25,9 +25,10 @@ impl Heading {
         options: Option<HeadingOptions>,
         size: &ViewportSize,
         global_header_height: usize,
+        global_header_num_lines: usize,
     ) -> Self {
         Self {
-            config: HeadingConfig::new(size, global_header_height),
+            config: HeadingConfig::new(size, global_header_height, global_header_num_lines),
             options,
             current: None,
         }
@@ -93,8 +94,14 @@ impl Heading {
             && line_index <= rows[rows.len() - 1].line_index()
     }
 
-    pub fn resize(&mut self, doc: &mut Document, size: &ViewportSize, global_header_height: usize) {
-        self.config = HeadingConfig::new(size, global_header_height);
+    pub fn resize(
+        &mut self,
+        doc: &mut Document,
+        size: &ViewportSize,
+        global_header_height: usize,
+        global_header_num_lines: usize,
+    ) {
+        self.config = HeadingConfig::new(size, global_header_height, global_header_num_lines);
         if let Some(h) = &mut self.current {
             h.rows = rows::from_lines(
                 doc,
@@ -196,14 +203,19 @@ struct HeadingConfig {
 }
 
 impl HeadingConfig {
-    fn new(size: &ViewportSize, global_header_height: usize) -> Self {
+    fn new(
+        size: &ViewportSize,
+        global_header_height: usize,
+        global_header_num_lines: usize,
+    ) -> Self {
         // Reserve at least one non-heading row so the heading does not cover the entire viewport.
         let max_heading_height = size
             .height()
             .saturating_sub(global_header_height)
             .saturating_sub(1);
         Self {
-            min_line_index: global_header_height,
+            // Bound candidates by the lines the header covers, not by the rows it occupies.
+            min_line_index: global_header_num_lines,
             max_heading_height,
             width: size.width(),
         }
@@ -243,7 +255,7 @@ mod tests {
     #[test]
     fn no_options_means_no_heading_ever_resolved() {
         let mut doc = Document::from_string("# h\nfoo\n".into());
-        let mut h = Heading::new(None, &size(10, 5), 0);
+        let mut h = Heading::new(None, &size(10, 5), 0, 0);
         h.resolve(&mut doc, 1);
         assert!(h.start_line_index().is_none());
         assert!(h.rows().is_empty());
@@ -255,7 +267,7 @@ mod tests {
     #[test]
     fn is_heading_start_matches_lone_pattern_line() {
         let mut doc = Document::from_string("# h\nfoo\n".into());
-        let h = Heading::new(Some(opts("^# ", 1)), &size(10, 5), 0);
+        let h = Heading::new(Some(opts("^# ", 1)), &size(10, 5), 0, 0);
         assert!(h.is_heading_start(&mut doc, 0));
         assert!(!h.is_heading_start(&mut doc, 1));
     }
@@ -264,7 +276,7 @@ mod tests {
     fn is_heading_start_with_multi_line_window_takes_last_match() {
         // num_lines = 2: only the last match within a 2-line window is the heading.
         let mut doc = Document::from_string("# A\n# B\nfoo\nbar\n".into());
-        let h = Heading::new(Some(opts("^# ", 2)), &size(10, 5), 0);
+        let h = Heading::new(Some(opts("^# ", 2)), &size(10, 5), 0, 0);
         // Line 0 has another match (line 1) within the next num_lines-1 lines, so not a heading.
         assert!(!h.is_heading_start(&mut doc, 0));
         // Line 1 has no further matches within its window, so it counts as a heading.
@@ -274,7 +286,7 @@ mod tests {
     #[test]
     fn resolve_finds_nearest_heading_above() {
         let mut doc = Document::from_string("# A\nx\ny\n# B\nz\n".into());
-        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 8), 0);
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 8), 0, 0);
 
         h.resolve(&mut doc, 4);
         assert_eq!(h.start_line_index(), Some(3));
@@ -286,7 +298,7 @@ mod tests {
     #[test]
     fn resolve_unsets_when_no_heading_found() {
         let mut doc = Document::from_string("a\nb\n# C\nd\n".into());
-        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 8), 0);
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 8), 0, 0);
 
         h.resolve(&mut doc, 2);
         assert_eq!(h.start_line_index(), Some(2));
@@ -299,7 +311,7 @@ mod tests {
     #[test]
     fn resolve_if_found_keeps_current_when_none_in_range() {
         let mut doc = Document::from_string("# A\nx\ny\n".into());
-        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 8), 0);
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 8), 0, 0);
 
         h.resolve(&mut doc, 0);
         assert_eq!(h.start_line_index(), Some(0));
@@ -311,7 +323,7 @@ mod tests {
     #[test]
     fn resolve_if_found_replaces_when_match_in_range() {
         let mut doc = Document::from_string("# A\nx\n# B\ny\n".into());
-        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 8), 0);
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 8), 0, 0);
 
         h.resolve(&mut doc, 0);
         assert_eq!(h.start_line_index(), Some(0));
@@ -323,7 +335,7 @@ mod tests {
     #[test]
     fn push_up_offsets_visible_rows() {
         let mut doc = Document::from_string("# A\nsub\nfoo\nbar\n".into());
-        let mut h = Heading::new(Some(opts("^# ", 2)), &size(10, 8), 0);
+        let mut h = Heading::new(Some(opts("^# ", 2)), &size(10, 8), 0, 0);
         h.resolve(&mut doc, 1);
         assert_eq!(h.full_height(), 2);
         assert_eq!(h.height(), 2);
@@ -336,7 +348,7 @@ mod tests {
     #[test]
     fn contains_returns_true_within_heading_lines() {
         let mut doc = Document::from_string("# A\nsub\nfoo\n".into());
-        let mut h = Heading::new(Some(opts("^# ", 2)), &size(10, 8), 0);
+        let mut h = Heading::new(Some(opts("^# ", 2)), &size(10, 8), 0, 0);
         h.resolve(&mut doc, 1);
 
         assert!(h.contains(0));
@@ -347,21 +359,41 @@ mod tests {
     #[test]
     fn min_line_index_excludes_global_header_area() {
         let mut doc = Document::from_string("# A\n# B\n# C\nx\ny\n".into());
-        // global_header_height = 2: lines 0, 1 are excluded as heading candidates.
-        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 10), 2);
+        // The header covers 2 lines, so lines 0 and 1 never become headings.
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 10), 2, 2);
 
         h.resolve(&mut doc, 4);
         assert_eq!(h.start_line_index(), Some(2));
     }
 
     #[test]
+    fn min_line_index_ignores_wrap_rows_of_the_global_header() {
+        let mut doc = Document::from_string("# A\n# B\nx\ny\n".into());
+        // The header covers 1 line but wraps into 2 rows, so line 1 is still a heading.
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 10), 2, 1);
+
+        h.resolve(&mut doc, 3);
+        assert_eq!(h.start_line_index(), Some(1));
+    }
+
+    #[test]
+    fn min_line_index_covers_header_lines_dropped_by_the_height_cap() {
+        let mut doc = Document::from_string("# A\n# B\n# C\nx\n".into());
+        // The header covers 3 lines but only 2 rows of it fit, so line 2 is still not a heading.
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 10), 2, 3);
+
+        h.resolve(&mut doc, 3);
+        assert!(h.start_line_index().is_none());
+    }
+
+    #[test]
     fn resize_rebuilds_rows_at_new_width() {
         let mut doc = Document::from_string("# Long header line\nsub\nfoo\n".into());
-        let mut h = Heading::new(Some(opts("^# ", 1)), &size(80, 5), 0);
+        let mut h = Heading::new(Some(opts("^# ", 1)), &size(80, 5), 0, 0);
         h.resolve(&mut doc, 0);
         assert_eq!(h.rows().len(), 1);
 
-        h.resize(&mut doc, &size(5, 5), 0);
+        h.resize(&mut doc, &size(5, 5), 0, 0);
         // "# Long header line" wraps into multiple rows at width 5.
         assert!(h.rows().len() > 1);
     }

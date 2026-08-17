@@ -27,8 +27,15 @@ impl Header {
         self.rows = build_rows(doc, size, self.num_lines);
     }
 
+    /// The number of screen rows the header covers.
     pub fn height(&self) -> usize {
         self.rows.len()
+    }
+
+    /// The number of document lines the header covers, which differs from [`Self::height`]
+    /// whenever a header line wraps or the header is capped to fit the viewport.
+    pub fn num_lines(&self) -> usize {
+        self.num_lines
     }
 
     pub fn contains(&self, line_index: usize) -> bool {

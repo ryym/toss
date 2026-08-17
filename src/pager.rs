@@ -169,7 +169,7 @@ impl Pager {
     pub fn new(mut doc: Document, options: Options, screen_size: ScreenSize) -> Self {
         let size = ViewportSize::new(screen_size.width(), screen_size.height());
         let header = Header::new(&mut doc, &size, options.header);
-        let mut heading = Heading::new(options.heading, &size, header.height());
+        let mut heading = Heading::new(options.heading, &size, header.height(), header.num_lines());
         heading.resolve(&mut doc, 0);
         let viewport = Viewport::new(&mut doc, size);
         Self {
@@ -312,8 +312,12 @@ impl Pager {
     /// the first screen as streamed input arrives.
     fn relayout_page(&mut self, size: ViewportSize) {
         self.header.resize(&mut self.doc, &size);
-        self.heading
-            .resize(&mut self.doc, &size, self.header.height());
+        self.heading.resize(
+            &mut self.doc,
+            &size,
+            self.header.height(),
+            self.header.num_lines(),
+        );
         self.viewport.resize(&mut self.doc, size);
     }
 
