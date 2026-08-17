@@ -1,11 +1,13 @@
 ---
 type: bugfix
 tags: [heading, header]
+status: todo
+opened_at: 2026-08-17T13:41:15Z
 ---
 
 ## Overview
 
-**`Heading` uses the global header's *row* count as a *line* index.**
+**`Heading` uses the global header's _row_ count as a _line_ index.**
 
 - **What it should hold** — `min_line_index` is the lowest document line that may become a
   heading. Lines inside the global header must not, since the header is always shown anyway.
@@ -18,13 +20,21 @@ directions:
 - **Header lines wrap** (narrow terminal, long header line): `height() > num_lines`, so lines
   just below the header are wrongly excluded, and a heading there is never found.
 - **Header is capped** (short terminal): `build_rows` caps the header at `viewport height - 1`
-  rows, so `height() < num_lines`, and a line that *is* part of the header can be picked as a
+  rows, so `height() < num_lines`, and a line that _is_ part of the header can be picked as a
   heading.
 
-**No reproduction is recorded.** It needs:
+## Reproduction
 
-- `--header` and `--heading` together.
-- A width narrow enough to wrap a header line, or a height short enough to cap the header.
+`heading_just_below_wrapped_header_line` in `src/tests/heading.rs` covers the wrapping
+direction: a 1-line header wraps into 2 rows at width 8, so `# A` on line 1 is excluded and
+never becomes the sticky heading after `G`. It encodes the _expected_ output and is marked
+`#[should_panic]`.
+
+Note that `min_line_index` only gates `Heading::resolve`, not `Heading::resolve_if_found`,
+so plain downward scrolling still finds the heading. The reproduction uses `G` to go through
+`resolve`.
+
+The capping direction (header taller than the viewport allows) has no reproduction recorded.
 
 ## Root Cause
 
@@ -60,6 +70,8 @@ argument serves two different units:
 - Keep `max_heading_height` derived from the row count.
 
 ### Tests
+
+Drop `#[should_panic]` from `heading_just_below_wrapped_header_line`; it should pass as is.
 
 Unit tests in `src/pager/heading.rs`, mirroring `min_line_index_excludes_global_header_area`:
 
