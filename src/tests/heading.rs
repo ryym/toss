@@ -290,6 +290,60 @@ line 5
     assert_eq!(screen.out(), want);
 }
 
+/// A heading right below a wrapped header still becomes sticky when scrolled past.
+#[test]
+// BUG: the wrapped header line counts as 2 rows, and that row count is used as the
+// lowest line index that may become a heading, so `# A` on line 1 is skipped and
+// no heading is shown.
+#[should_panic]
+fn heading_just_below_wrapped_header_line() {
+    let content = "\
+HEADERLINE!
+# A
+b1
+b2
+b3
+b4
+b5
+b6
+b7
+b8
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 8,
+        screen_height: 7,
+        content,
+        options: Options {
+            header: 1,
+            heading: heading_opts("^# "),
+            ..Default::default()
+        },
+        events: vec![key('G'), key('q')],
+        ..Default::default()
+    });
+    let want = "\
+HEADERLI>
+NE!
+# A
+b1
+b2
+b3
+{rev}5/10 50%{/rev}
+-----
+[EVENT]:char:G
+HEADERLI>
+NE!
+# A
+b6
+b7
+b8
+{rev}/10 100%{/rev}
+-----
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}
+
 /// Scroll down enough so that section B is fully above viewport,
 /// then scroll back up to see section A become sticky again.
 #[test]
