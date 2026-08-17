@@ -1,7 +1,7 @@
 ---
 type: bugfix
 tags: [heading, header]
-status: todo
+status: doing
 opened_at: 2026-08-17T13:41:15Z
 ---
 
