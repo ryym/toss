@@ -932,10 +932,11 @@ mod tests {
         assert!(pager.pump_input().is_none());
     }
 
-    /// `Header::height()` can fall short of `Header::num_lines()` without hitting the
-    /// reserved-row cap, simply because the document hasn't streamed in that far yet.
+    /// A document not yet as long as `--header-lines` gets a shorter header rather than a
+    /// padded one: it shows the lines that exist, and grows to its configured size as the
+    /// rest arrives.
     #[test]
-    fn header_height_stays_below_num_lines_while_document_is_still_shorter() {
+    fn header_shows_only_the_lines_that_exist_until_the_document_catches_up() {
         let (tx, rx) = mpsc::channel();
         let mut doc = Document::from_channel(rx);
         // Only 2 lines have arrived, but --header-lines is configured to 3.
