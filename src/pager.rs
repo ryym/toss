@@ -959,10 +959,11 @@ mod tests {
         assert_eq!(line_indices(snap.header), vec![0, 1, 2]);
     }
 
-    /// A line inside the configured header range never becomes a sticky heading, whether or
-    /// not it has arrived yet at the moment `Heading` is asked about it.
+    /// `--header-lines` claims its lines up front, whether or not the document is that long
+    /// yet. A claimed line never becomes the sticky heading, not even once it finally arrives,
+    /// while the first line past the claimed range does.
     #[test]
-    fn heading_never_picks_a_line_inside_the_header_even_before_it_has_arrived() {
+    fn heading_stays_outside_the_configured_header_while_the_document_is_still_shorter() {
         let (tx, rx) = mpsc::channel();
         let mut doc = Document::from_channel(rx);
         // Only line 0 has arrived; line 1 ("# B"), inside the header, hasn't yet.
@@ -976,6 +977,12 @@ mod tests {
             ..Default::default()
         };
         let mut pager = Pager::new(doc, opts, ScreenSize::new(20, 10));
+
+        // Only line 0 exists, so the header occupies a single row for the 3 lines it is
+        // configured to cover, and nothing is a heading while the rest is still missing.
+        let (snap, _) = pager.snapshot();
+        assert_eq!(line_indices(snap.header), vec![0]);
+        assert!(line_indices(snap.heading).is_empty());
 
         // The rest of the document arrives, including "# B" (line 1, still inside the
         // header) and "# D" (line 3, the first line outside the header).
