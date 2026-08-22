@@ -155,6 +155,19 @@ that lets the header occupy `viewport height` rows or more must give `pump_input
 header-staleness condition; otherwise a header line arriving after the first screen fills stays
 off-screen until the next resize or scroll.
 
+### The heading push-up scan also leans on the cap
+
+`Pager::push_up_heading_if_needed` scans the viewport rows under the heading overlay, starting at
+row `header.height()`, and asks `Heading::is_heading_start` whether each one starts the next
+section. That predicate does not consult `min_line_index`, so a header line answering `true`
+would shift the current heading's `offset` and hide part of it.
+
+The scan reaches a header line only when `height() < num_lines()` — i.e. exactly the capped case
+— with the viewport at the top of the document. It cannot happen today because a capped header
+forces `max_heading_height` to `0`, so no heading resolves and the function returns before the
+scan. Any resolution that lets a heading coexist with a capped header must therefore also bound
+the predicate; that bound is tracked in `heading-min-line-index-not-enforced.md`.
+
 ## Outcome
 
 - A header line the cap drops from rendering is either genuinely reachable (as header,
@@ -167,6 +180,7 @@ off-screen until the next resize or scroll.
   implicit.
 - `Pager::pump_input`'s first-screen fill gate no longer silently depends on the cap to keep a
   late-arriving header line from being missed.
+- Neither does `push_up_heading_if_needed`'s scan for the next section's heading.
 
 ## Plan
 
