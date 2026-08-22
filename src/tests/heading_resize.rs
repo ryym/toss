@@ -266,6 +266,60 @@ body b1
     assert_eq!(screen.out(), want);
 }
 
+/// Shrinking the width so the header line wraps into two rows must not disqualify the
+/// heading right below it from becoming sticky.
+#[test]
+fn resize_wraps_header_line_heading_stays_below_it() {
+    let content = "\
+HEADERLINE!
+# A
+b1
+b2
+b3
+b4
+b5
+b6
+b7
+b8
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 5,
+        content,
+        options: Options {
+            header: 1,
+            heading: heading_opts_n("^# ", 1),
+            ..Default::default()
+        },
+        events: vec![resize(8, 5), key('G'), key('q')],
+        ..Default::default()
+    });
+    let want = "\
+HEADERLINE!
+# A
+b1
+b2
+{rev}lines 1-4/10 40%{/rev}
+-----
+[EVENT]:resize:8x5
+HEADERLI>
+NE!
+# A
+b1
+{rev}3/10 30%{/rev}
+-----
+[EVENT]:char:G
+HEADERLI>
+NE!
+# A
+b8
+{rev}/10 100%{/rev}
+-----
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}
+
 /// Lines inside the global header never become a heading, even when they match the
 /// pattern. Here the header covers the whole document, so no heading is shown at any
 /// screen size.

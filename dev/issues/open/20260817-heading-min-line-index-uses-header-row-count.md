@@ -14,14 +14,28 @@ opened_at: 2026-08-17T13:41:15Z
   A **line** count.
 - **What it is fed** — `Header::height()`, which is `Header::rows().len()`. A **row** count.
 
-The two agree only while every header line occupies exactly one row. They diverge in both
-directions:
+The two agree only while every header line occupies exactly one row. They diverge in one
+direction:
 
 - **Header lines wrap** (narrow terminal, long header line): `height() > num_lines`, so lines
   just below the header are wrongly excluded, and a heading there is never found.
-- **Header is capped** (short terminal): `build_rows` caps the header at `viewport height - 1`
-  rows, so `height() < num_lines`, and a line that _is_ part of the header can be picked as a
-  heading.
+
+They do not diverge the other way, for two independent reasons:
+
+- **The header is capped** — `build_rows` caps the header at `viewport height - 1` rows when it
+  is short, so `height() < num_lines` there too. But the same cap forces `max_heading_height` to
+  `0` in `HeadingConfig`, and `find_heading` returns `None` before considering any line whenever
+  `max_heading_height` is `0`. So while the header is capped, no heading exists at all — the
+  row/line mismatch is unobservable in this direction.
+- **The document has fewer lines than the header is configured for** — `build_rows` skips lines
+  that do not exist rather than padding for them, so a file shorter than `--header-lines`, or a
+  streamed document whose header lines have not all arrived yet, also produces
+  `height() < num_lines` without any cap. This is harmless for a different reason: every
+  `line_index` that reaches `Heading::resolve`/`resolve_if_found` comes from a row the document
+  already has, so while it's shorter than `num_lines`, `line_index < doc.line_count() <=
+  num_lines` always holds. The search range `min_line_index..(line_index + 1)` (`min_line_index ==
+  num_lines`) is therefore always empty — no header line can ever be reached as a heading
+  candidate through this path, regardless of when the rest of the document arrives.
 
 ## Reproduction
 
@@ -33,8 +47,6 @@ never becomes the sticky heading after `G`. It encodes the _expected_ output and
 Note that `min_line_index` only gates `Heading::resolve`, not `Heading::resolve_if_found`,
 so plain downward scrolling still finds the heading. The reproduction uses `G` to go through
 `resolve`.
-
-The capping direction (header taller than the viewport allows) has no reproduction recorded.
 
 ## Root Cause
 
@@ -77,5 +89,3 @@ Unit tests in `src/pager/heading.rs`, mirroring `min_line_index_excludes_global_
 
 - A wrapped header line does not push `min_line_index` past the header, so a heading on the
   first line below the header is still found.
-- A capped header does not pull `min_line_index` into the header, so a header line is never
-  picked as a heading.
