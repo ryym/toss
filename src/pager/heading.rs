@@ -377,9 +377,10 @@ mod tests {
     }
 
     #[test]
-    fn min_line_index_covers_header_lines_dropped_by_the_height_cap() {
+    fn unreachable_capped_header_still_uses_header_line_count() {
         let mut doc = Document::from_string("# A\n# B\n# C\nx\n".into());
-        // The header covers 3 lines but only 2 rows of it fit, so line 2 is still not a heading.
+        // height (2) < num_lines (3) only to pin the arithmetic, not to model a capped header:
+        // that would force max_heading_height to 0, which find_heading short-circuits on first.
         let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 10), 2, 3);
 
         h.resolve(&mut doc, 3);
