@@ -27,13 +27,15 @@ impl Header {
         self.rows = build_rows(doc, size, self.num_lines);
     }
 
-    /// The number of screen rows the header covers.
+    /// The number of screen rows the header covers. Unlike [`Self::num_lines`], this counts
+    /// rendered rows: larger than `num_lines` when header lines wrap, smaller when the header
+    /// is capped to fit the viewport or the document has fewer lines than configured.
     pub fn height(&self) -> usize {
         self.rows.len()
     }
 
-    /// The number of document lines the header covers, which differs from [`Self::height`]
-    /// whenever a header line wraps or the header is capped to fit the viewport.
+    /// The number of leading document lines configured as the header.
+    /// This is a configured extent, not the number of lines actually rendered.
     pub fn num_lines(&self) -> usize {
         self.num_lines
     }
