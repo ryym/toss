@@ -40,6 +40,8 @@ impl Header {
         self.num_lines
     }
 
+    /// Whether `line_index` is a document line configured as part of the header.
+    /// Uses the configured extent, not the rendered one — see [`Self::num_lines`].
     pub fn contains(&self, line_index: usize) -> bool {
         line_index < self.num_lines
     }
