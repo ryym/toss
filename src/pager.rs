@@ -239,9 +239,9 @@ impl Pager {
             return 0;
         }
         if let Some(row) = self.heading.rows().first()
-            && row.line_index() == rows[self.header.rows().len()].line_index()
+            && row.line_index() == rows[self.header.height()].line_index()
         {
-            return self.header.rows().len();
+            return self.header.height();
         }
         self.total_header_height()
     }
