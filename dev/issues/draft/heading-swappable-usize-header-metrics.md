@@ -37,6 +37,46 @@ pub fn new(
 - No pair of adjacent `usize` parameters can be transposed without the compiler (or a test
   fabricating an unreachable state) catching it.
 
+## Related Concern
+
+Nearby, and worth keeping in view while choosing a direction: **"this line is inside the global
+header" is currently expressed in two modules under two names.**
+
+`src/pager/header.rs`:
+
+```rust
+    pub fn contains(&self, line_index: usize) -> bool {
+        line_index < self.num_lines
+    }
+```
+
+`src/pager/heading.rs` holds the same boundary as a threshold fed by `global_header_num_lines`:
+
+```rust
+struct HeadingConfig {
+    /// The minimum line index that can be a heading.
+    /// Lines below this index are never treated as headings, regardless of pattern matching.
+    min_line_index: usize,
+```
+
+and re-derives the predicate from it as the lower bound of the heading search:
+
+```rust
+    pub fn resolve(&mut self, doc: &mut Document, line_index: usize) {
+        self.current = self.find_heading(doc, self.config.min_line_index..(line_index + 1));
+    }
+```
+
+"excluded from the search" is therefore exactly `line_index < num_lines` — `Header::contains`
+spelled differently. Nothing links the two, so a change to what counts as "inside the header"
+has to be remembered in both places, with no compiler or test signal.
+
+A possible direction, not a requirement: let `Header` name that boundary once (e.g. an accessor
+for the first document line outside the header) and have the heading search read it, so the
+`&Header` option above removes the duplication rather than preserving it. `Header::contains`
+answers a boolean question and is not directly reusable as a range start, so sharing the named
+value is likely a better fit than sharing the predicate.
+
 ## Plan
 
 Not decided. Candidate directions, roughly in order of how much they change:
