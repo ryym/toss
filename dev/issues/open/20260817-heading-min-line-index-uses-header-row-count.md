@@ -20,12 +20,22 @@ direction:
 - **Header lines wrap** (narrow terminal, long header line): `height() > num_lines`, so lines
   just below the header are wrongly excluded, and a heading there is never found.
 
-They do not diverge the other way. `build_rows` caps the header at `viewport height - 1` rows
-when it is short, so `height() < num_lines` there too, but this never lets a header line become
-a heading: the same cap forces `max_heading_height` to `0` in `HeadingConfig`, and `find_heading`
-returns `None` before considering any line whenever `max_heading_height` is `0`. So while the
-header is capped, no heading exists at all — the row/line mismatch is unobservable in this
-direction.
+They do not diverge the other way, for two independent reasons:
+
+- **The header is capped** — `build_rows` caps the header at `viewport height - 1` rows when it
+  is short, so `height() < num_lines` there too. But the same cap forces `max_heading_height` to
+  `0` in `HeadingConfig`, and `find_heading` returns `None` before considering any line whenever
+  `max_heading_height` is `0`. So while the header is capped, no heading exists at all — the
+  row/line mismatch is unobservable in this direction.
+- **The document has fewer lines than the header is configured for** — `build_rows` skips lines
+  that do not exist rather than padding for them, so a file shorter than `--header-lines`, or a
+  streamed document whose header lines have not all arrived yet, also produces
+  `height() < num_lines` without any cap. This is harmless for a different reason: every
+  `line_index` that reaches `Heading::resolve`/`resolve_if_found` comes from a row the document
+  already has, so while it's shorter than `num_lines`, `line_index < doc.line_count() <=
+  num_lines` always holds. The search range `min_line_index..(line_index + 1)` (`min_line_index ==
+  num_lines`) is therefore always empty — no header line can ever be reached as a heading
+  candidate through this path, regardless of when the rest of the document arrives.
 
 ## Reproduction
 
