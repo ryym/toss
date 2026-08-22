@@ -214,7 +214,8 @@ impl HeadingConfig {
             .saturating_sub(global_header_height)
             .saturating_sub(1);
         Self {
-            // Bound candidates by the lines the header covers, not by the rows it occupies.
+            // Header lines are never heading candidates, regardless of how many rows they
+            // render as.
             min_line_index: global_header_num_lines,
             max_heading_height,
             width: size.width(),
