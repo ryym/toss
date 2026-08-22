@@ -359,12 +359,13 @@ mod tests {
 
     #[test]
     fn min_line_index_excludes_global_header_area() {
-        let mut doc = Document::from_string("# A\n# B\n# C\nx\ny\n".into());
+        let mut doc = Document::from_string("# A\n# B\nx\ny\n".into());
         // The header covers 2 lines, so lines 0 and 1 never become headings.
         let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 10), 2, 2);
 
-        h.resolve(&mut doc, 4);
-        assert_eq!(h.start_line_index(), Some(2));
+        h.resolve(&mut doc, 3);
+        // Without min_line_index, `# B` on line 1 would be picked.
+        assert!(h.start_line_index().is_none());
     }
 
     #[test]
