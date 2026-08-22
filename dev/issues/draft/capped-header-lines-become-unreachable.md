@@ -131,6 +131,30 @@ have nowhere to render. Its visible symptom today is a `jump_to` misdirect; it w
 turn into outright data loss on screen the moment the header's and heading's reserved-row
 constants stop matching.
 
+### The streaming fill gate also leans on the cap
+
+`Pager::pump_input` rebuilds the header only through `relayout_page`, and that call is gated on
+the viewport not yet being full:
+
+```rust
+if result.grew && self.viewport.rows().len() < self.viewport.size().height() {
+    self.relayout_page(*self.viewport.size());
+```
+
+"the header is still missing a configured line" and "the viewport is not full" are different
+conditions, but they cannot diverge visibly today:
+
+- A missing header line means `doc.line_count() < num_lines`, since `build_rows` renders
+  `0..num_lines` and a streamed document receives lines in order. So every row the pager can
+  lay out comes from a header line.
+- A full viewport therefore means those lines already render at least `viewport height` rows,
+  which is past the `height - 1` cap — the late line would not appear even after a rebuild.
+
+So the gate is correct only because the cap keeps the header within the viewport. Any resolution
+that lets the header occupy `viewport height` rows or more must give `pump_input` its own
+header-staleness condition; otherwise a header line arriving after the first screen fills stays
+off-screen until the next resize or scroll.
+
 ## Outcome
 
 - A header line the cap drops from rendering is either genuinely reachable (as header,
@@ -141,6 +165,8 @@ constants stop matching.
 - The header's and heading's reserved-row amounts no longer need to coincidentally match for
   correctness — or if they must, that's enforced (e.g. a shared constant) rather than left
   implicit.
+- `Pager::pump_input`'s first-screen fill gate no longer silently depends on the cap to keep a
+  late-arriving header line from being missed.
 
 ## Plan
 
