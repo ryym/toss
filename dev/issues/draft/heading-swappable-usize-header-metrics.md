@@ -79,7 +79,7 @@ value is likely a better fit than sharing the predicate.
 
 ## Plan
 
-Not decided. The first three directions are alternatives to each other, roughly in order of
+Not decided. The first four directions are alternatives to each other, roughly in order of
 how much they change. The last is on a different axis and combines with any of them:
 
 - **Pass `&Header` instead of the two `usize`s.** `Heading` and `Header` are both private
@@ -92,8 +92,48 @@ how much they change. The last is on a different axis and combines with any of t
   `Header` can still fill the struct wrongly — the mistake just becomes local to one place.
 - **Newtype the units** (e.g. `Rows(usize)` / `Lines(usize)`). Strongest guarantee, and
   generalizes: `dev/issues/draft/heading-line-range-clamped-by-row-count.md` records the same
-  row/line mix-up elsewhere in this file. Largest change of the three, and touches call sites
+  row/line mix-up elsewhere in this file. Largest change of the first three, and touches call sites
   beyond `Heading::new`/`resize`.
+- **Stop holding the bound at all; let `Pager` pass a search range.** The two values are not
+  symmetric: `max_heading_height` is screen space, which `Heading` needs to lay itself out, while
+  `min_line_index` only narrows where the search may start — something the caller can express
+  directly. `Heading` then keeps only the size-derived values, and the header boundary stays in
+  the module that owns the `Header`:
+
+  ```rust
+  // src/pager/heading.rs
+  pub fn new(options: Option<HeadingOptions>, size: &ViewportSize, global_header_height: usize) -> Self
+
+  /// Find and set the heading nearest to `range.end`, searching within `range`.
+  pub fn resolve(&mut self, doc: &mut Document, range: Range<usize>) {
+      self.current = self.find_heading(doc, range);
+  }
+  ```
+
+  ```rust
+  // src/pager.rs
+  fn resolve_heading(&mut self, up_to_line: usize) {
+      let range = self.header.num_lines()..(up_to_line + 1);
+      self.heading.resolve(&mut self.doc, range);
+  }
+  ```
+
+  Removes the transposable pair by removing one of the two values rather than renaming or
+  wrapping it, leaving a single `usize`. `resolve_if_found` already takes a range, so the two
+  entry points converge on one shape. It also answers the "Related Concern" above: the header
+  boundary is read where the `Header` is in scope, so `Header::contains` and the search bound
+  stop being the same rule written twice. As a side effect the six `heading.resolve` call sites
+  in `src/pager.rs` collapse into one helper, which is the audit
+  `dev/issues/draft/heading-resolved-from-header-covered-row-on-jump.md` currently has to do.
+
+  **Weigh against it:** `Heading::is_heading_start` is a second path to the same decision, and a
+  search range does not bound it — `Pager::push_up_heading_if_needed` calls it directly on rows
+  under the overlay. `Pager` would have to apply `header.contains(..)` there as well, so the
+  bound goes from "enforced once, inside the decision" to "applied at each `Pager` call site".
+  That is the opposite of `dev/issues/draft/heading-min-line-index-not-enforced.md`, whose plan
+  consolidates both paths onto one guarded method inside `Heading`. Choosing this direction means
+  re-planning that issue around a `Pager`-side bound instead of adopting its current plan.
+  Note also that `resolve` changes from an inclusive reference line to an exclusive range end.
 - **Stop passing the bound on resize.** `Header::num_lines` is written once in `Header::new` and
   never again — `Header::resize` only rebuilds `rows` — so `Heading::resize`'s
   `global_header_num_lines` argument is always the value `Heading::new` already received. Hold it
@@ -118,9 +158,8 @@ how much they change. The last is on a different axis and combines with any of t
   On its own this cuts the transposable pair from two call sites (`Pager::new` and
   `Pager::relayout_page`) to one, which lowers the stakes of whichever direction above is chosen.
   It also makes the distinction visible in the type: a resize changes how many rows the header
-  renders as, never which document lines it covers. Moot if `Heading` stops holding the bound
-  altogether — e.g. if `resolve` takes a search range that `Pager` builds from its own `Header` —
-  since then the field and the argument disappear together.
+  renders as, never which document lines it covers. Moot under the previous direction, where the
+  field and the argument disappear together.
 
 Whichever direction is chosen should also update (or replace) the `Heading` unit tests so they
 can no longer construct a `(height, num_lines)` pair that no real `Header` could produce.
