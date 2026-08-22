@@ -932,6 +932,69 @@ mod tests {
         assert!(pager.pump_input().is_none());
     }
 
+    /// `Header::height()` can fall short of `Header::num_lines()` without hitting the
+    /// reserved-row cap, simply because the document hasn't streamed in that far yet.
+    #[test]
+    fn header_height_stays_below_num_lines_while_document_is_still_shorter() {
+        let (tx, rx) = mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        // Only 2 lines have arrived, but --header-lines is configured to 3.
+        send_lines(&tx, 0, 2);
+        doc.pump();
+        // viewport height = 9, far more than a 3-line header needs.
+        let opts = Options {
+            header: 3,
+            ..Default::default()
+        };
+        let mut pager = Pager::new(doc, opts, ScreenSize::new(20, 10));
+
+        // The header shows only the 2 lines that exist, not padded to 3.
+        let (snap, _) = pager.snapshot();
+        assert_eq!(line_indices(snap.header), vec![0, 1]);
+
+        // Once the rest of the document arrives, the header reaches its configured size.
+        send_lines(&tx, 2, 3);
+        pager.pump_input();
+        let (snap, _) = pager.snapshot();
+        assert_eq!(line_indices(snap.header), vec![0, 1, 2]);
+    }
+
+    /// A line inside the configured header range never becomes a sticky heading, whether or
+    /// not it has arrived yet at the moment `Heading` is asked about it.
+    #[test]
+    fn heading_never_picks_a_line_inside_the_header_even_before_it_has_arrived() {
+        let (tx, rx) = mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        // Only line 0 has arrived; line 1 ("# B"), inside the header, hasn't yet.
+        tx.send(StreamMsg::Line(Line::new(0, "# A".into())))
+            .unwrap();
+        doc.pump();
+
+        let opts = Options {
+            header: 3,
+            heading: Some(heading_opts("^# ", 1)),
+            ..Default::default()
+        };
+        let mut pager = Pager::new(doc, opts, ScreenSize::new(20, 10));
+
+        // The rest of the document arrives, including "# B" (line 1, still inside the
+        // header) and "# D" (line 3, the first line outside the header).
+        for (i, text) in [(1, "# B"), (2, "# C"), (3, "# D"), (4, "tail")] {
+            tx.send(StreamMsg::Line(Line::new(i, text.into()))).unwrap();
+        }
+        tx.send(StreamMsg::Eof).unwrap();
+        pager.pump_input();
+
+        // "# B" (line 1) is inside the header: jumping to it redirects to the top of the
+        // document instead of making it a sticky heading.
+        pager.jump_to(1);
+        assert!(line_indices(pager.snapshot().0.heading).is_empty());
+
+        // "# D" (line 3) is the first line outside the header: it becomes the heading.
+        pager.jump_to(3);
+        assert_eq!(line_indices(pager.snapshot().0.heading), vec![3]);
+    }
+
     #[test]
     fn snapshot_starts_at_top_of_doc() {
         let mut pager = Pager::new(doc_lines(10), Options::default(), ScreenSize::new(20, 5));
