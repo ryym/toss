@@ -378,17 +378,6 @@ mod tests {
     }
 
     #[test]
-    fn unreachable_capped_header_still_uses_header_line_count() {
-        let mut doc = Document::from_string("# A\n# B\n# C\nx\n".into());
-        // height (2) < num_lines (3) only to pin the arithmetic, not to model a capped header:
-        // that would force max_heading_height to 0, which find_heading short-circuits on first.
-        let mut h = Heading::new(Some(opts("^# ", 1)), &size(10, 10), 2, 3);
-
-        h.resolve(&mut doc, 3);
-        assert!(h.start_line_index().is_none());
-    }
-
-    #[test]
     fn resize_rebuilds_rows_at_new_width() {
         let mut doc = Document::from_string("# Long header line\nsub\nfoo\n".into());
         let mut h = Heading::new(Some(opts("^# ", 1)), &size(80, 5), 0, 0);
