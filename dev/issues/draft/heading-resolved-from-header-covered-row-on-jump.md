@@ -12,9 +12,13 @@ via `jump_to_bottom`) can pin a heading from an earlier section than the one act
 The heading is meant to stick to the first *visible content* row, which is
 `viewport.rows()[header.height()]` — `Pager::snapshot` builds content as
 `&self.viewport.rows()[self.total_header_height()..]`, so rows `0..header.height()` are hidden
-under the global header. `Pager::scroll_up`, `scroll_down` and `jump_to` already resolve the
-heading against `rows()[header.height()]`; `jump_to_end` and `jump_to_bottom` are the only two
-call sites still using `rows()[0]`.
+under the global header. `Pager::scroll_up` and `scroll_down` already resolve the heading against
+`rows()[header.height()]`. `jump_to_end` and `jump_to_bottom` are the sites this issue was
+reported from, but they are examples, not a verified inventory: other call sites may resolve the
+heading from `rows()[0]` (or the equivalent `rows().first()`) too. Search for the current set
+when fixing, e.g. `rg 'heading\.resolve' src/`, and judge each hit on its own — resolving against
+a jump target rather than a viewport row, as `jump_to` does, is correct and not an instance of
+this bug.
 
 ## Reproduction
 
@@ -74,7 +78,7 @@ header whenever `header.height() > 0`, instead of the first row below it.
 
 ## Plan
 
-Use the same reference row as every other heading-resolving call site:
+Use the row just below the global header as the reference row:
 
 ```rust
 let top_line_index = self.viewport.rows()[self.header.height()].line_index();
@@ -82,10 +86,14 @@ self.heading.resolve(&mut self.doc, top_line_index);
 self.push_up_heading_if_needed();
 ```
 
-Apply this to both `jump_to_end` and `jump_to_bottom`. Add a regression test (e.g. in
-`src/tests/heading.rs`) that jumps to the end while a header and heading are both configured and
-asserts the heading matches the section actually visible, along the lines of the reproduction
-above.
+Apply this to `jump_to_end`, `jump_to_bottom`, and any other site the search turns up that
+resolves the heading from the viewport's top row. Some hits may belong to another issue — if a
+site's resolve is being moved or removed elsewhere, leave it to that issue instead of patching it
+here.
+
+Add a regression test (e.g. in `src/tests/heading.rs`) that jumps to the end while a header and
+heading are both configured and asserts the heading matches the section actually visible, along
+the lines of the reproduction above.
 
 `rows()[header.height()]` can be out of bounds on an empty or under-filled viewport; that is a
 pre-existing, separately tracked concern
