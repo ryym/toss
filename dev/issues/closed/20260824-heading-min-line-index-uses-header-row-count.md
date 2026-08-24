@@ -1,7 +1,7 @@
 ---
 type: bugfix
 tags: [heading, header]
-status: doing
+status: done
 opened_at: 2026-08-17T13:41:15Z
 ---
 
@@ -32,9 +32,9 @@ They do not diverge the other way, for two independent reasons:
   streamed document whose header lines have not all arrived yet, also produces
   `height() < num_lines` without any cap. This is harmless for a different reason: every
   `line_index` that reaches `Heading::resolve`/`resolve_if_found` comes from a row the document
-  already has, so while it's shorter than `num_lines`, `line_index < doc.line_count() <=
-  num_lines` always holds. The search range `min_line_index..(line_index + 1)` (`min_line_index ==
-  num_lines`) is therefore always empty — no header line can ever be reached as a heading
+  already has, so while it's shorter than `num_lines`, `line_index < doc.line_count() <= num_lines`
+  always holds. The search range `min_line_index..(line_index + 1)` (`min_line_index == num_lines`)
+  is therefore always empty — no header line can ever be reached as a heading
   candidate through this path, regardless of when the rest of the document arrives.
 
 ## Reproduction
