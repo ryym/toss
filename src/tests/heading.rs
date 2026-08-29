@@ -1,6 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test_screen};
+use super::{TestCase, enter, key, run_test_screen};
 use crate::options::{HeadingOptions, Options};
 
 fn heading_opts(pattern: &str) -> Option<HeadingOptions> {
@@ -398,6 +398,144 @@ line 1
 # Section B
 line 3
 {rev}lines 1-4/6 66%{/rev}
+-----
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}
+
+/// Jumping to the end with a global header configured should pin the heading of the
+/// section the visible content belongs to. The viewport top row after the jump is `a2`,
+/// which the 2-row header covers, and `# B` sits in the covered rows too.
+#[test]
+// BUG: `Pager::jump_to_end` resolves the heading from `viewport.rows()[0]` instead of
+// `viewport.rows()[header.height()]`, so it searches back from the covered `a2` and pins
+// `# A` while the visible content `b2` / `b3` / `b4` belongs to section B.
+#[should_panic]
+fn jump_to_end_resolves_heading_below_header() {
+    let content = "\
+H1
+H2
+# A
+a1
+a2
+# B
+b1
+b2
+b3
+b4
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 7,
+        content,
+        options: Options {
+            header: 2,
+            heading: heading_opts("^# "),
+            ..Default::default()
+        },
+        events: vec![key('G'), key('q')],
+        ..Default::default()
+    });
+    let want = "\
+H1
+H2
+# A
+a1
+a2
+# B
+{rev}lines 1-6/10 60%{/rev}
+-----
+[EVENT]:char:G
+H1
+H2
+# B
+b2
+b3
+b4
+{rev}lines 5-10/10 100%{/rev}
+-----
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}
+
+/// Jumping to a match below the page (`n`) goes through `Pager::jump_to_bottom`, which has
+/// the same defect as `jump_to_end`. The viewport top row after the jump is `az` and `# B`
+/// is the next row, both covered by the 2-row header.
+#[test]
+// BUG: `Pager::jump_to_bottom` resolves the heading from `viewport.rows()[0]`, so it pins
+// `# A` while the visible content `b2` / `b3` / `zzz` belongs to section B.
+#[should_panic]
+fn jump_to_match_below_resolves_heading_below_header() {
+    let content = "\
+H1
+H2
+# A
+az
+# B
+b1
+b2
+b3
+zz
+b4
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 7,
+        content,
+        options: Options {
+            header: 2,
+            heading: heading_opts("^# "),
+            ..Default::default()
+        },
+        events: vec![key('/'), key('z'), enter(), key('n'), key('q')],
+        ..Default::default()
+    });
+    let want = "\
+H1
+H2
+# A
+az
+# B
+b1
+{rev}lines 1-6/10 60%{/rev}
+-----
+[EVENT]:char:/
+H1
+H2
+# A
+az
+# B
+b1
+/█
+-----
+[EVENT]:char:z
+H1
+H2
+# A
+a{rev}{b}z{/rev}{/b}
+# B
+b1
+/z█
+-----
+[EVENT]:enter
+H1
+H2
+# A
+a{rev}{b}z{/rev}{/b}
+# B
+b1
+{rev}lines 1-6/10 60%{/rev}
+-----
+[EVENT]:char:n
+H1
+H2
+# B
+b2
+b3
+{rev}{b}z{/rev}{/b}{rev}{line}{b}z{/rev}{/line}{/b}
+{rev}lines 4-9/10 90%{/rev}
 -----
 [EVENT]:char:q
 ";
