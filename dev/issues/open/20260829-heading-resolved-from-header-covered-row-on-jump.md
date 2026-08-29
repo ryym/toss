@@ -1,6 +1,8 @@
 ---
 type: bugfix
 tags: [heading]
+status: doing
+opened_at: 2026-08-29T05:05:34Z
 ---
 
 ## Overview
