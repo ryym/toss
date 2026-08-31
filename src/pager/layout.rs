@@ -56,12 +56,12 @@ impl Layout {
         self.size.height().saturating_sub(1)
     }
 
-    /// Rows the sticky heading may occupy, given how many rows the header took.
-    /// Always leaves at least one row for content.
-    fn max_heading_height(&self, header_height: usize) -> usize {
+    /// Rows the sticky heading may occupy given the rows the header took,
+    /// always leaving at least one row for content.
+    fn max_heading_height(&self, header: &[Row]) -> usize {
         self.size
             .height()
-            .saturating_sub(header_height)
+            .saturating_sub(header.len())
             .saturating_sub(1)
     }
 }
@@ -178,12 +178,12 @@ pub(super) fn compose(doc: &mut Document, layout: &Layout, anchor: RowPos) -> Fr
     let block = rows
         .get(header.len())
         .map(|row| row.line_index())
-        .and_then(|line| resolve_heading(doc, layout, header.len(), line));
+        .and_then(|line| resolve_heading(doc, layout, &header, line));
 
     let heading = match block {
         None => Vec::new(),
         Some(block) => {
-            let push_up = push_up_offset(doc, layout, &rows, header.len(), &block);
+            let push_up = push_up_offset(doc, layout, &rows, &header, &block);
             block.rows[push_up..].to_vec()
         }
     };
@@ -232,11 +232,11 @@ struct HeadingBlock {
 fn resolve_heading(
     doc: &mut Document,
     layout: &Layout,
-    header_height: usize,
+    header: &[Row],
     at_line: usize,
 ) -> Option<HeadingBlock> {
     let options = layout.heading.as_ref()?;
-    let max_height = layout.max_heading_height(header_height);
+    let max_height = layout.max_heading_height(header);
     if max_height == 0 || at_line < layout.header_lines {
         return None;
     }
@@ -261,15 +261,15 @@ fn push_up_offset(
     doc: &mut Document,
     layout: &Layout,
     rows: &[Row],
-    header_height: usize,
+    header: &[Row],
     block: &HeadingBlock,
 ) -> usize {
     let Some(options) = layout.heading.as_ref() else {
         return 0;
     };
-    let overlay = header_height + block.rows.len();
+    let overlay = header.len() + block.rows.len();
     let mut next_section_start = overlay;
-    for (i, row) in rows.iter().enumerate().take(overlay).skip(header_height) {
+    for (i, row) in rows.iter().enumerate().take(overlay).skip(header.len()) {
         if row.wrap_index() != 0
             || row.line_index() == block.start_line
             || layout.is_header_line(row.line_index())
@@ -337,10 +337,10 @@ pub(super) struct HeadingPlacement {
 pub(super) fn heading_placement(
     doc: &mut Document,
     layout: &Layout,
-    header_height: usize,
+    header: &[Row],
     at_line: usize,
 ) -> Option<HeadingPlacement> {
-    let block = resolve_heading(doc, layout, header_height, at_line)?;
+    let block = resolve_heading(doc, layout, header, at_line)?;
     let end = block.rows[block.rows.len() - 1].line_index() + 1;
     Some(HeadingPlacement {
         lines: block.start_line..end,
@@ -348,30 +348,30 @@ pub(super) fn heading_placement(
     })
 }
 
-/// The anchor that puts `line_index` exactly `rows_above` rows below the top of the page.
+/// The anchor that puts `target` exactly `rows_above` rows below the top of the page.
 /// Near the start of the document fewer rows may be available, in which case the anchor
 /// lands on the first row of the document.
 pub(super) fn anchor_above(
     doc: &mut Document,
     layout: &Layout,
-    line_index: usize,
+    target: RowPos,
     rows_above: usize,
 ) -> RowPos {
-    let target = (line_index, 0);
     if rows_above == 0 {
         return target;
     }
     let width = layout.size.width();
-    let first_row = {
+    let (line_index, wrap_index) = target;
+    let target_row = {
         let Some(line) = doc.line(line_index) else {
             return target;
         };
-        match line.wrap(width).into_iter().next() {
+        match line.wrap(width).into_iter().nth(wrap_index) {
             Some(row) => row,
             None => return target,
         }
     };
-    let earlier = rows::list_backward(doc, width, DocPos::Before(&first_row), rows_above);
+    let earlier = rows::list_backward(doc, width, DocPos::Before(&target_row), rows_above);
     earlier
         .first()
         .map_or(target, |r| (r.line_index(), r.wrap_index()))

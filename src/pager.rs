@@ -194,10 +194,6 @@ impl Pager {
         self.compose_at(anchor);
     }
 
-    fn total_header_height(&self) -> usize {
-        self.frame.overlay_height()
-    }
-
     /// Returns the height of the display area (the number of rows) excluding the header region.
     pub fn content_height(&self) -> usize {
         self.frame.content().len()
@@ -265,9 +261,8 @@ impl Pager {
             line_index = 0;
         }
 
-        let header_height = self.frame.header().len();
         let placement =
-            layout::heading_placement(&mut self.doc, &self.layout, header_height, line_index);
+            layout::heading_placement(&mut self.doc, &self.layout, self.frame.header(), line_index);
         let heading_height = match &placement {
             // The target is one of the heading lines: show it as the pinned heading itself.
             Some(p) if p.lines.contains(&line_index) => 0,
@@ -275,12 +270,8 @@ impl Pager {
             None => 0,
         };
 
-        let anchor = layout::anchor_above(
-            &mut self.doc,
-            &self.layout,
-            line_index,
-            header_height + heading_height,
-        );
+        let rows_above = self.frame.header().len() + heading_height;
+        let anchor = layout::anchor_above(&mut self.doc, &self.layout, (line_index, 0), rows_above);
         self.compose_at(anchor);
         true
     }
@@ -306,7 +297,7 @@ impl Pager {
             .map(|l| l.row_count(width))
             .unwrap_or(1);
         let rows_above = self.layout.size().height().saturating_sub(row_count);
-        let anchor = layout::anchor_above(&mut self.doc, &self.layout, line_index, rows_above);
+        let anchor = layout::anchor_above(&mut self.doc, &self.layout, (line_index, 0), rows_above);
         self.compose_at(anchor);
         true
     }
@@ -322,10 +313,10 @@ impl Pager {
         let anchor = match num_rows {
             0 => return false,
             n if n < 0 => {
-                let Some(top) = self.frame.rows().first().cloned() else {
+                let Some(top) = self.frame.rows().first() else {
                     return false;
                 };
-                layout::anchor_backward(&mut self.doc, &self.layout, &top, (-n) as usize)
+                layout::anchor_backward(&mut self.doc, &self.layout, top, (-n) as usize)
             }
             n => layout::anchor_forward(&mut self.doc, &self.layout, before, n as usize),
         };
@@ -977,7 +968,6 @@ mod tests {
         let pager = Pager::new(doc_lines(10), opts, ScreenSize::new(20, 6));
         // viewport height = 5, header = 1 -> content = 4.
         assert_eq!(pager.content_height(), 4);
-        assert_eq!(pager.total_header_height(), 1);
     }
 
     #[test]
