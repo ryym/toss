@@ -1,6 +1,6 @@
 ---
 type: bugfix
-status: todo
+status: done
 opened_at: 2026-08-15T06:24:47Z
 tags: [resize]
 ---

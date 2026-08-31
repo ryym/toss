@@ -19,16 +19,16 @@ nor showable on demand, nor discoverable except by accident.
 
 This happens because of how `toss` internally decides which lines "belong" to the header:
 
-- `Header::num_lines()` records what the header is *configured* to cover; `Header::height()`
-  is how many rows actually got rendered once the cap kicked in. They diverge whenever
-  `num_lines > viewport_height - 1`.
-- `Header::contains(line_index)` compares against `num_lines`, not `height()`, so it reports
-  `true` for lines the cap dropped and that never actually appear as header rows.
-- `Pager::jump_to` uses `contains()` to decide whether to redirect to line 0:
+- `Layout::is_header_line` answers from the *configured* line count (`--header`), while the
+  header actually rendered by `layout::compose` is capped at `viewport height - 1` rows. The
+  two diverge whenever `header_lines > viewport_height - 1`.
+- So `is_header_line` reports `true` for lines the cap dropped and that never appear as header
+  rows.
+- `Pager::jump_to` uses it to decide whether to redirect to line 0:
 
   ```rust
-  pub fn jump_to(&mut self, mut line_index: usize) -> PageUpdate {
-      if self.header.contains(line_index) {
+  pub fn jump_to(&mut self, mut line_index: usize) -> bool {
+      if self.layout.is_header_line(line_index) {
           line_index = 0;
       }
       ...
@@ -36,8 +36,8 @@ This happens because of how `toss` internally decides which lines "belong" to th
 
   So an explicit jump to a dropped header line always bounces back to the top. The only way
   to see such a line at all is to scroll past it, where it spills into an ordinary content row
-  instead of a header row (`Viewport` builds rows sequentially from line 0 and never consults
-  `Header::contains()`).
+  instead of a header row: the viewport rows are listed from the anchor without consulting
+  `is_header_line` at all.
 
 ## Reproduction
 
@@ -62,38 +62,37 @@ fn jump_to_dropped_header_line_bounces_to_top() {
 
 ## Root Cause
 
-`Header::contains` and `Heading`'s `min_line_index` both treat "configured header lines"
-(`num_lines`) as equivalent to "lines the header actually occupies on screen". That
-equivalence only holds when the header isn't capped. Once it is, the lines between what's
-rendered (`height()`) and what's configured (`num_lines()`) fall into a gap no code path
-accounts for:
+`Layout::is_header_line` treats "configured header lines" as equivalent to "lines the header
+actually occupies on screen". That equivalence only holds when the header isn't capped. Once it
+is, the lines between what renders and what is configured fall into a gap no code path accounts
+for:
 
 - Not shown as header (rendering stopped at the cap).
-- Not reachable via `jump_to` (`contains()` still claims them).
-- Shown only incidentally as regular content when scrolled past, since `Viewport` doesn't
-  know about `Header::contains()` at all.
+- Not reachable via `jump_to` (`is_header_line` still claims them).
+- Shown only incidentally as regular content when scrolled past, since the viewport rows do not
+  know about `is_header_line` at all.
 
 ### The gap widens if the header's and heading's row reservations ever diverge
 
-`Header::build_rows` and `Heading`'s `HeadingConfig::new` each independently reserve one row
+`Layout::max_header_height` and `Layout::max_heading_height` each independently reserve one row
 so neither one covers the full viewport:
 
 ```rust
-// src/pager/header.rs
-let max_height = size.height().saturating_sub(1);
-```
+fn max_header_height(&self) -> usize {
+    self.size.height().saturating_sub(1)
+}
 
-```rust
-// src/pager/heading.rs
-let max_heading_height = size
-    .height()
-    .saturating_sub(global_header_height)
-    .saturating_sub(1);
+fn max_heading_height(&self, header_height: usize) -> usize {
+    self.size
+        .height()
+        .saturating_sub(header_height)
+        .saturating_sub(1)
+}
 ```
 
 Today both reserve exactly `1`, and that coincidence is what keeps this bug partially
-contained: whenever the header is capped, `max_heading_height` is forced to `0`, so `Heading`
-never activates at the same time as a capped header. Bumping the header's reserve to `2`
+contained: whenever the header is capped, `max_heading_height` is forced to `0`, so a heading
+never resolves at the same time as a capped header. Bumping the header's reserve to `2`
 (heading's left at `1`) breaks that: the header still caps, but `max_heading_height` becomes
 `1`, so a heading can resolve while the header is capped. When that happens, the dropped
 header lines don't even spill into content anymore — they vanish from the screen entirely,
@@ -103,9 +102,9 @@ while remaining unreachable via `jump_to`:
 #[test]
 fn capped_header_with_active_heading_loses_lines() {
     // Demonstrates the compounded failure. Requires bumping the header's reserved-row
-    // count from 1 to 2 in `Header::build_rows` to make the state reachable (heading's
-    // own reserve stays 1) — with both reserves equal to 1, as they are today, this state
-    // cannot occur.
+    // count from 1 to 2 in `Layout::max_header_height` to make the state reachable
+    // (the heading's own reserve stays 1) — with both reserves equal to 1, as they are
+    // today, this state cannot occur.
     let doc = Document::from_string("H0\nH1\nH2\nH3\nH4\n# heading\nbody1\nbody2\n".into());
     let opts = Options {
         header: 5,
@@ -133,40 +132,26 @@ constants stop matching.
 
 ### The streaming fill gate also leans on the cap
 
-`Pager::pump_input` rebuilds the header only through `relayout_page`, and that call is gated on
-the viewport not yet being full:
+`Pager::pump_input` rebuilds the page only while it is not yet full:
 
 ```rust
-if result.grew && self.viewport.rows().len() < self.viewport.size().height() {
-    self.relayout_page(*self.viewport.size());
+if result.grew && self.frame.rows().len() < self.layout.size().height() {
+    self.recompose();
 ```
 
-"the header is still missing a configured line" and "the viewport is not full" are different
+"the header is still missing a configured line" and "the page is not full" are different
 conditions, but they cannot diverge visibly today:
 
-- A missing header line means `doc.line_count() < num_lines`, since `build_rows` renders
-  `0..num_lines` and a streamed document receives lines in order. So every row the pager can
+- A missing header line means `doc.line_count() < header_lines`, since the header renders
+  `0..header_lines` and a streamed document receives lines in order. So every row the pager can
   lay out comes from a header line.
-- A full viewport therefore means those lines already render at least `viewport height` rows,
-  which is past the `height - 1` cap — the late line would not appear even after a rebuild.
+- A full page therefore means those lines already render at least `viewport height` rows, which
+  is past the `height - 1` cap — the late line would not appear even after a rebuild.
 
 So the gate is correct only because the cap keeps the header within the viewport. Any resolution
 that lets the header occupy `viewport height` rows or more must give `pump_input` its own
 header-staleness condition; otherwise a header line arriving after the first screen fills stays
 off-screen until the next resize or scroll.
-
-### The heading push-up scan also leans on the cap
-
-`Pager::push_up_heading_if_needed` scans the viewport rows under the heading overlay, starting at
-row `header.height()`, and asks `Heading::is_heading_start` whether each one starts the next
-section. That predicate does not consult `min_line_index`, so a header line answering `true`
-would shift the current heading's `offset` and hide part of it.
-
-The scan reaches a header line only when `height() < num_lines()` — i.e. exactly the capped case
-— with the viewport at the top of the document. It cannot happen today because a capped header
-forces `max_heading_height` to `0`, so no heading resolves and the function returns before the
-scan. Any resolution that lets a heading coexist with a capped header must therefore also bound
-the predicate; that bound is tracked in `heading-min-line-index-not-enforced.md`.
 
 ## Outcome
 
@@ -180,28 +165,26 @@ the predicate; that bound is tracked in `heading-min-line-index-not-enforced.md`
   implicit.
 - `Pager::pump_input`'s first-screen fill gate no longer silently depends on the cap to keep a
   late-arriving header line from being missed.
-- Neither does `push_up_heading_if_needed`'s scan for the next section's heading.
 
 ## Plan
 
 Not decided. Candidate directions:
 
-- **Make `Header::contains` (and anything gating on it) reflect what's rendered, not what's
-  configured** — compare against something derived from the capped row count rather than
-  `num_lines`. Simplest, but changes what "part of the header" means when capped, and needs a
-  decision on where the dropped lines *do* show up (content, most likely, consistent with
-  today's incidental spillover).
-- **Never let the header actually drop configured lines** — e.g. clamp `num_lines` itself to
-  what fits, either silently or with a startup warning, so `contains()`/`num_lines()`/rendered
-  rows always agree by construction. Removes the gap instead of patching each consumer, but
-  changes the user-visible behavior of the `--header` option when given a count too large for
-  the terminal.
+- **Make `is_header_line` (and anything gating on it) reflect what's rendered, not what's
+  configured** — compare against something derived from the capped row count. Simplest, but
+  changes what "part of the header" means when capped, and needs a decision on where the
+  dropped lines *do* show up (content, most likely, consistent with today's incidental
+  spillover).
+- **Never let the header actually drop configured lines** — e.g. clamp `header_lines` itself to
+  what fits, either silently or with a startup warning, so the configured count and the
+  rendered rows always agree by construction. Removes the gap instead of patching each
+  consumer, but changes the user-visible behavior of the `--header` option when given a count
+  too large for the terminal.
 - **Extract the "reserve one row" policy into one shared place** used by both
-  `Header::build_rows` and `Heading`'s `HeadingConfig::new`, so the two can't drift apart even
-  if neither stays fixed at `1` forever. Addresses only the compounding risk, not the
-  underlying `jump_to` gap by itself — would need pairing with one of the above.
+  `max_header_height` and `max_heading_height`, so the two can't drift apart even if neither
+  stays fixed at `1` forever. Addresses only the compounding risk, not the underlying `jump_to`
+  gap by itself — would need pairing with one of the above.
 
 Whichever direction is chosen should add regression coverage at the `Pager` level (not just
-`Header`/`Heading` unit tests) for the case of `header` configured larger than the viewport
-can render, both with and without an active heading, since that is exactly where this gap
-lives.
+`layout` unit tests) for the case of `header` configured larger than the viewport can render,
+both with and without an active heading, since that is exactly where this gap lives.
