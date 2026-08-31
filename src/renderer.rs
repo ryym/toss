@@ -1,25 +1,74 @@
 mod highlight;
 
-use std::{borrow::Cow, collections::HashSet, io, mem, ops::Range};
+use std::{collections::HashMap, io, ops::Range};
 
 use crossterm::event::Event;
 
 use crate::{
     document::Document,
-    line::{MatchPosition, Row},
-    pager::{PageSnapshot, PageUpdate},
+    line::Row,
+    pager::PageSnapshot,
     screen::{Direction, Screen, Scroll},
-    search::SearchState,
 };
 
-struct SearchStateRef {
-    query: String,
-    current: Option<MatchPosition>,
+/// A row position in the document: `(line_index, wrap_index)`.
+type RowPos = (usize, usize);
+
+/// A run of consecutive screen rows that render one document line.
+///
+/// The rows of a wrapped line are written as a single continuous string so the terminal
+/// treats the breaks between them as soft wraps, which means a group is the smallest unit
+/// that can be redrawn.
+#[derive(Debug, PartialEq)]
+struct PaintedGroup {
+    y: usize,
+    height: usize,
+    /// The text as written to the screen, with search highlights already applied.
+    /// `None` when the line could not be read, in which case the rows are only cleared.
+    text: Option<String>,
 }
 
-impl PartialEq<SearchState> for SearchStateRef {
-    fn eq(&self, other: &SearchState) -> bool {
-        self.query == other.query.as_str() && self.current == other.current
+/// What one screen row holds, as the identity used to diff two frames.
+///
+/// `raw` is part of the identity because the same `(line_index, wrap_index)` covers
+/// different text at different widths: a reflow can leave the position untouched while
+/// the row now has to show more or less of the line.
+#[derive(Debug)]
+struct PaintedRow {
+    pos: RowPos,
+    raw: Range<usize>,
+    group: usize,
+}
+
+/// A whole frame as it should appear on screen: what [`Renderer`] compares against the
+/// frame it painted last to decide what actually has to be written.
+#[derive(Debug)]
+struct PaintedFrame {
+    groups: Vec<PaintedGroup>,
+    /// One entry per viewport row, sticky rows included.
+    rows: Vec<PaintedRow>,
+    status: String,
+    /// Screen row the status line sits on. Also the number of viewport rows painted:
+    /// an under-filled page pulls the status line up and leaves the rest blank.
+    status_y: usize,
+    /// Viewport height, i.e. the rows below the status line that must stay blank.
+    height: usize,
+}
+
+impl PaintedFrame {
+    fn text_at(&self, y: usize) -> Option<&Option<String>> {
+        self.rows.get(y).map(|row| &self.groups[row.group].text)
+    }
+
+    /// Whether screen row `y` of this frame is already showing what row `other_y` of
+    /// `other` needs, i.e. it can be reused as is.
+    fn matches(&self, y: usize, other: &PaintedFrame, other_y: usize) -> bool {
+        match (self.rows.get(y), other.rows.get(other_y)) {
+            (Some(a), Some(b)) => {
+                a.pos == b.pos && a.raw == b.raw && self.text_at(y) == other.text_at(other_y)
+            }
+            _ => false,
+        }
     }
 }
 
@@ -29,31 +78,17 @@ impl PartialEq<SearchState> for SearchStateRef {
 /// and [`Screen`], which abstracts terminal writes. Its sole job is to apply the current
 /// page state to the screen; it never modifies the page state itself.
 ///
-/// It also keeps a small amount of state from the previous render so that it can
-/// re-apply or clear search highlights on rows that a terminal scroll would otherwise leave
-/// untouched.
+/// It keeps the frame it painted last and diffs the new one against it in screen
+/// coordinates, so the redraw is decided from what the terminal actually shows rather than
+/// from what the pager did. See [`plan_shift`] for how the two frames are aligned.
 pub struct Renderer<S: Screen> {
     screen: S,
-    last_search: Option<SearchStateRef>,
-    /// Lines shown with a highlight on screen as of the previous render.
-    last_highlight_lines: HashSet<usize>,
-    /// Lines shown with a highlight on screen as of the render in progress.
-    /// Starts empty every render and becomes `last_highlight_lines` at the end of it.
-    ///
-    /// INVARIANT: a render must populate this for every highlighted row on screen, including
-    /// rows it chose not to redraw. Missing an entry makes the next render believe the row is
-    /// unhighlighted and skip clearing it, leaving a stale highlight behind.
-    current_highlight_lines: HashSet<usize>,
+    last: Option<PaintedFrame>,
 }
 
 impl<S: Screen> Renderer<S> {
     pub fn new(screen: S) -> Self {
-        Self {
-            screen,
-            last_search: None,
-            last_highlight_lines: HashSet::new(),
-            current_highlight_lines: HashSet::new(),
-        }
+        Self { screen, last: None }
     }
 
     pub fn into_screen(self) -> S {
@@ -64,235 +99,281 @@ impl<S: Screen> Renderer<S> {
         self.screen.poll_event(timeout)
     }
 
-    /// Apply the given [`PageSnapshot`] to the screen.
-    /// To keep updates smooth and avoid unnecessary flicker, picks a redraw strategy
-    /// based on the supplied [`PageUpdate`]:
+    /// Apply the given [`PageSnapshot`] to the screen, writing as little as possible.
     ///
-    /// - [`PageUpdate::StatusOnly`]: only the status line is rewritten.
-    /// - [`PageUpdate::Full`]: the entire page (headers, content, status line) is redrawn.
-    /// - [`PageUpdate::Partial`]: only rows affected by state changes are redrawn. when a
-    ///   [`Scroll`] is provided, the terminal is scrolled so the existing rows are preserved.
-    pub fn render(
-        &mut self,
-        doc: &mut Document,
-        page: PageSnapshot,
-        update: PageUpdate,
-    ) -> io::Result<()> {
-        log::debug!("render: {update:?}");
-        let result = match update {
-            PageUpdate::StatusOnly => self.render_status_line(&page),
-            PageUpdate::Full => self.render_full_page(doc, &page),
-            PageUpdate::Partial(scroll) => self.render_partial(doc, &page, scroll),
+    /// The new frame is aligned against the previous one to find how far the screen
+    /// content shifted. When it shifted, the terminal is scrolled so the rows that survive
+    /// are kept, and only the rows that do not match after the shift are rewritten.
+    pub fn render(&mut self, doc: &mut Document, page: PageSnapshot) -> io::Result<()> {
+        let frame = build_frame(doc, &page);
+        let shift = self
+            .last
+            .as_ref()
+            .map_or(0, |last| plan_shift(last, &frame));
+        let dirty = match &self.last {
+            Some(last) => dirty_groups(last, &frame, shift),
+            // Nothing has been painted yet, so everything is.
+            None => (0..frame.groups.len()).collect(),
         };
-        self.store_page_state(update, page.search);
-        result
-    }
+        log::debug!("render: shift={shift}, dirty groups={}", dirty.len());
 
-    /// Store some page states to make the next render effective.
-    fn store_page_state(&mut self, update: PageUpdate, search: Option<&SearchState>) {
-        // Skip if the page update is StatusOnly as it doesn't change the page content.
-        if matches!(update, PageUpdate::StatusOnly) {
-            return;
-        }
-        self.last_search = search.map(|s| SearchStateRef {
-            query: s.query.as_str().to_string(),
-            current: s.current.clone(),
-        });
-        self.last_highlight_lines = mem::take(&mut self.current_highlight_lines);
-    }
-
-    fn render_status_line(&mut self, page: &PageSnapshot) -> io::Result<()> {
-        self.redraw_status_line(page)?;
-        self.screen.flush()
-    }
-
-    fn redraw_status_line(&mut self, page: &PageSnapshot) -> io::Result<()> {
-        let status_y = page.viewport_height();
-        self.screen.clear_row(status_y)?;
-        self.screen.write_at(status_y, &page.status_line)?;
-        Ok(())
-    }
-
-    fn render_full_page(&mut self, doc: &mut Document, page: &PageSnapshot) -> io::Result<()> {
         self.screen.begin_sync()?;
 
-        self.draw_rows(doc, page.header, page.search, 0)?;
-        self.draw_rows(doc, page.heading, page.search, page.header.len())?;
-        self.draw_rows(doc, page.content, page.search, page.total_header_height())?;
-        self.clear_row_range(0, page.viewport_height()..page.height)?;
-        self.redraw_status_line(page)?;
+        if let Some(scroll) = as_scroll(shift) {
+            self.screen.scroll_terminal(&scroll)?;
+        }
+        for i in dirty {
+            let group = &frame.groups[i];
+            self.clear_rows(group.y..(group.y + group.height))?;
+            if let Some(text) = &group.text {
+                self.screen.write_at(group.y, text)?;
+            }
+        }
+
+        // A scroll drags the rows below the viewport around too, and an under-filled page
+        // leaves blank rows below the status line, so clear everything past the content.
+        // A page that shrank also has to clear whatever the previous one painted below it.
+        let painted_before = self.last.as_ref().map_or(0, |last| last.status_y);
+        let blank_end = frame.height.max(painted_before).max(frame.status_y + 1);
+        self.clear_rows(frame.status_y..blank_end)?;
+        self.screen.write_at(frame.status_y, &frame.status)?;
 
         self.screen.end_sync()?;
+        self.last = Some(frame);
         self.screen.flush()
     }
 
-    fn render_partial(
-        &mut self,
-        doc: &mut Document,
-        page: &PageSnapshot,
-        scroll: Option<Scroll>,
-    ) -> io::Result<()> {
-        self.screen.begin_sync()?;
-
-        let header_height = page.total_header_height();
-        let ranges = compute_scroll_redraw_ranges(page.content, scroll.as_ref());
-        log::debug!("render partial: new_rows_range={:?}", ranges);
-
-        // Scroll the terminal and draw newly appeared rows.
-        if let Some(scroll) = &scroll {
-            self.screen.scroll_terminal(scroll)?;
-            let screen_y = header_height + ranges.new_rows.start;
-            self.draw_rows(doc, &page.content[ranges.new_rows], page.search, screen_y)?;
+    fn clear_rows(&mut self, range: Range<usize>) -> io::Result<()> {
+        for y in range {
+            self.screen.clear_row(y)?;
         }
+        Ok(())
+    }
+}
 
-        let is_search_same = match (&self.last_search, page.search) {
-            (Some(prev), Some(current)) => prev == current,
-            (None, None) => true,
-            _ => false,
+/// Build the frame the given page should produce on screen.
+fn build_frame(doc: &mut Document, page: &PageSnapshot) -> PaintedFrame {
+    let sections = [
+        (page.header, 0),
+        (page.heading, page.header.len()),
+        (page.content, page.total_header_height()),
+    ];
+
+    let mut groups: Vec<PaintedGroup> = Vec::new();
+    let mut rows: Vec<PaintedRow> = Vec::new();
+    for (section, base_y) in sections {
+        let mut i = 0;
+        while i < section.len() {
+            let line_index = section[i].line_index();
+            let start = i;
+            while i < section.len() && section[i].line_index() == line_index {
+                i += 1;
+            }
+            let group = groups.len();
+            groups.push(PaintedGroup {
+                y: base_y + start,
+                height: i - start,
+                text: group_text(doc, page, &section[start..i]),
+            });
+            for row in &section[start..i] {
+                rows.push(PaintedRow {
+                    pos: (row.line_index(), row.wrap_index()),
+                    raw: row.raw_range().clone(),
+                    group,
+                });
+            }
+        }
+    }
+
+    PaintedFrame {
+        groups,
+        rows,
+        status: page.status_line.clone(),
+        status_y: page.viewport_height(),
+        height: page.height,
+    }
+}
+
+/// The text of one soft-wrap group, with search highlights applied.
+fn group_text(doc: &mut Document, page: &PageSnapshot, rows: &[Row]) -> Option<String> {
+    let line = doc.line(rows[0].line_index())?;
+    let raw_range = rows[0].raw_range().start..rows[rows.len() - 1].raw_range().end;
+    let text = highlight::apply_highlight_if_matches(page.search, line, raw_range);
+    Some(text.into_owned())
+}
+
+/// How far the screen content moved between two frames, in screen rows.
+/// A positive shift means the content moved up, i.e. the page scrolled down.
+///
+/// Every row of the new frame votes for the distance at which it finds itself in the old
+/// frame, and the winning distance is the one the terminal should be scrolled by. Because
+/// the number of rows that need no redraw is exactly the number of votes a shift got,
+/// the most voted shift is also the one that leaves the least to redraw — including a
+/// shift of zero, which competes on the same footing and means no terminal scroll.
+///
+/// Voting rather than probing a chosen row is what keeps the sticky rows from deciding the
+/// answer: they stay put while the content moves, so they vote for a shift of zero and are
+/// simply outvoted, then redrawn along with the rows the scroll exposed.
+fn plan_shift(old: &PaintedFrame, new: &PaintedFrame) -> isize {
+    let positions: HashMap<RowPos, usize> = old
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(y, row)| (row.pos, y))
+        .collect();
+
+    let mut votes: HashMap<isize, usize> = HashMap::new();
+    for (y, row) in new.rows.iter().enumerate() {
+        let Some(&old_y) = positions.get(&row.pos) else {
+            continue;
         };
-        if is_search_same {
-            // These rows are not redrawn, so carry their highlight state forward.
-            for row in &page.content[ranges.remaining] {
-                if self.last_highlight_lines.contains(&row.line_index()) {
-                    self.current_highlight_lines.insert(row.line_index());
-                }
-            }
-        } else {
-            // The search state has changed, so refresh other rows as well.
-            let screen_y = header_height + ranges.remaining.start;
-            self.refresh_rows(doc, &page.content[ranges.remaining], page.search, screen_y)?;
+        if old.matches(old_y, new, y) {
+            *votes.entry(old_y as isize - y as isize).or_insert(0) += 1;
         }
-
-        // Refresh headers and the status line.
-        self.draw_rows(doc, page.header, page.search, 0)?;
-        self.draw_rows(doc, page.heading, page.search, page.header.len())?;
-        self.redraw_status_line(page)?;
-
-        self.screen.end_sync()?;
-        self.screen.flush()
     }
 
-    /// Draw rows, grouping consecutive rows from the same logical line and writing them as a
-    /// single continuous string so that the terminal treats line-internal wraps as soft wraps.
-    /// `screen_y` specifies the starting screen row position for drawing.
-    fn draw_rows(
-        &mut self,
-        doc: &mut Document,
-        rows: &[Row],
-        search: Option<&SearchState>,
-        screen_y: usize,
-    ) -> io::Result<()> {
-        let mut i = 0;
-        while i < rows.len() {
-            let line_idx = rows[i].line_index();
-            let start = i;
-            while i < rows.len() && rows[i].line_index() == line_idx {
-                i += 1;
-            }
-            self.clear_row_range(screen_y, start..i)?;
-            // Write the combined text for this group as one continuous piece
-            if let Some(line) = doc.line(line_idx) {
-                let raw_range = rows[start].raw_range().start..rows[i - 1].raw_range().end;
-                let text = highlight::apply_highlight_if_matches(search, line, raw_range);
-                if matches!(&text, Cow::Owned(_)) {
-                    self.current_highlight_lines.insert(line_idx);
-                }
-                self.screen.write_at(start + screen_y, &text)?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Similar to [`Self::draw_rows`], but redraw rows only if the rows on screen are stale.
-    /// Reduce screen flickering by skipping redraws whenever possible.
-    fn refresh_rows(
-        &mut self,
-        doc: &mut Document,
-        rows: &[Row],
-        search: Option<&SearchState>,
-        screen_y: usize,
-    ) -> io::Result<()> {
-        let mut i = 0;
-        while i < rows.len() {
-            let line_idx = rows[i].line_index();
-            let start = i;
-            while i < rows.len() && rows[i].line_index() == line_idx {
-                i += 1;
-            }
-            // Write the combined text for this group as one continuous piece
-            if let Some(line) = doc.line(line_idx) {
-                let raw_range = rows[start].raw_range().start..rows[i - 1].raw_range().end;
-                match highlight::apply_highlight_if_matches(search, line, raw_range) {
-                    Cow::Owned(text) => {
-                        self.current_highlight_lines.insert(line_idx);
-                        self.clear_row_range(screen_y, start..i)?;
-                        self.screen.write_at(start + screen_y, &text)?;
-                    }
-                    Cow::Borrowed(text) => {
-                        // Skip redraw only if the line has no highlights both before and this time.
-                        if !self.last_highlight_lines.contains(&line_idx) {
-                            continue;
-                        }
-                        self.clear_row_range(screen_y, start..i)?;
-                        self.screen.write_at(start + screen_y, text)?;
-                    }
-                };
-            }
-        }
-        Ok(())
-    }
-
-    fn clear_row_range(&mut self, base: usize, range: Range<usize>) -> io::Result<()> {
-        for i in range {
-            self.screen.clear_row(base + i)?;
-        }
-        Ok(())
-    }
+    // Ties go to the smallest shift, so an unmoved page never scrolls the terminal. The
+    // sign breaks a remaining tie between the two directions, which repeated rows can
+    // produce: without it the winner would follow the hash map's iteration order.
+    votes
+        .into_iter()
+        .max_by_key(|&(shift, count)| (count, std::cmp::Reverse((shift.abs(), shift))))
+        .map_or(0, |(shift, _)| shift)
 }
 
-#[derive(Debug)]
-struct ScrollRedrawRanges {
-    /// A range of newly appeared rows in the screen by scrolling.
-    new_rows: Range<usize>,
-    /// A range of rows other than [`Self::new_rows`]; rows existing before scroll.
-    remaining: Range<usize>,
-}
-
-/// Compute the range of rows that need redrawing after a scroll as well as the remaining rows.
-fn compute_scroll_redraw_ranges(rows: &[Row], scroll: Option<&Scroll>) -> ScrollRedrawRanges {
-    let (from, to) = scroll_dirty_range(rows, scroll);
-    let remaining = if from == 0 { to..rows.len() } else { 0..from };
-    ScrollRedrawRanges {
-        new_rows: from..to,
-        remaining,
+/// The groups of `new` that the screen does not already show once it is scrolled by
+/// `shift`. A group is redrawn as a whole because its rows are written as one string.
+fn dirty_groups(old: &PaintedFrame, new: &PaintedFrame, shift: isize) -> Vec<usize> {
+    let mut dirty = vec![false; new.groups.len()];
+    for (y, row) in new.rows.iter().enumerate() {
+        let old_y = y as isize + shift;
+        let reusable = old_y >= 0 && old.matches(old_y as usize, new, y);
+        if !reusable {
+            dirty[row.group] = true;
+        }
     }
+    dirty
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, is_dirty)| is_dirty.then_some(i))
+        .collect()
 }
 
-/// After terminal scroll shifts content, `scroll_rows` new rows appear at one edge.
-/// This function returns the range extended to include adjacent existing
-/// rows from the same logical line, so soft-wrap groups are drawn correctly.
-fn scroll_dirty_range(rows: &[Row], scroll: Option<&Scroll>) -> (usize, usize) {
-    let Some(scroll) = scroll else {
-        return (0, 0);
+/// Turn a screen shift into the terminal scroll that realizes it.
+fn as_scroll(shift: isize) -> Option<Scroll> {
+    let direction = if shift > 0 {
+        Direction::Down
+    } else {
+        Direction::Up
     };
-    let num_rows = scroll.num_rows.get();
-    let len = rows.len();
-    match scroll.direction {
-        Direction::Down => {
-            let new_start = len.saturating_sub(num_rows);
-            let mut from = new_start;
-            while from > 0 && rows[from - 1].line_index() == rows[new_start].line_index() {
-                from -= 1;
-            }
-            (from, len)
+    Scroll::new(direction, shift.unsigned_abs())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn frame(rows: &[(usize, &str)], status: &str) -> PaintedFrame {
+        let mut groups = Vec::new();
+        let mut painted = Vec::new();
+        for (y, &(line_index, text)) in rows.iter().enumerate() {
+            groups.push(PaintedGroup {
+                y,
+                height: 1,
+                text: Some(text.to_string()),
+            });
+            painted.push(PaintedRow {
+                pos: (line_index, 0),
+                raw: 0..text.len(),
+                group: y,
+            });
         }
-        Direction::Up => {
-            let new_end = num_rows.min(len);
-            let mut to = new_end;
-            while to < len && rows[to].line_index() == rows[new_end - 1].line_index() {
-                to += 1;
-            }
-            (0, to)
+        PaintedFrame {
+            groups,
+            rows: painted,
+            status: status.to_string(),
+            status_y: rows.len(),
+            height: rows.len(),
         }
+    }
+
+    #[test]
+    fn shift_is_zero_for_an_unchanged_frame() {
+        let old = frame(&[(0, "a"), (1, "b"), (2, "c")], "s");
+        let new = frame(&[(0, "a"), (1, "b"), (2, "c")], "s");
+        assert_eq!(plan_shift(&old, &new), 0);
+        assert!(dirty_groups(&old, &new, 0).is_empty());
+    }
+
+    #[test]
+    fn scrolling_down_shifts_the_content_up() {
+        let old = frame(&[(0, "a"), (1, "b"), (2, "c")], "s");
+        let new = frame(&[(2, "c"), (3, "d"), (4, "e")], "s");
+        // Only "c" survives, one row higher than before.
+        assert_eq!(plan_shift(&old, &new), 2);
+        // The two rows the scroll exposed are the only ones to draw.
+        assert_eq!(dirty_groups(&old, &new, 2), vec![1, 2]);
+    }
+
+    #[test]
+    fn scrolling_up_shifts_the_content_down() {
+        let old = frame(&[(2, "c"), (3, "d"), (4, "e")], "s");
+        let new = frame(&[(1, "b"), (2, "c"), (3, "d")], "s");
+        assert_eq!(plan_shift(&old, &new), -1);
+        assert_eq!(dirty_groups(&old, &new, -1), vec![0]);
+    }
+
+    /// The sticky rows do not move while the content scrolls under them, so they vote for
+    /// a shift of zero. The content has to outvote them, or the whole page would be
+    /// redrawn on every scroll.
+    #[test]
+    fn sticky_rows_do_not_decide_the_shift() {
+        let old = frame(&[(0, "# A"), (3, "c"), (4, "d"), (5, "e")], "s");
+        let new = frame(&[(0, "# A"), (4, "d"), (5, "e"), (6, "f")], "s");
+        assert_eq!(plan_shift(&old, &new), 1);
+        // The sticky row is dragged along by the scroll, so it is redrawn with the new row.
+        assert_eq!(dirty_groups(&old, &new, 1), vec![0, 3]);
+    }
+
+    /// Repeated rows can make two opposite shifts tie. Either would render correctly, but
+    /// which one wins must not depend on the hash map's iteration order.
+    #[test]
+    fn a_tie_between_two_directions_is_broken_deterministically() {
+        let old = frame(&[(0, "a"), (1, "b"), (2, "c")], "s");
+        let new = frame(&[(1, "b"), (0, "a"), (9, "z")], "s");
+        // One row votes for a shift of 1 and one for -1; the rule picks the negative one.
+        assert_eq!(plan_shift(&old, &new), -1);
+    }
+
+    /// A shift only wins when it leaves less to redraw than staying put does.
+    #[test]
+    fn a_shift_that_saves_nothing_loses_to_staying_put() {
+        let old = frame(&[(0, "a"), (1, "b"), (2, "c")], "s");
+        let new = frame(&[(7, "x"), (8, "y"), (9, "z")], "s");
+        assert_eq!(plan_shift(&old, &new), 0);
+        assert_eq!(dirty_groups(&old, &new, 0), vec![0, 1, 2]);
+    }
+
+    /// A row whose text changed cannot be reused even though it did not move, so a
+    /// highlight moving within the page redraws exactly the rows it touched.
+    #[test]
+    fn changed_text_makes_a_row_dirty_in_place() {
+        let old = frame(&[(0, "a"), (1, "hit"), (2, "c")], "s");
+        let new = frame(&[(0, "a"), (1, "{rev}hit{/rev}"), (2, "c")], "s");
+        assert_eq!(plan_shift(&old, &new), 0);
+        assert_eq!(dirty_groups(&old, &new, 0), vec![1]);
+    }
+
+    #[test]
+    fn a_shift_turns_into_a_terminal_scroll() {
+        let down = as_scroll(2).expect("a non-zero shift scrolls");
+        assert_eq!(down.direction, Direction::Down);
+        assert_eq!(down.num_rows.get(), 2);
+
+        let up = as_scroll(-3).expect("a non-zero shift scrolls");
+        assert_eq!(up.direction, Direction::Up);
+        assert_eq!(up.num_rows.get(), 3);
+
+        assert!(as_scroll(0).is_none());
     }
 }

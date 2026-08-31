@@ -8,7 +8,7 @@ use crate::{
     line_editor::{LineEdit, LineEditor},
     options::Options,
     pager::layout::{Frame, Layout, RowPos},
-    screen::{ScreenSize, Scroll},
+    screen::ScreenSize,
     search::{self, SearchDirection, SearchFrom, SearchState},
 };
 
@@ -38,31 +38,6 @@ impl ViewportSize {
     #[inline]
     pub fn height(&self) -> usize {
         self.height
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum PageUpdate {
-    Full,
-    Partial(Option<Scroll>),
-    StatusOnly,
-}
-
-impl PageUpdate {
-    /// Combine two page updates into the one with the widest redraw coverage
-    /// (`Full ⊇ Partial ⊇ StatusOnly`).
-    pub fn combine(self, other: Self) -> Self {
-        match (self, other) {
-            (Self::Full, _) | (_, Self::Full) => Self::Full,
-            (Self::Partial(a), Self::Partial(b)) => match (a, b) {
-                (Some(_), Some(_)) => Self::Full,
-                (a, b) => Self::Partial(a.or(b)),
-            },
-            (Self::Partial(s), Self::StatusOnly) | (Self::StatusOnly, Self::Partial(s)) => {
-                Self::Partial(s)
-            }
-            (Self::StatusOnly, Self::StatusOnly) => Self::StatusOnly,
-        }
     }
 }
 
@@ -147,9 +122,8 @@ impl SearchDraft {
 ///
 /// The only page state [`Pager`] mutates is the anchor — the document row the viewport
 /// starts at. Everything else, including which heading is pinned and how far it has been
-/// pushed up, is derived by [`layout::compose`]. Every operation therefore reduces to
-/// picking an anchor and recomposing, and no operation has to remember to keep the overlay
-/// consistent afterwards.
+/// pushed up, is derived by [`layout::compose`], so every operation reduces to picking an
+/// anchor and recomposing.
 /// [`Pager`] only holds the state but does not write anything to the screen itself.
 pub struct Pager {
     doc: Document,
@@ -213,8 +187,8 @@ impl Pager {
         self.frame = layout::compose(&mut self.doc, &self.layout, anchor);
     }
 
-    /// Rebuild the page at the current anchor. Used when the inputs to the layout changed
-    /// (a resize, or newly streamed lines) rather than the position.
+    /// Rebuild the page at the current anchor, for when the inputs to the layout changed
+    /// rather than the position.
     fn recompose(&mut self) {
         let anchor = self.frame.anchor();
         self.compose_at(anchor);
@@ -229,7 +203,6 @@ impl Pager {
         self.frame.content().len()
     }
 
-    /// Returns the rows that form a contiguous range within the viewport.
     /// See [`Frame::contiguous_rows`].
     fn contiguous_rows(&self) -> Vec<Row> {
         self.frame.contiguous_rows()
@@ -251,31 +224,22 @@ impl Pager {
 
     /// Drain pending streamed input and reflect it in the page.
     ///
-    /// While the first screen is still filling in (the viewport has not yet
-    /// reached its full height), newly arrived lines are appended from the top
-    /// anchor, requiring a [`PageUpdate::Full`].
+    /// While the first screen is still filling in (the viewport has not yet reached its
+    /// full height), newly arrived lines extend the page from the top anchor.
     ///
-    /// Once the viewport is full, appended tail lines stay below the fold and
-    /// become visible only on scroll, so the content does not change. The status
-    /// line still must, though: its running total grows and the loading marker
-    /// turns into the final percentage at EOF. Such pumps return
-    /// [`PageUpdate::StatusOnly`]. Pumps that change nothing return `None`.
-    pub fn pump_input(&mut self) -> Option<PageUpdate> {
+    /// Once the viewport is full, appended tail lines stay below the fold, so the content
+    /// does not change but the status line still does: its running total grows and the
+    /// loading marker turns into the final percentage at EOF. Hence a `true` return does
+    /// not imply the content moved.
+    pub fn pump_input(&mut self) -> bool {
         let result = self.doc.pump();
 
-        // Fill the first screen from the top while it is not yet full.
         if result.grew && self.frame.rows().len() < self.layout.size().height() {
             self.recompose();
-            return Some(PageUpdate::Full);
+            return true;
         }
 
-        // The content did not change, but a changed total or reaching EOF still
-        // requires refreshing the status line.
-        if result.grew || result.reached_eof {
-            return Some(PageUpdate::StatusOnly);
-        }
-
-        None
+        result.grew || result.reached_eof
     }
 
     /// Whether more input may still arrive (the document is not yet complete).
@@ -284,11 +248,11 @@ impl Pager {
     }
 
     /// Resize the page to fit the new dimensions.
-    pub fn resize(&mut self, screen_width: usize, screen_height: usize) -> PageUpdate {
+    pub fn resize(&mut self, screen_width: usize, screen_height: usize) -> bool {
         let size = ViewportSize::new(screen_width, screen_height);
         self.layout = self.layout.with_size(size);
         self.recompose();
-        PageUpdate::Full
+        true
     }
 
     /// Move the page so that the specified line comes to the top.
@@ -296,7 +260,7 @@ impl Pager {
     /// - If the specified line is within the heading that would be pinned, move so that it
     ///   comes right below the global header.
     /// - Otherwise, move so that the specified line comes right after the pinned rows.
-    pub fn jump_to(&mut self, mut line_index: usize) -> PageUpdate {
+    pub fn jump_to(&mut self, mut line_index: usize) -> bool {
         if self.layout.is_header_line(line_index) {
             line_index = 0;
         }
@@ -318,24 +282,23 @@ impl Pager {
             header_height + heading_height,
         );
         self.compose_at(anchor);
-        PageUpdate::Full
+        true
     }
 
     /// Jump to the end of the document so that the last line is at the bottom.
     /// For streamed input this jumps to the currently known end (non-blocking);
     /// lines still arriving become reachable as they are pumped in.
-    pub fn jump_to_end(&mut self) -> PageUpdate {
+    pub fn jump_to_end(&mut self) -> bool {
         self.doc.pump();
         let anchor = layout::end_anchor(&mut self.doc, &self.layout);
         self.compose_at(anchor);
-        PageUpdate::Full
+        true
     }
 
     /// Move the page so that the specified line is fully shown with its last row at the bottom.
     /// Unlike [`Self::jump_to`], which anchors the line at the top, this anchors the whole line
     /// at the bottom so that wherever a match sits within the line it stays visible.
-    fn jump_to_bottom(&mut self, line_index: usize) -> PageUpdate {
-        // Offset the line so its last wrap row lands on the bottom (i.e. the whole line is shown).
+    fn jump_to_bottom(&mut self, line_index: usize) -> bool {
         let width = self.layout.size().width();
         let row_count = self
             .doc
@@ -345,32 +308,30 @@ impl Pager {
         let rows_above = self.layout.size().height().saturating_sub(row_count);
         let anchor = layout::anchor_above(&mut self.doc, &self.layout, line_index, rows_above);
         self.compose_at(anchor);
-        PageUpdate::Full
+        true
     }
 
     /// Scroll by the given number of rows (positive = down, negative = up).
-    /// Returns the resulting [`PageUpdate`] when any rows were actually scrolled.
-    /// Returns `None` when there is no room to scroll.
-    pub fn scroll(&mut self, num_rows: i32) -> Option<PageUpdate> {
+    /// Returns whether the page actually moved.
+    pub fn scroll(&mut self, num_rows: i32) -> bool {
         if num_rows.unsigned_abs() as usize > self.layout.size().height() {
             panic!("scroll rows too big");
         }
 
         let before = self.frame.anchor();
         let anchor = match num_rows {
-            0 => return None,
+            0 => return false,
             n if n < 0 => {
-                let top = self.frame.rows().first()?.clone();
+                let Some(top) = self.frame.rows().first().cloned() else {
+                    return false;
+                };
                 layout::anchor_backward(&mut self.doc, &self.layout, &top, (-n) as usize)
             }
             n => layout::anchor_forward(&mut self.doc, &self.layout, before, n as usize),
         };
 
         self.compose_at(anchor);
-        if self.frame.anchor() == before {
-            return None;
-        }
-        Some(PageUpdate::Full)
+        self.frame.anchor() != before
     }
 
     pub fn has_search_input(&self) -> bool {
@@ -380,13 +341,11 @@ impl Pager {
         }
     }
 
-    pub fn start_search_input(&mut self, direction: SearchDirection) -> PageUpdate {
-        // Start searching from the top line of the contiguous rows.
-        // The first purpose is why it needs to be a first line of contiguous rows that
-        // may include header rows. When the header line is not overlaid, include it in the
-        // search range. If a match is found, place the initial cursor position within the header.
-        // Excluding the header would cause unnatural behavior where the cursor starts in the content
-        // during preview and only jumps to the header via n/N after the query is submitted.
+    pub fn start_search_input(&mut self, direction: SearchDirection) -> bool {
+        // Search from the top of the contiguous rows, which include the sticky rows while
+        // they sit directly above the content. A match in those rows must be reachable
+        // during the preview too; otherwise the cursor would start in the content and only
+        // move up into the sticky rows via n/N after the query is submitted.
         let start_line_index = self.contiguous_rows()[0].line_index();
         let editor = LineEditor::new();
         self.mode = PagerMode::SearchInput(SearchInputMode {
@@ -395,53 +354,52 @@ impl Pager {
             start_line_index,
             draft: SearchDraft::Empty,
         });
-        PageUpdate::StatusOnly
+        true
     }
 
     /// Commit the current search input.
     /// Does nothing and keeps the search input mode active if the current raw input
     /// is not a valid regex, so the user can keep editing it.
-    pub fn submit_search(&mut self) -> PageUpdate {
+    pub fn submit_search(&mut self) -> bool {
         let PagerMode::SearchInput(mode) = &mut self.mode else {
-            return PageUpdate::StatusOnly;
+            return false;
         };
         if !mode.draft.is_submittable() {
-            return PageUpdate::StatusOnly;
+            return false;
         }
         if let SearchDraft::Valid(draft) = mem::replace(&mut mode.draft, SearchDraft::Empty) {
             log::debug!("Submit search: query={:?}", draft.query.as_str());
             self.search = Some(draft);
         }
         self.mode = PagerMode::View;
-        PageUpdate::StatusOnly
+        true
     }
 
     /// Cancel search: discard input and restore the original scroll position.
-    pub fn cancel_search_input(&mut self) -> PageUpdate {
+    pub fn cancel_search_input(&mut self) -> bool {
         if let PagerMode::SearchInput(mode) = mem::take(&mut self.mode) {
             log::debug!("Cancel search");
-            self.jump_to(mode.start_line_index)
-        } else {
-            PageUpdate::StatusOnly
+            self.jump_to(mode.start_line_index);
         }
+        true
     }
 
     /// Update the search input and scroll to the first match.
-    pub fn update_search_query(&mut self, edit: LineEdit) -> PageUpdate {
+    pub fn update_search_query(&mut self, edit: LineEdit) -> bool {
         let PagerMode::SearchInput(mode) = &mut self.mode else {
-            return PageUpdate::StatusOnly;
+            return false;
         };
 
         let changes_text = edit.changes_text();
         mode.editor.edit(edit);
         if !changes_text {
-            return PageUpdate::StatusOnly;
+            return true;
         }
         let input = mode.editor.input();
 
         if input.is_empty() {
             mode.draft = SearchDraft::Empty;
-            return PageUpdate::Full;
+            return true;
         }
 
         // While the input is mid-edit (e.g. right after typing `(` or `[`), it is often
@@ -450,7 +408,7 @@ impl Pager {
         let Ok(re) = Regex::new(&input) else {
             let frozen = mem::replace(&mut mode.draft, SearchDraft::Empty).into_preview();
             mode.draft = SearchDraft::Invalid(frozen);
-            return PageUpdate::StatusOnly;
+            return true;
         };
 
         let matched = search::search_document(
@@ -469,37 +427,37 @@ impl Pager {
         });
 
         if let Some(line_index) = current_line_index {
-            self.jump_to(line_index)
-        } else {
-            // Refresh the page to clear search highlights.
-            PageUpdate::Full
+            self.jump_to(line_index);
         }
+        true
     }
 
     /// Jump to next/previous match using the stored search state.
-    /// Returns `Some` when a match was found and applied, `None` otherwise.
-    pub fn jump_to_next_match(&mut self, reverse: bool) -> Option<PageUpdate> {
+    /// Returns whether a match was found and applied.
+    pub fn jump_to_next_match(&mut self, reverse: bool) -> bool {
         let next = self.find_next_match_position(reverse);
         log::debug!("Jump to next match: {next:?}");
-        if let Some(pos) = next {
-            let update = self.reveal_match(&pos);
-            if let Some(s) = self.search.as_mut() {
+        let Some(pos) = next else {
+            return false;
+        };
+        self.reveal_match(&pos);
+        match self.search.as_mut() {
+            Some(s) => {
                 s.current = Some(pos);
-                return Some(update);
+                true
             }
+            None => false,
         }
-
-        None
     }
 
     /// Move the page minimally so that the given match becomes visible.
     /// - If the match's row is already in the page, only refresh highlights (no scroll).
     /// - If the match is above the page, bring its line to the page top.
     /// - If the match is below the page, bring its line to the page bottom.
-    fn reveal_match(&mut self, pos: &MatchPosition) -> PageUpdate {
+    fn reveal_match(&mut self, pos: &MatchPosition) {
         let raw_offset = match self.doc.line(pos.line_index()) {
             Some(line) => line.match_raw_range(pos).start,
-            None => return PageUpdate::Full,
+            None => return,
         };
 
         let visible = self.contiguous_rows();
@@ -507,21 +465,19 @@ impl Pager {
         let bottom = &visible[visible.len() - 1];
         let target = pos.line_index();
 
-        // Compare the match's row against the page edges by (line_index, raw_offset).
-        // The match's row is off-page when it sorts before the top row or after the bottom row.
+        // The match is off-page when it sorts before the top row or after the bottom row,
+        // ordering by (line_index, raw_offset) so a wrapped line is compared per row.
         let above = target < top.line_index()
             || (target == top.line_index() && raw_offset < top.raw_range().start);
         let below = target > bottom.line_index()
             || (target == bottom.line_index() && raw_offset >= bottom.raw_range().end);
 
         if above {
-            self.jump_to(target)
+            self.jump_to(target);
         } else if below {
-            self.jump_to_bottom(target)
-        } else {
-            // The match's row is within the page: just move the highlight, no scroll.
-            PageUpdate::Full
+            self.jump_to_bottom(target);
         }
+        // Otherwise the match's row is already in the page: only the highlight moves.
     }
 
     /// Find the next match to jump to.
@@ -574,7 +530,6 @@ mod tests {
     use crate::line::Line;
     use crate::options::{HeadingOptions, Options};
     use crate::pager::status_line::{STATUS_REVERSE_OFF, STATUS_REVERSE_ON};
-    use crate::screen::Direction;
     use regex::Regex;
     use std::sync::mpsc;
 
@@ -725,7 +680,7 @@ mod tests {
         // More lines arrive: the first screen should fill from the top.
         send_lines(&tx, 1, 3);
         let update = pager.pump_input();
-        assert!(matches!(update, Some(PageUpdate::Full)));
+        assert!(update);
         {
             let (snap, _) = pager.snapshot();
             assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
@@ -735,12 +690,12 @@ mod tests {
         // the content is unchanged, but the status line still needs refreshing for
         // the growing total.
         send_lines(&tx, 4, 5);
-        assert!(matches!(pager.pump_input(), Some(PageUpdate::StatusOnly)));
+        assert!(pager.pump_input());
         let (snap, _) = pager.snapshot();
         assert_eq!(line_indices(snap.content), vec![0, 1, 2, 3]);
 
         // A pump that drains nothing changes nothing.
-        assert!(pager.pump_input().is_none());
+        assert!(!pager.pump_input());
     }
 
     #[test]
@@ -755,7 +710,7 @@ mod tests {
 
         // EOF with no new line still refreshes the status line to drop the marker.
         tx.send(crate::document::StreamMsg::Eof).unwrap();
-        assert!(matches!(pager.pump_input(), Some(PageUpdate::StatusOnly)));
+        assert!(pager.pump_input());
         assert!(!pager.is_loading());
     }
 
@@ -785,7 +740,7 @@ mod tests {
         send_lines(&tx, 0, 1);
         doc.pump();
         let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
-        assert!(pager.pump_input().is_none());
+        assert!(!pager.pump_input());
     }
 
     /// A document not yet as long as `--header-lines` gets a shorter header rather than a
@@ -885,7 +840,7 @@ mod tests {
     #[test]
     fn scroll_down_shifts_content_forward() {
         let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
-        assert!(pager.scroll(2).is_some());
+        assert!(pager.scroll(2));
         let (snap, _doc) = pager.snapshot();
         assert_eq!(line_indices(snap.content), vec![2, 3, 4, 5]);
     }
@@ -895,7 +850,7 @@ mod tests {
         let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
         pager.scroll(3);
         assert_eq!(line_indices(pager.snapshot().0.content), vec![3, 4, 5, 6]);
-        assert!(pager.scroll(-1).is_some());
+        assert!(pager.scroll(-1));
         assert_eq!(line_indices(pager.snapshot().0.content), vec![2, 3, 4, 5]);
     }
 
@@ -903,11 +858,11 @@ mod tests {
     fn scroll_reports_no_change_at_the_document_edges() {
         let mut pager = Pager::new(doc_lines(6), Options::default(), ScreenSize::new(20, 5));
         // Already at the top: there is nothing above to scroll to.
-        assert!(pager.scroll(-1).is_none());
+        assert!(!pager.scroll(-1));
 
         pager.jump_to_end();
         assert_eq!(line_indices(pager.snapshot().0.content), vec![2, 3, 4, 5]);
-        assert!(pager.scroll(1).is_none());
+        assert!(!pager.scroll(1));
     }
 
     #[test]
@@ -1083,12 +1038,10 @@ mod tests {
         type_query(&mut pager, "line5");
         assert_eq!(current_match_line(&mut pager), Some(5));
 
-        let update = pager.update_search_query(LineEdit::MoveCursorLeft);
-        assert!(matches!(update, PageUpdate::StatusOnly));
+        pager.update_search_query(LineEdit::MoveCursorLeft);
         assert_eq!(current_match_line(&mut pager), Some(5));
 
-        let update = pager.update_search_query(LineEdit::MoveCursorRight);
-        assert!(matches!(update, PageUpdate::StatusOnly));
+        pager.update_search_query(LineEdit::MoveCursorRight);
         assert_eq!(current_match_line(&mut pager), Some(5));
     }
 
@@ -1118,9 +1071,8 @@ mod tests {
         assert_eq!(line_indices(pager.snapshot().0.content), vec![0, 1, 2, 3]);
         assert_eq!(current_match_line(&mut pager), Some(0));
 
-        let update = pager.jump_to_next_match(false);
         // The next match (line 1) is already in the page: the page does not move.
-        assert!(update.is_some());
+        assert!(pager.jump_to_next_match(false));
         assert_eq!(line_indices(pager.snapshot().0.content), vec![0, 1, 2, 3]);
         assert_eq!(current_match_line(&mut pager), Some(1));
     }
@@ -1161,116 +1113,6 @@ mod tests {
         // The previous match (line 3) is above the page, so it is anchored at the top.
         assert_eq!(line_indices(pager.snapshot().0.content), vec![3, 4, 5, 6]);
         assert_eq!(current_match_line(&mut pager), Some(3));
-    }
-
-    #[test]
-    fn combine_full_dominates_anything() {
-        let scroll = Scroll::new(Direction::Down, 3);
-        assert!(matches!(
-            PageUpdate::Full.combine(PageUpdate::StatusOnly),
-            PageUpdate::Full
-        ));
-        assert!(matches!(
-            PageUpdate::StatusOnly.combine(PageUpdate::Full),
-            PageUpdate::Full
-        ));
-        assert!(matches!(
-            PageUpdate::Full.combine(PageUpdate::Partial(scroll)),
-            PageUpdate::Full
-        ));
-        assert!(matches!(
-            PageUpdate::Partial(scroll).combine(PageUpdate::Full),
-            PageUpdate::Full
-        ));
-        assert!(matches!(
-            PageUpdate::Full.combine(PageUpdate::Full),
-            PageUpdate::Full
-        ));
-    }
-
-    #[test]
-    fn combine_partial_and_status_only_preserves_scroll_payload() {
-        let scroll = Scroll::new(Direction::Up, 2);
-        assert!(matches!(
-            PageUpdate::Partial(scroll).combine(PageUpdate::StatusOnly),
-            PageUpdate::Partial(Some(s)) if s.num_rows.get() == 2 && s.direction == Direction::Up
-        ));
-        assert!(matches!(
-            PageUpdate::StatusOnly.combine(PageUpdate::Partial(scroll)),
-            PageUpdate::Partial(Some(s)) if s.num_rows.get() == 2 && s.direction == Direction::Up
-        ));
-
-        // Also holds when the partial carries no scroll (highlight-only refresh).
-        assert!(matches!(
-            PageUpdate::Partial(None).combine(PageUpdate::StatusOnly),
-            PageUpdate::Partial(None)
-        ));
-        assert!(matches!(
-            PageUpdate::StatusOnly.combine(PageUpdate::Partial(None)),
-            PageUpdate::Partial(None)
-        ));
-    }
-
-    #[test]
-    fn combine_status_only_pair_stays_status_only() {
-        assert!(matches!(
-            PageUpdate::StatusOnly.combine(PageUpdate::StatusOnly),
-            PageUpdate::StatusOnly
-        ));
-    }
-
-    #[test]
-    fn combine_two_no_scroll_partials_stays_partial_none() {
-        assert!(matches!(
-            PageUpdate::Partial(None).combine(PageUpdate::Partial(None)),
-            PageUpdate::Partial(None)
-        ));
-    }
-
-    #[test]
-    fn combine_two_scroll_bearing_partials_falls_back_to_full() {
-        let a = Scroll::new(Direction::Down, 1);
-        let b = Scroll::new(Direction::Up, 2);
-        assert!(matches!(
-            PageUpdate::Partial(a).combine(PageUpdate::Partial(b)),
-            PageUpdate::Full
-        ));
-        // Even identical-looking scrolls fall back to Full (conservative rule).
-        let c = Scroll::new(Direction::Down, 1);
-        let d = Scroll::new(Direction::Down, 1);
-        assert!(matches!(
-            PageUpdate::Partial(c).combine(PageUpdate::Partial(d)),
-            PageUpdate::Full
-        ));
-    }
-
-    #[test]
-    fn combine_scroll_partial_with_no_scroll_partial_keeps_scroll() {
-        let scroll = Scroll::new(Direction::Down, 3);
-        assert!(matches!(
-            PageUpdate::Partial(scroll).combine(PageUpdate::Partial(None)),
-            PageUpdate::Partial(Some(s)) if s.num_rows.get() == 3 && s.direction == Direction::Down
-        ));
-        assert!(matches!(
-            PageUpdate::Partial(None).combine(PageUpdate::Partial(scroll)),
-            PageUpdate::Partial(Some(s)) if s.num_rows.get() == 3 && s.direction == Direction::Down
-        ));
-    }
-
-    #[test]
-    fn combine_is_commutative() {
-        let scroll = Scroll::new(Direction::Down, 4);
-        let pairs = [
-            (PageUpdate::Full, PageUpdate::StatusOnly),
-            (PageUpdate::Partial(scroll), PageUpdate::StatusOnly),
-            (PageUpdate::Partial(None), PageUpdate::Partial(None)),
-            (PageUpdate::StatusOnly, PageUpdate::StatusOnly),
-        ];
-        for (a, b) in pairs {
-            let ab = format!("{:?}", a.combine(b));
-            let ba = format!("{:?}", b.combine(a));
-            assert_eq!(ab, ba, "combine should be commutative for {a:?} / {b:?}");
-        }
     }
 
     #[test]
