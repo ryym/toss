@@ -14,6 +14,7 @@ use crate::{
 
 mod header;
 mod heading;
+mod layout;
 mod rows;
 mod status_line;
 mod viewport;
