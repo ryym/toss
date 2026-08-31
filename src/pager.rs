@@ -7,17 +7,14 @@ use crate::{
     line::{MatchPosition, Row},
     line_editor::{LineEdit, LineEditor},
     options::Options,
-    pager::{header::Header, heading::Heading, viewport::Viewport},
-    screen::{Direction, ScreenSize, Scroll},
+    pager::layout::{Frame, Layout, RowPos},
+    screen::{ScreenSize, Scroll},
     search::{self, SearchDirection, SearchFrom, SearchState},
 };
 
-mod header;
-mod heading;
 mod layout;
 mod rows;
 mod status_line;
-mod viewport;
 
 #[derive(Debug, Clone, Copy)]
 struct ViewportSize {
@@ -143,42 +140,35 @@ impl SearchDraft {
 /// Depending on the configuration, a global header and a heading may be pinned at
 /// the top of the viewport.
 ///
-/// Internally the following structs manage rows displayed in sticky area and viewport:
-/// - Sticky area
-///     - Global header: [`Header`]
-///     - Heading: [`Heading`]
-/// - Viewport: [`Viewport`]
+/// The pinned rows are an overlay: they cover the first rows of the viewport rather than
+/// pushing them down, which is what keeps scrolling uniform. Advancing the page by one row
+/// always moves the visible content by exactly one row, whether or not a heading appeared
+/// or disappeared in the same step.
 ///
-/// [`Viewport`] is unaware of sticky rows and just holds a specific range of [`Document`]
-/// as directed by [`Pager`]. The header rows managed by [`Header`] and [`Heading`]
-/// are rendered as if overlaid on top of [`Viewport`].
-/// With this overlay approach, [`Viewport`] can manage its rows independently,
-/// without being affected by header content or height.
-/// The role of [`Pager`] is to maintain this overlay correctly while applying the requested
-/// operations to update the page state.
+/// The only page state [`Pager`] mutates is the anchor — the document row the viewport
+/// starts at. Everything else, including which heading is pinned and how far it has been
+/// pushed up, is derived by [`layout::compose`]. Every operation therefore reduces to
+/// picking an anchor and recomposing, and no operation has to remember to keep the overlay
+/// consistent afterwards.
 /// [`Pager`] only holds the state but does not write anything to the screen itself.
 pub struct Pager {
     doc: Document,
     mode: PagerMode,
-    header: Header,
-    heading: Heading,
-    viewport: Viewport,
+    layout: Layout,
+    frame: Frame,
     search: Option<SearchState>,
 }
 
 impl Pager {
     pub fn new(mut doc: Document, options: Options, screen_size: ScreenSize) -> Self {
         let size = ViewportSize::new(screen_size.width(), screen_size.height());
-        let header = Header::new(&mut doc, &size, options.header);
-        let mut heading = Heading::new(options.heading, &size, header.height(), header.num_lines());
-        heading.resolve(&mut doc, 0);
-        let viewport = Viewport::new(&mut doc, size);
+        let layout = Layout::new(&options, size);
+        let frame = layout::compose(&mut doc, &layout, (0, 0));
         Self {
             doc,
             mode: PagerMode::View,
-            header,
-            heading,
-            viewport,
+            layout,
+            frame,
             search: None,
         }
     }
@@ -200,51 +190,49 @@ impl Pager {
             PagerMode::SearchInput(search) => search.draft.preview().or(self.search.as_ref()),
             _ => self.search.as_ref(),
         };
+        let status_line = status_line::build(
+            &self.mode,
+            self.frame.rows(),
+            self.layout.size().width(),
+            &self.doc,
+        );
         let snapshot = PageSnapshot {
-            header: self.header.rows(),
-            heading: self.heading.rows(),
-            content: &self.viewport.rows()[self.total_header_height()..],
-            height: self.viewport.size().height,
-            status_line: status_line::build(&self.mode, &self.viewport, &self.doc),
+            header: self.frame.header(),
+            heading: self.frame.heading(),
+            content: self.frame.content(),
+            height: self.layout.size().height(),
+            status_line,
             search,
         };
         (snapshot, &mut self.doc)
     }
 
+    /// Rebuild the page for `anchor`. The composed frame may end up at a different anchor:
+    /// [`layout::compose`] pulls it back when the page would otherwise be under-filled.
+    fn compose_at(&mut self, anchor: RowPos) {
+        self.frame = layout::compose(&mut self.doc, &self.layout, anchor);
+    }
+
+    /// Rebuild the page at the current anchor. Used when the inputs to the layout changed
+    /// (a resize, or newly streamed lines) rather than the position.
+    fn recompose(&mut self) {
+        let anchor = self.frame.anchor();
+        self.compose_at(anchor);
+    }
+
     fn total_header_height(&self) -> usize {
-        self.header.height() + self.heading.height()
+        self.frame.overlay_height()
     }
 
     /// Returns the height of the display area (the number of rows) excluding the header region.
     pub fn content_height(&self) -> usize {
-        self.viewport.rows().len() - self.total_header_height()
+        self.frame.content().len()
     }
 
     /// Returns the rows that form a contiguous range within the viewport.
-    /// When sticky area exists, it is included only if its region and the content region
-    /// are adjacent in the document; otherwise they are excluded.
-    /// For example, if the heading shows lines 3-5 of [`Document`] and the content
-    /// shows lines 6-30, the rows for lines 3-30 are returned.
-    /// If a global header also exists at lines 1-2, the global header is included as well.
-    /// However, if the content starts at line 7 or later (not adjacent), only the content rows
-    /// are returned.
-    fn contiguous_rows(&self) -> &[Row] {
-        &self.viewport.rows()[self.contiguous_top_row_index()..]
-    }
-
-    fn contiguous_top_row_index(&self) -> usize {
-        let rows = self.viewport.rows();
-        if let Some(row) = self.header.rows().first()
-            && row == &rows[0]
-        {
-            return 0;
-        }
-        if let Some(row) = self.heading.rows().first()
-            && row.line_index() == rows[self.header.height()].line_index()
-        {
-            return self.header.height();
-        }
-        self.total_header_height()
+    /// See [`Frame::contiguous_rows`].
+    fn contiguous_rows(&self) -> Vec<Row> {
+        self.frame.contiguous_rows()
     }
 
     /// Whether the entire page fits within the specified `height`.
@@ -252,7 +240,7 @@ impl Pager {
         let mut total_rows = 0;
         for i in 0..self.doc.line_count() {
             if let Some(line) = self.doc.line(i) {
-                total_rows += line.row_count(self.viewport.size().width());
+                total_rows += line.row_count(self.layout.size().width());
                 if total_rows > height {
                     return false;
                 }
@@ -265,7 +253,7 @@ impl Pager {
     ///
     /// While the first screen is still filling in (the viewport has not yet
     /// reached its full height), newly arrived lines are appended from the top
-    /// anchor and the headers are rebuilt, requiring a [`PageUpdate::Full`].
+    /// anchor, requiring a [`PageUpdate::Full`].
     ///
     /// Once the viewport is full, appended tail lines stay below the fold and
     /// become visible only on scroll, so the content does not change. The status
@@ -276,14 +264,8 @@ impl Pager {
         let result = self.doc.pump();
 
         // Fill the first screen from the top while it is not yet full.
-        if result.grew && self.viewport.rows().len() < self.viewport.size().height() {
-            self.relayout_page(*self.viewport.size());
-            let top_line = self
-                .viewport
-                .rows()
-                .first()
-                .map_or(0, |row| row.line_index());
-            self.heading.resolve(&mut self.doc, top_line);
+        if result.grew && self.frame.rows().len() < self.layout.size().height() {
+            self.recompose();
             return Some(PageUpdate::Full);
         }
 
@@ -304,45 +286,39 @@ impl Pager {
     /// Resize the page to fit the new dimensions.
     pub fn resize(&mut self, screen_width: usize, screen_height: usize) -> PageUpdate {
         let size = ViewportSize::new(screen_width, screen_height);
-        self.relayout_page(size);
+        self.layout = self.layout.with_size(size);
+        self.recompose();
         PageUpdate::Full
-    }
-
-    /// Rebuild the header, heading, and viewport for `size`, keeping the
-    /// current top anchor. Used both for terminal resizes and for filling in
-    /// the first screen as streamed input arrives.
-    fn relayout_page(&mut self, size: ViewportSize) {
-        self.header.resize(&mut self.doc, &size);
-        self.heading.resize(
-            &mut self.doc,
-            &size,
-            self.header.height(),
-            self.header.num_lines(),
-        );
-        self.viewport.resize(&mut self.doc, size);
     }
 
     /// Move the page so that the specified line comes to the top.
     /// - If the specified line is within the global header, jump to the start of the document.
-    /// - If the specified line is within any heading, move so that it comes to the top.
-    /// - Otherwise, move so that the specified line comes right after the headers.
+    /// - If the specified line is within the heading that would be pinned, move so that it
+    ///   comes right below the global header.
+    /// - Otherwise, move so that the specified line comes right after the pinned rows.
     pub fn jump_to(&mut self, mut line_index: usize) -> PageUpdate {
-        if self.header.contains(line_index) {
+        if self.layout.is_header_line(line_index) {
             line_index = 0;
         }
 
-        let jump_distance = JumpDistance::from(&self.viewport);
-
-        self.heading.resolve(&mut self.doc, line_index);
-        let jump_offset = if self.heading.contains(line_index) {
-            self.header.height()
-        } else {
-            self.total_header_height()
+        let header_height = self.frame.header().len();
+        let placement =
+            layout::heading_placement(&mut self.doc, &self.layout, header_height, line_index);
+        let heading_height = match &placement {
+            // The target is one of the heading lines: show it as the pinned heading itself.
+            Some(p) if p.lines.contains(&line_index) => 0,
+            Some(p) => p.height,
+            None => 0,
         };
-        self.viewport
-            .jump_to(&mut self.doc, line_index, jump_offset);
 
-        jump_distance.compute(&self.viewport)
+        let anchor = layout::anchor_above(
+            &mut self.doc,
+            &self.layout,
+            line_index,
+            header_height + heading_height,
+        );
+        self.compose_at(anchor);
+        PageUpdate::Full
     }
 
     /// Jump to the end of the document so that the last line is at the bottom.
@@ -350,12 +326,8 @@ impl Pager {
     /// lines still arriving become reachable as they are pumped in.
     pub fn jump_to_end(&mut self) -> PageUpdate {
         self.doc.pump();
-        self.viewport.jump_to_end(&mut self.doc);
-
-        let top_line_index = self.viewport.rows()[0].line_index();
-        self.heading.resolve(&mut self.doc, top_line_index);
-        self.push_up_heading_if_needed();
-
+        let anchor = layout::end_anchor(&mut self.doc, &self.layout);
+        self.compose_at(anchor);
         PageUpdate::Full
     }
 
@@ -363,120 +335,42 @@ impl Pager {
     /// Unlike [`Self::jump_to`], which anchors the line at the top, this anchors the whole line
     /// at the bottom so that wherever a match sits within the line it stays visible.
     fn jump_to_bottom(&mut self, line_index: usize) -> PageUpdate {
-        let jump_distance = JumpDistance::from(&self.viewport);
-
         // Offset the line so its last wrap row lands on the bottom (i.e. the whole line is shown).
-        let width = self.viewport.size().width();
+        let width = self.layout.size().width();
         let row_count = self
             .doc
             .line(line_index)
             .map(|l| l.row_count(width))
             .unwrap_or(1);
-        let row_offset = self.viewport.size().height.saturating_sub(row_count);
-        self.viewport.jump_to(&mut self.doc, line_index, row_offset);
-
-        // Re-resolve the heading for the new top line (mirrors jump_to_end).
-        let top_line_index = self.viewport.rows()[0].line_index();
-        self.heading.resolve(&mut self.doc, top_line_index);
-        self.push_up_heading_if_needed();
-
-        jump_distance.compute(&self.viewport)
+        let rows_above = self.layout.size().height().saturating_sub(row_count);
+        let anchor = layout::anchor_above(&mut self.doc, &self.layout, line_index, rows_above);
+        self.compose_at(anchor);
+        PageUpdate::Full
     }
 
     /// Scroll by the given number of rows (positive = down, negative = up).
     /// Returns the resulting [`PageUpdate`] when any rows were actually scrolled.
     /// Returns `None` when there is no room to scroll.
     pub fn scroll(&mut self, num_rows: i32) -> Option<PageUpdate> {
-        if num_rows.unsigned_abs() as usize > self.viewport.size().height {
+        if num_rows.unsigned_abs() as usize > self.layout.size().height() {
             panic!("scroll rows too big");
         }
 
-        let actual_scroll_rows = if num_rows < 0 {
-            self.scroll_up((-num_rows) as usize)
-        } else if num_rows > 0 {
-            self.scroll_down(num_rows as usize)
-        } else {
-            0
+        let before = self.frame.anchor();
+        let anchor = match num_rows {
+            0 => return None,
+            n if n < 0 => {
+                let top = self.frame.rows().first()?.clone();
+                layout::anchor_backward(&mut self.doc, &self.layout, &top, (-n) as usize)
+            }
+            n => layout::anchor_forward(&mut self.doc, &self.layout, before, n as usize),
         };
-        if actual_scroll_rows == 0 {
+
+        self.compose_at(anchor);
+        if self.frame.anchor() == before {
             return None;
         }
-        let direction = if num_rows < 0 {
-            Direction::Up
-        } else {
-            Direction::Down
-        };
-        Some(PageUpdate::Partial(Scroll::new(
-            direction,
-            actual_scroll_rows,
-        )))
-    }
-
-    fn scroll_up(&mut self, num_rows: usize) -> usize {
-        let rows_scrolled = self.viewport.scroll_up(&mut self.doc, num_rows);
-
-        // Check the heading status to update it as needed.
-        let heading_start = match self.heading.start_line_index() {
-            Some(idx) => idx,
-            // If there is no current heading, scrolling upward cannot newly reveal one, so do nothing.
-            None => return rows_scrolled,
-        };
-
-        // If the new top row is above the current heading, search for a heading above it.
-        let top_line = self.viewport.rows()[self.header.height()].line_index();
-        if top_line < heading_start {
-            self.heading.resolve(&mut self.doc, top_line);
-        }
-        self.push_up_heading_if_needed();
-
-        rows_scrolled
-    }
-
-    fn scroll_down(&mut self, num_rows: usize) -> usize {
-        let prev_top_line = self.viewport.rows()[self.header.height()].line_index();
-        let rows_scrolled = self.viewport.scroll_down(&mut self.doc, num_rows);
-        let top_line = self.viewport.rows()[self.header.height()].line_index();
-
-        // If a new heading exists within the moved range, replace the current one with it.
-        self.heading
-            .resolve_if_found(&mut self.doc, prev_top_line..(top_line + 1));
-        self.push_up_heading_if_needed();
-
-        rows_scrolled
-    }
-
-    /// Look for another heading underneath the current heading overlay,
-    /// and if one is found (i.e. a section transition is in progress), adjust the offset of
-    /// the current section so that the new heading becomes visible.
-    fn push_up_heading_if_needed(&mut self) {
-        let current_start_line = match self.heading.start_line_index() {
-            Some(i) => i,
-            None => return,
-        };
-
-        let overlay_height = self.header.height() + self.heading.full_height();
-        let mut other_section_start = overlay_height;
-        let rows_under_heading = self
-            .viewport
-            .rows()
-            .iter()
-            .enumerate()
-            .take(overlay_height)
-            .skip(self.header.height());
-        for (i, row) in rows_under_heading {
-            if row.wrap_index() != 0 || row.line_index() == current_start_line {
-                continue;
-            }
-            if self
-                .heading
-                .is_heading_start(&mut self.doc, row.line_index())
-            {
-                other_section_start = i;
-                break;
-            }
-        }
-        let push_up = overlay_height.saturating_sub(other_section_start);
-        self.heading.push_up(push_up);
+        Some(PageUpdate::Full)
     }
 
     pub fn has_search_input(&self) -> bool {
@@ -547,7 +441,7 @@ impl Pager {
 
         if input.is_empty() {
             mode.draft = SearchDraft::Empty;
-            return PageUpdate::Partial(None);
+            return PageUpdate::Full;
         }
 
         // While the input is mid-edit (e.g. right after typing `(` or `[`), it is often
@@ -578,7 +472,7 @@ impl Pager {
             self.jump_to(line_index)
         } else {
             // Refresh the page to clear search highlights.
-            PageUpdate::Partial(None)
+            PageUpdate::Full
         }
     }
 
@@ -605,7 +499,7 @@ impl Pager {
     fn reveal_match(&mut self, pos: &MatchPosition) -> PageUpdate {
         let raw_offset = match self.doc.line(pos.line_index()) {
             Some(line) => line.match_raw_range(pos).start,
-            None => return PageUpdate::Partial(None),
+            None => return PageUpdate::Full,
         };
 
         let visible = self.contiguous_rows();
@@ -626,7 +520,7 @@ impl Pager {
             self.jump_to_bottom(target)
         } else {
             // The match's row is within the page: just move the highlight, no scroll.
-            PageUpdate::Partial(None)
+            PageUpdate::Full
         }
     }
 
@@ -665,51 +559,11 @@ impl Pager {
         let line = self.doc.line(pos.line_index())?;
         let raw_offset = line.match_raw_range(pos).start;
         let is_in_page = self
+            .frame
             .contiguous_rows()
             .iter()
             .any(|r| r.line_index() == pos.line_index() && r.raw_range().contains(&raw_offset));
         if is_in_page { Some(pos.clone()) } else { None }
-    }
-}
-
-/// A struct to calculate a proper [`PageUpdate`] for a jump.
-///
-/// It remembers the viewport edges before a jump and, after the jump, checks whether the old
-/// and new viewports still overlap. When they do, the jump can be rendered as a scroll.
-struct JumpDistance {
-    prev_top: Row,
-    prev_bottom: Row,
-}
-
-impl JumpDistance {
-    fn from(viewport: &Viewport) -> Self {
-        // Remember the viewport edges before the jump so we can measure the overlap afterwards.
-        let rows = viewport.rows();
-        Self {
-            prev_top: rows[0].clone(),
-            prev_bottom: rows[rows.len() - 1].clone(),
-        }
-    }
-
-    fn compute(self, viewport: &Viewport) -> PageUpdate {
-        let rows = viewport.rows();
-        if self.prev_top < rows[0] {
-            // Downward jump. The old top has scrolled off, but if the old bottom row is still
-            // visible the viewports overlap, so we can render this as a downward scroll.
-            match viewport.row_index(self.prev_bottom.line_index(), self.prev_bottom.wrap_index()) {
-                Some(pos) => {
-                    PageUpdate::Partial(Scroll::new(Direction::Down, rows.len() - 1 - pos))
-                }
-                None => PageUpdate::Full,
-            }
-        } else {
-            // Upward jump (or no move). If the old top row is still within the new viewport,
-            // the viewports overlap, so we can render this as an upward scroll.
-            match viewport.row_index(self.prev_top.line_index(), self.prev_top.wrap_index()) {
-                Some(pos) => PageUpdate::Partial(Scroll::new(Direction::Up, pos)),
-                None => PageUpdate::Full,
-            }
-        }
     }
 }
 
@@ -720,6 +574,7 @@ mod tests {
     use crate::line::Line;
     use crate::options::{HeadingOptions, Options};
     use crate::pager::status_line::{STATUS_REVERSE_OFF, STATUS_REVERSE_ON};
+    use crate::screen::Direction;
     use regex::Regex;
     use std::sync::mpsc;
 
@@ -995,9 +850,10 @@ mod tests {
         pager.pump_input();
 
         // "# B" (line 1) is inside the header: jumping to it redirects to the top of the
-        // document instead of making it a sticky heading.
+        // document instead of making it a sticky heading. What gets pinned there is
+        // "# D" (line 3), the first line outside the header, never a header line.
         pager.jump_to(1);
-        assert!(line_indices(pager.snapshot().0.heading).is_empty());
+        assert_eq!(line_indices(pager.snapshot().0.heading), vec![3]);
 
         // "# D" (line 3) is the first line outside the header: it becomes the heading.
         pager.jump_to(3);
@@ -1026,18 +882,10 @@ mod tests {
         assert_eq!(line_indices(snap.content), vec![2, 3, 4]);
     }
 
-    fn scroll_num_rows(update: Option<PageUpdate>) -> usize {
-        match update {
-            Some(PageUpdate::Partial(Some(scroll))) => scroll.num_rows.get(),
-            _ => 0,
-        }
-    }
-
     #[test]
     fn scroll_down_shifts_content_forward() {
         let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
-        let update = pager.scroll(2);
-        assert_eq!(scroll_num_rows(update), 2);
+        assert!(pager.scroll(2).is_some());
         let (snap, _doc) = pager.snapshot();
         assert_eq!(line_indices(snap.content), vec![2, 3, 4, 5]);
     }
@@ -1047,9 +895,19 @@ mod tests {
         let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
         pager.scroll(3);
         assert_eq!(line_indices(pager.snapshot().0.content), vec![3, 4, 5, 6]);
-        let update = pager.scroll(-1);
-        assert_eq!(scroll_num_rows(update), 1);
+        assert!(pager.scroll(-1).is_some());
         assert_eq!(line_indices(pager.snapshot().0.content), vec![2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn scroll_reports_no_change_at_the_document_edges() {
+        let mut pager = Pager::new(doc_lines(6), Options::default(), ScreenSize::new(20, 5));
+        // Already at the top: there is nothing above to scroll to.
+        assert!(pager.scroll(-1).is_none());
+
+        pager.jump_to_end();
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![2, 3, 4, 5]);
+        assert!(pager.scroll(1).is_none());
     }
 
     #[test]
@@ -1073,28 +931,16 @@ mod tests {
         assert_eq!(line_indices(snap.content), vec![10, 11, 12, 13]);
     }
 
-    fn jump_scroll(update: PageUpdate) -> Option<(Direction, usize)> {
-        match update {
-            PageUpdate::Partial(Some(scroll)) => Some((scroll.direction, scroll.num_rows.get())),
-            _ => None,
-        }
-    }
-
     #[test]
-    fn jump_to_downward_renders_as_partial_scroll_when_overlapping() {
-        // Downward jump whose target was off-screen but still overlaps near the doc end.
+    fn jump_to_near_the_document_end_keeps_the_page_full() {
+        // The target is too close to the end to sit at the top, so the page fills from above.
         let mut pager = Pager::new(doc_lines(8), Options::default(), ScreenSize::new(20, 5));
-        pager.scroll(1);
-        assert_eq!(line_indices(pager.snapshot().0.content), vec![1, 2, 3, 4]);
-
-        let update = pager.jump_to(6);
+        pager.jump_to(6);
         assert_eq!(line_indices(pager.snapshot().0.content), vec![4, 5, 6, 7]);
-        // Old bottom (line 4) is still visible, so this is a 3-row downward scroll.
-        assert_eq!(jump_scroll(update), Some((Direction::Down, 3)));
     }
 
     #[test]
-    fn jump_to_upward_renders_as_partial_scroll_when_overlapping() {
+    fn jump_to_upward_places_target_line_at_top() {
         let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
         pager.jump_to(10);
         assert_eq!(
@@ -1102,21 +948,8 @@ mod tests {
             vec![10, 11, 12, 13]
         );
 
-        let update = pager.jump_to(8);
+        pager.jump_to(8);
         assert_eq!(line_indices(pager.snapshot().0.content), vec![8, 9, 10, 11]);
-        // Old top (line 10) is still visible, so this is a 2-row upward scroll.
-        assert_eq!(jump_scroll(update), Some((Direction::Up, 2)));
-    }
-
-    #[test]
-    fn jump_to_renders_full_when_no_overlap() {
-        let mut pager = Pager::new(doc_lines(20), Options::default(), ScreenSize::new(20, 5));
-        let update = pager.jump_to(10);
-        assert_eq!(
-            line_indices(pager.snapshot().0.content),
-            vec![10, 11, 12, 13]
-        );
-        assert!(matches!(update, PageUpdate::Full));
     }
 
     #[test]
@@ -1199,7 +1032,7 @@ mod tests {
             ..Default::default()
         };
         let pager = Pager::new(doc_lines(10), opts, ScreenSize::new(20, 6));
-        assert_eq!(line_indices(pager.contiguous_rows()), vec![0, 1, 2, 3, 4]);
+        assert_eq!(line_indices(&pager.contiguous_rows()), vec![0, 1, 2, 3, 4]);
     }
 
     #[test]
@@ -1210,7 +1043,7 @@ mod tests {
         };
         let mut pager = Pager::new(doc_lines(20), opts, ScreenSize::new(20, 6));
         pager.scroll(5);
-        assert_eq!(line_indices(pager.contiguous_rows()), vec![7, 8, 9]);
+        assert_eq!(line_indices(&pager.contiguous_rows()), vec![7, 8, 9]);
     }
 
     #[test]
@@ -1225,7 +1058,7 @@ mod tests {
             opts,
             ScreenSize::new(20, 5),
         );
-        assert_eq!(line_indices(pager.contiguous_rows()), vec![0, 1, 2, 3]);
+        assert_eq!(line_indices(&pager.contiguous_rows()), vec![0, 1, 2, 3]);
     }
 
     #[test]
@@ -1286,8 +1119,8 @@ mod tests {
         assert_eq!(current_match_line(&mut pager), Some(0));
 
         let update = pager.jump_to_next_match(false);
-        // The next match (line 1) is already in the page: no scroll, just refresh.
-        assert!(matches!(update, Some(PageUpdate::Partial(None))));
+        // The next match (line 1) is already in the page: the page does not move.
+        assert!(update.is_some());
         assert_eq!(line_indices(pager.snapshot().0.content), vec![0, 1, 2, 3]);
         assert_eq!(current_match_line(&mut pager), Some(1));
     }

@@ -77,8 +77,6 @@ pub(super) struct Frame {
     header: Vec<Row>,
     /// Heading rows as displayed, i.e. already trimmed by the push-up offset.
     heading: Vec<Row>,
-    /// Line where the resolved heading block starts, if any.
-    heading_start: Option<usize>,
 }
 
 impl Frame {
@@ -102,10 +100,6 @@ impl Frame {
         &self.heading
     }
 
-    pub fn heading_start(&self) -> Option<usize> {
-        self.heading_start
-    }
-
     /// Number of document rows hidden behind the sticky area.
     pub fn overlay_height(&self) -> usize {
         self.header.len() + self.heading.len()
@@ -115,16 +109,6 @@ impl Frame {
     pub fn content(&self) -> &[Row] {
         let overlay = self.overlay_height().min(self.rows.len());
         &self.rows[overlay..]
-    }
-
-    /// Whether `line_index` is one of the currently displayed heading lines.
-    pub fn heading_covers(&self, line_index: usize) -> bool {
-        match (self.heading.first(), self.heading.last()) {
-            (Some(first), Some(last)) => {
-                first.line_index() <= line_index && line_index <= last.line_index()
-            }
-            _ => false,
-        }
     }
 
     /// The visible rows that form a contiguous range of the document, in reading order.
@@ -141,7 +125,8 @@ impl Frame {
             (Some(row), _) => row.line_index(),
             // Nothing is visible below the overlay: the heading itself is the whole page.
             (None, Some(row)) => row.line_index(),
-            (None, None) => return rows,
+            // Not even a heading: the header is the whole page, and trivially contiguous.
+            (None, None) => return self.header.clone(),
         };
 
         let heading_adjacent = match self.heading.last() {
@@ -149,8 +134,13 @@ impl Frame {
             None => true,
         };
         let heading_top = self.heading.first().map_or(top_line, |r| r.line_index());
-        // The header is adjacent when the block above it starts right after the header.
-        let above_line = if heading_adjacent { heading_top } else { top_line };
+        // Measure the header against the heading only while the heading itself joins the
+        // content; a detached heading is dropped, so the header must reach the content.
+        let above_line = if heading_adjacent {
+            heading_top
+        } else {
+            top_line
+        };
         let header_adjacent = match self.header.last() {
             Some(last) => last.line_index() + 1 >= above_line,
             None => true,
@@ -173,7 +163,12 @@ impl Frame {
 /// decided; every page operation reduces to picking an anchor and calling this.
 pub(super) fn compose(doc: &mut Document, layout: &Layout, anchor: RowPos) -> Frame {
     let width = layout.size.width();
-    let header = rows::from_lines(doc, width, 0..layout.header_lines, layout.max_header_height());
+    let header = rows::from_lines(
+        doc,
+        width,
+        0..layout.header_lines,
+        layout.max_header_height(),
+    );
     let rows = fill_from(doc, layout, anchor);
 
     // The heading sticks to the first row below the global header. Resolving from that row
@@ -185,12 +180,11 @@ pub(super) fn compose(doc: &mut Document, layout: &Layout, anchor: RowPos) -> Fr
         .map(|row| row.line_index())
         .and_then(|line| resolve_heading(doc, layout, header.len(), line));
 
-    let (heading, heading_start) = match block {
-        None => (Vec::new(), None),
+    let heading = match block {
+        None => Vec::new(),
         Some(block) => {
             let push_up = push_up_offset(doc, layout, &rows, header.len(), &block);
-            let start = block.start_line;
-            (block.rows[push_up..].to_vec(), Some(start))
+            block.rows[push_up..].to_vec()
         }
     };
 
@@ -198,7 +192,6 @@ pub(super) fn compose(doc: &mut Document, layout: &Layout, anchor: RowPos) -> Fr
         rows,
         header,
         heading,
-        heading_start,
     }
 }
 
@@ -333,17 +326,92 @@ pub(super) fn is_heading_start(
     true
 }
 
-/// The line range a heading block would occupy if resolved at `at_line`.
-/// Used to place a jump target relative to the heading that will end up pinned.
-pub(super) fn heading_block_at(
+/// Where the heading would sit for a page showing `at_line`.
+pub(super) struct HeadingPlacement {
+    /// Document lines the heading block displays.
+    pub lines: Range<usize>,
+    /// Rows the heading block occupies on screen.
+    pub height: usize,
+}
+
+pub(super) fn heading_placement(
     doc: &mut Document,
     layout: &Layout,
     header_height: usize,
     at_line: usize,
-) -> Option<Range<usize>> {
+) -> Option<HeadingPlacement> {
     let block = resolve_heading(doc, layout, header_height, at_line)?;
     let end = block.rows[block.rows.len() - 1].line_index() + 1;
-    Some(block.start_line..end)
+    Some(HeadingPlacement {
+        lines: block.start_line..end,
+        height: block.rows.len(),
+    })
+}
+
+/// The anchor that puts `line_index` exactly `rows_above` rows below the top of the page.
+/// Near the start of the document fewer rows may be available, in which case the anchor
+/// lands on the first row of the document.
+pub(super) fn anchor_above(
+    doc: &mut Document,
+    layout: &Layout,
+    line_index: usize,
+    rows_above: usize,
+) -> RowPos {
+    let target = (line_index, 0);
+    if rows_above == 0 {
+        return target;
+    }
+    let width = layout.size.width();
+    let first_row = {
+        let Some(line) = doc.line(line_index) else {
+            return target;
+        };
+        match line.wrap(width).into_iter().next() {
+            Some(row) => row,
+            None => return target,
+        }
+    };
+    let earlier = rows::list_backward(doc, width, DocPos::Before(&first_row), rows_above);
+    earlier
+        .first()
+        .map_or(target, |r| (r.line_index(), r.wrap_index()))
+}
+
+/// The anchor that shows the last page of the document.
+pub(super) fn end_anchor(doc: &mut Document, layout: &Layout) -> RowPos {
+    let last_page =
+        rows::list_backward(doc, layout.size.width(), DocPos::End, layout.size.height());
+    last_page
+        .first()
+        .map_or((0, 0), |r| (r.line_index(), r.wrap_index()))
+}
+
+/// The anchor `count` rows after `from`, clamped to the last row of the document.
+pub(super) fn anchor_forward(
+    doc: &mut Document,
+    layout: &Layout,
+    from: RowPos,
+    count: usize,
+) -> RowPos {
+    let ahead = rows::list_forward(doc, layout.size.width(), from, count + 1);
+    ahead
+        .last()
+        .map_or(from, |r| (r.line_index(), r.wrap_index()))
+}
+
+/// The anchor `count` rows before `from`, clamped to the first row of the document.
+pub(super) fn anchor_backward(
+    doc: &mut Document,
+    layout: &Layout,
+    from: &Row,
+    count: usize,
+) -> RowPos {
+    let earlier = rows::list_backward(doc, layout.size.width(), DocPos::Before(from), count);
+    earlier
+        .first()
+        .map_or((from.line_index(), from.wrap_index()), |r| {
+            (r.line_index(), r.wrap_index())
+        })
 }
 
 #[cfg(test)]
@@ -514,7 +582,6 @@ b1
         let layout = layout(0, Some(("^# ", 1)), size(10, 3));
         let frame = compose(&mut doc, &layout, (0, 0));
         assert!(frame.heading().is_empty());
-        assert_eq!(frame.heading_start(), None);
     }
 
     #[test]

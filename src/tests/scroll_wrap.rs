@@ -159,7 +159,7 @@ fgh
 [EVENT]:char:g
 line1
 line2
-abcde>
+abcde
 {rev} 100%{/rev}
 -----
 [EVENT]:char:q
