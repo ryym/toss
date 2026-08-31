@@ -534,3 +534,78 @@ b3
 ";
     assert_eq!(screen.out(), want);
 }
+
+/// Jumping to the top of the document from inside a section drops the sticky heading, so
+/// the rows it used to cover become content and the whole page moves further than the
+/// viewport did. Every row must end up showing what belongs there, with nothing left over
+/// from the frame before.
+#[test]
+fn jump_to_top_from_a_section_leaves_no_stale_rows() {
+    let content = "\
+intro 1
+intro 2
+# Section A
+sub title
+body 1
+body 2
+body 3
+body 4
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 6,
+        content,
+        options: Options {
+            heading: Some(HeadingOptions {
+                pattern: regex::Regex::new("^# ").unwrap(),
+                num_lines: 2,
+            }),
+            ..Default::default()
+        },
+        events: vec![key('j'), key('j'), key('j'), key('g'), key('q')],
+        ..Default::default()
+    });
+    let want = "\
+intro 1
+intro 2
+# Section A
+sub title
+body 1
+{rev}lines 1-5/8 62%{/rev}
+-----
+[EVENT]:char:j
+intro 2
+# Section A
+sub title
+body 1
+body 2
+{rev}lines 2-6/8 75%{/rev}
+-----
+[EVENT]:char:j
+# Section A
+sub title
+body 1
+body 2
+body 3
+{rev}lines 3-7/8 87%{/rev}
+-----
+[EVENT]:char:j
+# Section A
+sub title
+body 2
+body 3
+body 4
+{rev}lines 4-8/8 100%{/rev}
+-----
+[EVENT]:char:g
+intro 1
+intro 2
+# Section A
+sub title
+body 1
+{rev}lines 1-5/8 62%{/rev}
+-----
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}
