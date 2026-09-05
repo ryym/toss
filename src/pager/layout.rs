@@ -447,35 +447,6 @@ pub(super) fn heading_placement(
     })
 }
 
-/// The anchor that puts `target` exactly `rows_above` rows below the top of the page.
-/// Near the start of the document fewer rows may be available, in which case the anchor
-/// lands on the first row of the document.
-pub(super) fn anchor_above(
-    doc: &mut Document,
-    layout: &Layout,
-    target: RowPos,
-    rows_above: usize,
-) -> RowPos {
-    if rows_above == 0 {
-        return target;
-    }
-    let width = layout.size.width();
-    let (line_index, wrap_index) = target;
-    let target_row = {
-        let Some(line) = doc.line(line_index) else {
-            return target;
-        };
-        match line.wrap(width).into_iter().nth(wrap_index) {
-            Some(row) => row,
-            None => return target,
-        }
-    };
-    let earlier = rows::list_backward(doc, width, DocPos::Before(&target_row), rows_above);
-    earlier
-        .first()
-        .map_or(target, |r| (r.line_index(), r.wrap_index()))
-}
-
 /// The anchor that shows the last page of the document.
 pub(super) fn end_anchor(doc: &mut Document, layout: &Layout) -> RowPos {
     let last_page =
@@ -499,18 +470,32 @@ pub(super) fn anchor_forward(
 }
 
 /// The anchor `count` rows before `from`, clamped to the first row of the document.
+/// Putting a target line `count` rows below the top of the page is the same operation:
+/// pass the target as `from`.
 pub(super) fn anchor_backward(
     doc: &mut Document,
     layout: &Layout,
-    from: &Row,
+    from: RowPos,
     count: usize,
 ) -> RowPos {
-    let earlier = rows::list_backward(doc, layout.size.width(), DocPos::Before(from), count);
+    if count == 0 {
+        return from;
+    }
+    let width = layout.size.width();
+    let (line_index, wrap_index) = from;
+    let from_row = {
+        let Some(line) = doc.line(line_index) else {
+            return from;
+        };
+        match line.wrap(width).into_iter().nth(wrap_index) {
+            Some(row) => row,
+            None => return from,
+        }
+    };
+    let earlier = rows::list_backward(doc, width, DocPos::Before(&from_row), count);
     earlier
         .first()
-        .map_or((from.line_index(), from.wrap_index()), |r| {
-            (r.line_index(), r.wrap_index())
-        })
+        .map_or(from, |r| (r.line_index(), r.wrap_index()))
 }
 
 #[cfg(test)]

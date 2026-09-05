@@ -275,7 +275,8 @@ impl Pager {
         };
 
         let rows_above = self.frame.header().len() + heading_height;
-        let anchor = layout::anchor_above(&mut self.doc, &self.layout, (line_index, 0), rows_above);
+        let anchor =
+            layout::anchor_backward(&mut self.doc, &self.layout, (line_index, 0), rows_above);
         self.compose_at(anchor);
         true
     }
@@ -301,7 +302,8 @@ impl Pager {
             .map(|l| l.row_count(width))
             .unwrap_or(1);
         let rows_above = self.layout.size().height().saturating_sub(row_count);
-        let anchor = layout::anchor_above(&mut self.doc, &self.layout, (line_index, 0), rows_above);
+        let anchor =
+            layout::anchor_backward(&mut self.doc, &self.layout, (line_index, 0), rows_above);
         self.compose_at(anchor);
         true
     }
@@ -313,10 +315,7 @@ impl Pager {
         let anchor = match num_rows {
             0 => return false,
             n if n < 0 => {
-                let Some(top) = self.frame.rows().first() else {
-                    return false;
-                };
-                layout::anchor_backward(&mut self.doc, &self.layout, top, (-n) as usize)
+                layout::anchor_backward(&mut self.doc, &self.layout, before, (-n) as usize)
             }
             n => layout::anchor_forward(&mut self.doc, &self.layout, before, n as usize),
         };
