@@ -199,11 +199,6 @@ impl Pager {
         self.frame.content().len()
     }
 
-    /// See [`Frame::contiguous_rows`].
-    fn contiguous_rows(&self) -> Vec<Row> {
-        self.frame.contiguous_rows()
-    }
-
     /// Whether the entire page fits within the specified `height`.
     pub fn fits_within(&mut self, height: usize) -> bool {
         let mut total_rows = 0;
@@ -336,7 +331,7 @@ impl Pager {
         // they sit directly above the content. A match in those rows must be reachable
         // during the preview too; otherwise the cursor would start in the content and only
         // move up into the sticky rows via n/N after the query is submitted.
-        let start_line_index = self.contiguous_rows()[0].line_index();
+        let start_line_index = self.frame.contiguous_rows()[0].line_index();
         let editor = LineEditor::new();
         self.mode = PagerMode::SearchInput(SearchInputMode {
             direction,
@@ -450,7 +445,7 @@ impl Pager {
             None => return,
         };
 
-        let visible = self.contiguous_rows();
+        let visible = self.frame.contiguous_rows();
         let top = &visible[0];
         let bottom = &visible[visible.len() - 1];
         let target = pos.line_index();
@@ -492,7 +487,7 @@ impl Pager {
                 // When the current match is not visible,
                 // jump to the first match in the page regardless of direction.
                 log::debug!("search '{}': find first match in page", search.query);
-                let top_row = self.contiguous_rows()[0].clone();
+                let top_row = self.frame.contiguous_rows()[0].clone();
                 (SearchFrom::Row(top_row), SearchDirection::Forward)
             }
         };
@@ -976,7 +971,10 @@ mod tests {
             ..Default::default()
         };
         let pager = Pager::new(doc_lines(10), opts, ScreenSize::new(20, 6));
-        assert_eq!(line_indices(&pager.contiguous_rows()), vec![0, 1, 2, 3, 4]);
+        assert_eq!(
+            line_indices(&pager.frame.contiguous_rows()),
+            vec![0, 1, 2, 3, 4]
+        );
     }
 
     #[test]
@@ -987,7 +985,7 @@ mod tests {
         };
         let mut pager = Pager::new(doc_lines(20), opts, ScreenSize::new(20, 6));
         pager.scroll(5);
-        assert_eq!(line_indices(&pager.contiguous_rows()), vec![7, 8, 9]);
+        assert_eq!(line_indices(&pager.frame.contiguous_rows()), vec![7, 8, 9]);
     }
 
     #[test]
@@ -1002,7 +1000,10 @@ mod tests {
             opts,
             ScreenSize::new(20, 5),
         );
-        assert_eq!(line_indices(&pager.contiguous_rows()), vec![0, 1, 2, 3]);
+        assert_eq!(
+            line_indices(&pager.frame.contiguous_rows()),
+            vec![0, 1, 2, 3]
+        );
     }
 
     #[test]
@@ -1047,7 +1048,7 @@ mod tests {
             ScreenSize::new(20, 4),
         );
         pager.scroll(2);
-        let rows = pager.contiguous_rows();
+        let rows = pager.frame.contiguous_rows();
         // Heading (line 0) is no longer adjacent to content.
         assert_ne!(rows[0].line_index(), 0);
     }
