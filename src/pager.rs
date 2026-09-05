@@ -309,10 +309,6 @@ impl Pager {
     /// Scroll by the given number of rows (positive = down, negative = up).
     /// Returns whether the page actually moved.
     pub fn scroll(&mut self, num_rows: i32) -> bool {
-        if num_rows.unsigned_abs() as usize > self.layout.size().height() {
-            panic!("scroll rows too big");
-        }
-
         let before = self.frame.anchor();
         let anchor = match num_rows {
             0 => return false,
