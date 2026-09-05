@@ -136,8 +136,8 @@ pub struct Pager {
 impl Pager {
     pub fn new(mut doc: Document, options: Options, screen_size: ScreenSize) -> Self {
         let size = ViewportSize::new(screen_size.width(), screen_size.height());
-        let layout = Layout::new(&options, size);
-        let frame = layout::compose(&mut doc, &layout, (0, 0));
+        let mut layout = Layout::new(&options, size);
+        let frame = layout::compose(&mut doc, &mut layout, (0, 0));
         Self {
             doc,
             mode: PagerMode::View,
@@ -184,7 +184,7 @@ impl Pager {
     /// Rebuild the page for `anchor`. The composed frame may end up at a different anchor:
     /// [`layout::compose`] pulls it back when the page would otherwise be under-filled.
     fn compose_at(&mut self, anchor: RowPos) {
-        self.frame = layout::compose(&mut self.doc, &self.layout, anchor);
+        self.frame = layout::compose(&mut self.doc, &mut self.layout, anchor);
     }
 
     /// Rebuild the page at the current anchor, for when the inputs to the layout changed
@@ -246,7 +246,7 @@ impl Pager {
     /// Resize the page to fit the new dimensions.
     pub fn resize(&mut self, screen_width: usize, screen_height: usize) -> bool {
         let size = ViewportSize::new(screen_width, screen_height);
-        self.layout = self.layout.with_size(size);
+        self.layout.resize(size);
         self.recompose();
         true
     }
@@ -261,8 +261,12 @@ impl Pager {
             line_index = 0;
         }
 
-        let placement =
-            layout::heading_placement(&mut self.doc, &self.layout, self.frame.header(), line_index);
+        let placement = layout::heading_placement(
+            &mut self.doc,
+            &mut self.layout,
+            self.frame.header(),
+            line_index,
+        );
         let heading_height = match &placement {
             // The target is one of the heading lines: show it as the pinned heading itself.
             Some(p) if p.lines.contains(&line_index) => 0,

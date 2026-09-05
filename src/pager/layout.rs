@@ -14,13 +14,14 @@ use crate::{
 pub(super) type RowPos = (usize, usize);
 
 /// Everything needed to compose a [`Frame`] except the anchor.
-/// This is the static part of the page: it changes only on resize.
+/// This is the static part of the page: only a resize changes what it describes.
+/// It does carry the [`Headings`] memo, which fills in as pages are composed.
 #[derive(Debug)]
 pub(super) struct Layout {
     size: ViewportSize,
     /// Number of leading document lines pinned as the global header (`--header`).
     header_lines: usize,
-    heading: Option<HeadingOptions>,
+    heading: Option<Headings>,
 }
 
 impl Layout {
@@ -28,16 +29,14 @@ impl Layout {
         Self {
             size,
             header_lines: options.header,
-            heading: options.heading.clone(),
+            heading: options.heading.clone().map(Headings::new),
         }
     }
 
-    pub fn with_size(&self, size: ViewportSize) -> Self {
-        Self {
-            size,
-            header_lines: self.header_lines,
-            heading: self.heading.clone(),
-        }
+    /// Resize the page. The [`Headings`] memo survives: which lines start a heading does
+    /// not depend on the viewport.
+    pub fn resize(&mut self, size: ViewportSize) {
+        self.size = size;
     }
 
     #[inline]
@@ -63,6 +62,110 @@ impl Layout {
             .height()
             .saturating_sub(header.len())
             .saturating_sub(1)
+    }
+}
+
+/// The heading pattern plus a memo of where the heading start lines are.
+///
+/// Composing a page needs the nearest heading start at or above a given line, which is a
+/// backward scan over the document. Without a memo that scan is proportional to the
+/// document length on every frame, and a document with no heading in it pays the worst
+/// case every time.
+///
+/// The memo never needs invalidating. Lines are immutable and the document only grows, so
+/// an answer stays true once computed. The one exception is the tail: [`is_heading_start`]
+/// also looks at the following `--heading-lines - 1` lines, so a line that is a heading
+/// start only because those lines have not arrived yet may stop being one later. Those
+/// lines are answered by scanning but never recorded.
+#[derive(Debug)]
+struct Headings {
+    options: HeadingOptions,
+    /// Confirmed heading start lines, ascending.
+    starts: Vec<usize>,
+    /// Lines already tested, as one contiguous range. `starts` is complete within it, so
+    /// this is exactly where the memo can also answer "no heading start here".
+    tested: Range<usize>,
+}
+
+impl Headings {
+    fn new(options: HeadingOptions) -> Self {
+        Self {
+            options,
+            starts: Vec::new(),
+            tested: 0..0,
+        }
+    }
+
+    /// The nearest heading start in `lo..=at`, touching the document only for the lines
+    /// the memo cannot answer.
+    fn start_at_or_above(&mut self, doc: &mut Document, lo: usize, at: usize) -> Option<usize> {
+        if at < lo {
+            return None;
+        }
+        // Answers for lines this close to the end of a growing document are not final yet.
+        let final_end = if doc.is_complete() {
+            usize::MAX
+        } else {
+            doc.line_count()
+                .saturating_sub(self.options.num_lines.saturating_sub(1))
+        };
+
+        let mut line = at;
+        let found = loop {
+            if self.tested.contains(&line) {
+                // The memo covers this line down to `tested.start`.
+                let from = self.tested.start.max(lo);
+                if let Some(start) = self.recorded_start_in(from..(line + 1)) {
+                    break Some(start);
+                }
+                if self.tested.start <= lo {
+                    break None;
+                }
+                // The memo ran out above `lo`: keep scanning below it.
+                line = self.tested.start - 1;
+                continue;
+            }
+            if is_heading_start(doc, line, &self.options) {
+                if line < final_end {
+                    self.record_start(line);
+                }
+                break Some(line);
+            }
+            if line == lo {
+                break None;
+            }
+            line -= 1;
+        };
+        // Everything from `line` up to `at` has now been tested, one way or another.
+        self.mark_tested(line..(at + 1).min(final_end));
+        found
+    }
+
+    /// The greatest recorded start within `range`.
+    fn recorded_start_in(&self, range: Range<usize>) -> Option<usize> {
+        let end = self.starts.partition_point(|&start| start < range.end);
+        let start = *self.starts[..end].last()?;
+        (start >= range.start).then_some(start)
+    }
+
+    fn record_start(&mut self, line_index: usize) {
+        if let Err(i) = self.starts.binary_search(&line_index) {
+            self.starts.insert(i, line_index);
+        }
+    }
+
+    fn mark_tested(&mut self, range: Range<usize>) {
+        if range.start >= range.end {
+            return;
+        }
+        let overlaps = range.start <= self.tested.end && self.tested.start <= range.end;
+        self.tested = if self.tested.is_empty() || !overlaps {
+            // A single range is all the memo tracks, so a stretch disconnected from what is
+            // known replaces it. The recorded starts stay valid either way.
+            range
+        } else {
+            self.tested.start.min(range.start)..self.tested.end.max(range.end)
+        };
     }
 }
 
@@ -161,7 +264,7 @@ impl Frame {
 ///
 /// This is the single place where the header, the sticky heading and the content are
 /// decided; every page operation reduces to picking an anchor and calling this.
-pub(super) fn compose(doc: &mut Document, layout: &Layout, anchor: RowPos) -> Frame {
+pub(super) fn compose(doc: &mut Document, layout: &mut Layout, anchor: RowPos) -> Frame {
     let width = layout.size.width();
     let header = rows::from_lines(
         doc,
@@ -231,21 +334,21 @@ struct HeadingBlock {
 /// header already shows them.
 fn resolve_heading(
     doc: &mut Document,
-    layout: &Layout,
+    layout: &mut Layout,
     header: &[Row],
     at_line: usize,
 ) -> Option<HeadingBlock> {
-    let options = layout.heading.as_ref()?;
     let max_height = layout.max_heading_height(header);
     if max_height == 0 || at_line < layout.header_lines {
         return None;
     }
 
-    let start_line = (layout.header_lines..=at_line)
-        .rev()
-        .find(|&i| is_heading_start(doc, i, options))?;
-    let line_range = start_line..(start_line + options.num_lines);
-    let rows = rows::from_lines(doc, layout.size.width(), line_range, max_height);
+    let header_lines = layout.header_lines;
+    let width = layout.size.width();
+    let headings = layout.heading.as_mut()?;
+    let start_line = headings.start_at_or_above(doc, header_lines, at_line)?;
+    let line_range = start_line..(start_line + headings.options.num_lines);
+    let rows = rows::from_lines(doc, width, line_range, max_height);
     if rows.is_empty() {
         return None;
     }
@@ -264,7 +367,7 @@ fn push_up_offset(
     header: &[Row],
     block: &HeadingBlock,
 ) -> usize {
-    let Some(options) = layout.heading.as_ref() else {
+    let Some(options) = layout.heading.as_ref().map(|h| &h.options) else {
         return 0;
     };
     let overlay = header.len() + block.rows.len();
@@ -304,11 +407,7 @@ fn push_up_offset(
 /// sentence 1   => A part of the heading but not a start line
 /// sentence 2   => Not a heading
 /// ```
-pub(super) fn is_heading_start(
-    doc: &mut Document,
-    line_index: usize,
-    options: &HeadingOptions,
-) -> bool {
+fn is_heading_start(doc: &mut Document, line_index: usize, options: &HeadingOptions) -> bool {
     match doc.line(line_index) {
         Some(line) if line.has_match(&options.pattern) => {}
         _ => return false,
@@ -336,7 +435,7 @@ pub(super) struct HeadingPlacement {
 
 pub(super) fn heading_placement(
     doc: &mut Document,
-    layout: &Layout,
+    layout: &mut Layout,
     header: &[Row],
     at_line: usize,
 ) -> Option<HeadingPlacement> {
@@ -418,7 +517,10 @@ pub(super) fn anchor_backward(
 mod tests {
     use super::*;
     use crate::document::Document;
+    use crate::document::StreamMsg;
+    use crate::line::Line;
     use regex::Regex;
+    use std::sync::mpsc;
 
     fn size(width: usize, height: usize) -> ViewportSize {
         ViewportSize { width, height }
@@ -454,11 +556,75 @@ mod tests {
         Document::from_string(s)
     }
 
+    fn heading_options(pattern: &str, num_lines: usize) -> HeadingOptions {
+        HeadingOptions {
+            pattern: Regex::new(pattern).unwrap(),
+            num_lines,
+        }
+    }
+
+    /// 20 lines with a heading at 0, 5 and 12.
+    fn doc_with_headings() -> Document {
+        let mut lines: Vec<String> = (0..20).map(|i| format!("line{i}")).collect();
+        for i in [0, 5, 12] {
+            lines[i] = format!("# h{i}");
+        }
+        Document::from_string(lines.join("\n"))
+    }
+
+    #[test]
+    fn the_heading_memo_answers_like_a_full_scan() {
+        let mut doc = doc_with_headings();
+        let options = heading_options("^# ", 1);
+        let mut headings = Headings::new(options.clone());
+
+        // Query out of order, so the memo also meets lines far below what it has scanned.
+        for at in [19, 18, 3, 4, 13, 12, 11, 6, 0, 19] {
+            let expected = (0..=at)
+                .rev()
+                .find(|&i| is_heading_start(&mut doc, i, &options));
+            assert_eq!(
+                headings.start_at_or_above(&mut doc, 0, at),
+                expected,
+                "at line {at}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_heading_memo_never_reaches_below_the_lower_bound() {
+        let mut doc = doc_with_headings();
+        let mut headings = Headings::new(heading_options("^# ", 1));
+        assert_eq!(headings.start_at_or_above(&mut doc, 0, 19), Some(12));
+        assert_eq!(headings.start_at_or_above(&mut doc, 6, 11), None);
+        assert_eq!(headings.start_at_or_above(&mut doc, 6, 19), Some(12));
+        assert_eq!(headings.start_at_or_above(&mut doc, 1, 4), None);
+    }
+
+    #[test]
+    fn a_heading_start_at_the_end_of_a_growing_document_is_not_memoized() {
+        let (tx, rx) = mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        tx.send(StreamMsg::Line(Line::new(0, "# a".into())))
+            .unwrap();
+        doc.pump();
+
+        // With --heading-lines 2, "# a" is a heading start only while the line that would
+        // follow it is still unknown.
+        let mut headings = Headings::new(heading_options("^# ", 2));
+        assert_eq!(headings.start_at_or_above(&mut doc, 0, 0), Some(0));
+
+        tx.send(StreamMsg::Line(Line::new(1, "# b".into())))
+            .unwrap();
+        doc.pump();
+        assert_eq!(headings.start_at_or_above(&mut doc, 0, 0), None);
+    }
+
     #[test]
     fn composes_from_the_top_of_the_document() {
         let mut doc = doc_lines(10);
-        let layout = layout(0, None, size(10, 4));
-        let frame = compose(&mut doc, &layout, (0, 0));
+        let mut layout = layout(0, None, size(10, 4));
+        let frame = compose(&mut doc, &mut layout, (0, 0));
         assert!(frame.header().is_empty());
         assert!(frame.heading().is_empty());
         assert_eq!(pos(frame.content()), vec![(0, 0), (1, 0), (2, 0), (3, 0)]);
@@ -467,16 +633,16 @@ mod tests {
     #[test]
     fn short_document_leaves_the_page_partially_filled() {
         let mut doc = doc_lines(2);
-        let layout = layout(0, None, size(10, 5));
-        let frame = compose(&mut doc, &layout, (0, 0));
+        let mut layout = layout(0, None, size(10, 5));
+        let frame = compose(&mut doc, &mut layout, (0, 0));
         assert_eq!(lines(frame.content()), vec![0, 1]);
     }
 
     #[test]
     fn header_covers_the_rows_it_duplicates() {
         let mut doc = doc_lines(10);
-        let layout = layout(2, None, size(10, 5));
-        let frame = compose(&mut doc, &layout, (0, 0));
+        let mut layout = layout(2, None, size(10, 5));
+        let frame = compose(&mut doc, &mut layout, (0, 0));
         // The header shows lines 0-1, which also occupy the first two viewport rows.
         assert_eq!(lines(frame.header()), vec![0, 1]);
         assert_eq!(lines(frame.rows()), vec![0, 1, 2, 3, 4]);
@@ -487,17 +653,17 @@ mod tests {
     fn header_is_capped_to_leave_room_for_content() {
         let mut doc = doc_lines(10);
         // Viewport height 5 leaves at most 4 rows for a header.
-        let layout = layout(5, None, size(10, 5));
-        let frame = compose(&mut doc, &layout, (0, 0));
+        let mut layout = layout(5, None, size(10, 5));
+        let frame = compose(&mut doc, &mut layout, (0, 0));
         assert_eq!(lines(frame.header()), vec![0, 1, 2, 3]);
     }
 
     #[test]
     fn anchor_is_pulled_back_to_keep_the_page_full() {
         let mut doc = doc_lines(6);
-        let layout = layout(0, None, size(10, 4));
+        let mut layout = layout(0, None, size(10, 4));
         // Only two rows are left below line 4, so the anchor moves back to line 2.
-        let frame = compose(&mut doc, &layout, (4, 0));
+        let frame = compose(&mut doc, &mut layout, (4, 0));
         assert_eq!(frame.anchor(), (2, 0));
         assert_eq!(lines(frame.content()), vec![2, 3, 4, 5]);
     }
@@ -505,8 +671,8 @@ mod tests {
     #[test]
     fn anchor_past_the_end_falls_back_to_the_last_page() {
         let mut doc = doc_lines(6);
-        let layout = layout(0, None, size(10, 4));
-        let frame = compose(&mut doc, &layout, (99, 0));
+        let mut layout = layout(0, None, size(10, 4));
+        let frame = compose(&mut doc, &mut layout, (99, 0));
         assert_eq!(lines(frame.content()), vec![2, 3, 4, 5]);
     }
 
@@ -522,8 +688,8 @@ b2
 b3
 ";
         let mut doc = Document::from_string(content.into());
-        let layout = layout(0, Some(("^# ", 1)), size(10, 4));
-        let frame = compose(&mut doc, &layout, (2, 0));
+        let mut layout = layout(0, Some(("^# ", 1)), size(10, 4));
+        let frame = compose(&mut doc, &mut layout, (2, 0));
         // Line 2 belongs to section A, so "# A" is pinned and covers line 2.
         assert_eq!(lines(frame.heading()), vec![0]);
         assert_eq!(lines(frame.content()), vec![3, 4, 5]);
@@ -544,9 +710,9 @@ b5
 ";
         let mut doc = Document::from_string(content.into());
         // --heading-lines 2 so the heading occupies two rows and can be pushed up by one.
-        let layout = layout(0, Some(("^# ", 2)), size(10, 6));
+        let mut layout = layout(0, Some(("^# ", 2)), size(10, 6));
         // Anchor at line 2: the covered band is lines 2-3 and line 3 starts section B.
-        let frame = compose(&mut doc, &layout, (2, 0));
+        let frame = compose(&mut doc, &mut layout, (2, 0));
         // "# A" is pushed up by one row, leaving only its second line pinned.
         assert_eq!(lines(frame.heading()), vec![1]);
         // The row freed by the push-up reveals "# B" as content.
@@ -564,8 +730,8 @@ b3
 ";
         let mut doc = Document::from_string(content.into());
         // Lines 0-1 are the global header, so neither may become the heading.
-        let layout = layout(2, Some(("^# ", 1)), size(10, 5));
-        let frame = compose(&mut doc, &layout, (2, 0));
+        let mut layout = layout(2, Some(("^# ", 1)), size(10, 5));
+        let frame = compose(&mut doc, &mut layout, (2, 0));
         assert!(frame.heading().is_empty());
         assert_eq!(lines(frame.header()), vec![0, 1]);
     }
@@ -579,8 +745,8 @@ a1
 b1
 ";
         let mut doc = Document::from_string(content.into());
-        let layout = layout(0, Some(("^# ", 1)), size(10, 3));
-        let frame = compose(&mut doc, &layout, (0, 0));
+        let mut layout = layout(0, Some(("^# ", 1)), size(10, 3));
+        let frame = compose(&mut doc, &mut layout, (0, 0));
         assert!(frame.heading().is_empty());
     }
 
@@ -594,8 +760,8 @@ a2
 a3
 ";
         let mut doc = Document::from_string(content.into());
-        let layout = layout(1, Some(("^# ", 1)), size(10, 4));
-        let frame = compose(&mut doc, &layout, (0, 0));
+        let mut layout = layout(1, Some(("^# ", 1)), size(10, 4));
+        let frame = compose(&mut doc, &mut layout, (0, 0));
         // The header displays line 0 and covers it, the heading does the same for line 1,
         // so the whole page reads as one contiguous range.
         assert_eq!(lines(frame.header()), vec![0]);
@@ -615,8 +781,8 @@ a4
 a5
 ";
         let mut doc = Document::from_string(content.into());
-        let layout = layout(1, Some(("^# ", 1)), size(10, 4));
-        let frame = compose(&mut doc, &layout, (3, 0));
+        let mut layout = layout(1, Some(("^# ", 1)), size(10, 4));
+        let frame = compose(&mut doc, &mut layout, (3, 0));
         // The heading (line 1) is far above the content (lines 5-6), so only content remains.
         assert_eq!(lines(frame.heading()), vec![1]);
         assert_eq!(lines(&frame.contiguous_rows()), vec![5, 6]);
@@ -625,8 +791,8 @@ a5
     #[test]
     fn wrapped_lines_occupy_several_rows() {
         let mut doc = Document::from_string("abcde\nf\ng\n".into());
-        let layout = layout(0, None, size(2, 4));
-        let frame = compose(&mut doc, &layout, (0, 0));
+        let mut layout = layout(0, None, size(2, 4));
+        let frame = compose(&mut doc, &mut layout, (0, 0));
         assert_eq!(pos(frame.content()), vec![(0, 0), (0, 1), (0, 2), (1, 0)]);
     }
 }
