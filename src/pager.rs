@@ -136,7 +136,7 @@ pub struct Pager {
 impl Pager {
     pub fn new(mut doc: Document, options: Options, screen_size: ScreenSize) -> Self {
         let size = ViewportSize::new(screen_size.width(), screen_size.height());
-        let mut layout = Layout::new(&options, size);
+        let mut layout = Layout::new(options, size);
         let frame = layout::compose(&mut doc, &mut layout, (0, 0));
         Self {
             doc,

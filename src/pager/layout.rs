@@ -25,11 +25,11 @@ pub(super) struct Layout {
 }
 
 impl Layout {
-    pub fn new(options: &Options, size: ViewportSize) -> Self {
+    pub fn new(options: Options, size: ViewportSize) -> Self {
         Self {
             size,
             header_lines: options.header,
-            heading: options.heading.clone().map(Headings::new),
+            heading: options.heading.map(Headings::new),
         }
     }
 
@@ -520,7 +520,7 @@ mod tests {
             }),
             quit_if_one_screen: false,
         };
-        Layout::new(&options, size)
+        Layout::new(options, size)
     }
 
     fn pos(rows: &[Row]) -> Vec<(usize, usize)> {
