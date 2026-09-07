@@ -150,20 +150,27 @@ impl Headings {
         (start >= range.start).then_some(start)
     }
 
+    /// Record `line_index` as a heading start, keeping [`Self::starts`] ascending.
+    /// Recording a line already known to be a start does nothing.
     fn record_start(&mut self, line_index: usize) {
         if let Err(i) = self.starts.binary_search(&line_index) {
             self.starts.insert(i, line_index);
         }
     }
 
+    /// Record that every line in `range` has been tested, so the memo can also answer
+    /// "no heading start here" for them.
+    ///
+    /// The tested lines are tracked as a single range. A `range` that does not touch the
+    /// current one therefore replaces it instead of extending it, and the lines the memo
+    /// used to cover stop being answerable. An empty `range` records nothing.
     fn mark_tested(&mut self, range: Range<usize>) {
         if range.start >= range.end {
             return;
         }
         let overlaps = range.start <= self.tested.end && self.tested.start <= range.end;
         self.tested = if self.tested.is_empty() || !overlaps {
-            // A single range is all the memo tracks, so a stretch disconnected from what is
-            // known replaces it. The recorded starts stay valid either way.
+            // Only the tested range is given up; the recorded starts stay valid either way.
             range
         } else {
             self.tested.start.min(range.start)..self.tested.end.max(range.end)

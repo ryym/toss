@@ -56,6 +56,8 @@ struct PaintedFrame {
 }
 
 impl PaintedFrame {
+    /// The text of the group screen row `y` belongs to. The outer `None` means the frame
+    /// has no such row; the inner one is [`PaintedGroup::text`] being absent.
     fn text_at(&self, y: usize) -> Option<&Option<String>> {
         self.rows.get(y).map(|row| &self.groups[row.group].text)
     }
