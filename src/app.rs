@@ -10,7 +10,10 @@ use crate::screen::Screen;
 use crate::scroll::ScrollPhysics;
 use crate::search::SearchDirection;
 
+/// Poll cadence while a scroll animation is running. It is also the fixed time step the
+/// animation advances by, so the motion does not depend on how long a frame really took.
 const FRAME_DURATION_ANIMATING: Duration = Duration::from_millis(8);
+/// Poll cadence when nothing is in flight, chosen to keep an idle pager cheap.
 const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
 /// Poll cadence while input is still streaming in, so new lines surface promptly
 /// without the busy cost of the animation cadence.
@@ -23,6 +26,14 @@ enum AppAction {
     Quit,
 }
 
+/// Drives the pager: reads terminal events, turns them into page operations, and renders
+/// the result.
+///
+/// [`App`] owns the event loop. It polls for input at a cadence that follows what is in
+/// flight (a running scroll animation, streaming input, or neither), asks [`Pager`] to
+/// update the page state, and hands the resulting page to [`Renderer`]. Scrolling by a
+/// page or half a page is animated by [`ScrollPhysics`], unless
+/// [`Self::set_instant_scroll`] turned the animation off.
 pub struct App<S: Screen> {
     renderer: Renderer<S>,
     pager: Pager,
@@ -44,6 +55,8 @@ impl<S: Screen> App<S> {
         })
     }
 
+    /// Make animated scrolls land immediately instead of easing over several frames.
+    /// Tests need the page to settle within the call that scrolled it.
     pub fn set_instant_scroll(&mut self) {
         self.instant_scroll = true;
     }
@@ -56,6 +69,7 @@ impl<S: Screen> App<S> {
         self.pager.doc()
     }
 
+    /// Run the event loop until the user quits, rendering whenever the page changed.
     pub fn run(&mut self) -> io::Result<()> {
         self.pager.pump_input();
         self.render()?;
@@ -79,6 +93,8 @@ impl<S: Screen> App<S> {
         self.renderer.render(doc, snapshot)
     }
 
+    /// Wait for the next terminal event, up to the poll cadence for the current state,
+    /// and apply it.
     fn handle_terminal_event(&mut self) -> io::Result<AppAction> {
         let timeout = if self.scroll_physics.is_active() {
             FRAME_DURATION_ANIMATING
@@ -176,13 +192,14 @@ impl<S: Screen> App<S> {
         }
     }
 
+    /// Scroll by `rows` at once, cancelling any animation in flight.
     fn scroll_immediate(&mut self, rows: i32) -> bool {
         self.scroll_physics.stop();
         self.apply_scroll(rows)
     }
 
-    /// Start or add momentum for an animated scroll.
-    /// In instant_scroll mode (tests), scrolls immediately instead.
+    /// Start or add momentum for a scroll animated over the following frames.
+    /// Under [`Self::set_instant_scroll`] the whole distance is applied at once instead.
     fn scroll_animated(&mut self, total_rows: i32) -> bool {
         if self.instant_scroll {
             self.scroll_physics.stop();
@@ -194,6 +211,7 @@ impl<S: Screen> App<S> {
         }
     }
 
+    /// Advance a running scroll animation by one frame. Returns whether the page moved.
     fn update_scroll_animation(&mut self) -> bool {
         if !self.scroll_physics.is_active() {
             return false;
@@ -204,6 +222,8 @@ impl<S: Screen> App<S> {
         self.apply_scroll(rows as i32)
     }
 
+    /// Scroll the page by `rows`, never further than one screenful of content in one step.
+    /// Returns whether the page actually moved.
     fn apply_scroll(&mut self, rows: i32) -> bool {
         if rows == 0 {
             return false;
