@@ -73,11 +73,10 @@ impl Layout {
 /// document length on every frame, and a document with no heading in it pays the worst
 /// case every time.
 ///
-/// The memo never needs invalidating. Lines are immutable and the document only grows, so
-/// an answer stays true once computed. The one exception is the tail: [`is_heading_start`]
-/// also looks at the following `--heading-lines - 1` lines, so a line that is a heading
-/// start only because those lines have not arrived yet may stop being one later. Those
-/// lines are answered by scanning but never recorded.
+/// A recorded answer never goes stale: lines are immutable and the document only appends,
+/// so a line that starts a heading keeps starting one. The end of a growing document is
+/// the one place that does not hold yet, so those lines are scanned without being
+/// recorded.
 #[derive(Debug)]
 struct Headings {
     options: HeadingOptions,
@@ -103,7 +102,9 @@ impl Headings {
         if at < lo {
             return None;
         }
-        // Answers for lines this close to the end of a growing document are not final yet.
+        // is_heading_start also looks at the following lines, so a line can pass it merely
+        // because they have not arrived yet. From this bound on, an answer is not final:
+        // scan those lines every time and keep them out of the memo.
         let final_end = if doc.is_complete() {
             usize::MAX
         } else {
