@@ -130,9 +130,9 @@ impl<S: Screen> Renderer<S> {
             }
         }
 
-        // A scroll drags the rows below the viewport around too, and an under-filled page
-        // leaves blank rows below the status line, so clear everything past the content.
-        // A page that shrank also has to clear whatever the previous one painted below it.
+        // Clear everything past the content: a scroll drags the rows below the viewport
+        // around too, an under-filled page leaves blank rows below the status line, and a
+        // page that shrank must erase whatever the previous one painted below it.
         let painted_before = self.last.as_ref().map_or(0, |last| last.status_y);
         let blank_end = frame.height.max(painted_before).max(frame.status_y + 1);
         self.clear_rows(frame.status_y..blank_end)?;

@@ -433,6 +433,8 @@ pub(super) struct HeadingPlacement {
     pub height: usize,
 }
 
+/// Where the heading would sit on a page whose content reaches `at_line`, or `None` if no
+/// heading would be pinned there.
 pub(super) fn heading_placement(
     doc: &mut Document,
     layout: &mut Layout,
