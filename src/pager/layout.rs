@@ -102,10 +102,7 @@ impl Headings {
         if at < lo {
             return None;
         }
-        // is_heading_start also looks at the following lines, so a line can pass it merely
-        // because they have not arrived yet. From this bound on, an answer is not final:
-        // scan those lines every time and keep them out of the memo.
-        let final_end = if doc.is_complete() {
+        let settled_end = if doc.is_complete() {
             usize::MAX
         } else {
             doc.line_count()
@@ -128,7 +125,9 @@ impl Headings {
                 continue;
             }
             if is_heading_start(doc, line, &self.options) {
-                if line < final_end {
+                // Memoize only lines whose following lines have all arrived; for the rest,
+                // is_heading_start can still change its answer as the document grows.
+                if line < settled_end {
                     self.record_start(line);
                 }
                 break Some(line);
@@ -139,7 +138,7 @@ impl Headings {
             line -= 1;
         };
         // Everything from `line` up to `at` has now been tested, one way or another.
-        self.mark_tested(line..(at + 1).min(final_end));
+        self.mark_tested(line..(at + 1).min(settled_end));
         found
     }
 
