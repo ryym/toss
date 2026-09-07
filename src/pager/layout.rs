@@ -15,12 +15,13 @@ pub(super) type RowPos = (usize, usize);
 
 /// Everything needed to compose a [`Frame`] except the anchor.
 /// This is the static part of the page: only a resize changes what it describes.
-/// It does carry the [`Headings`] memo, which fills in as pages are composed.
 #[derive(Debug)]
 pub(super) struct Layout {
     size: ViewportSize,
     /// Number of leading document lines pinned as the global header (`--header`).
     header_lines: usize,
+    /// The heading configuration (`--heading`), along with the memo it accumulates as
+    /// pages are composed. `None` disables the sticky heading entirely.
     heading: Option<Headings>,
 }
 
@@ -33,9 +34,9 @@ impl Layout {
         }
     }
 
-    /// Resize the page. The [`Headings`] memo survives: which lines start a heading does
-    /// not depend on the viewport.
+    /// Change the viewport size. Nothing else the layout describes depends on it.
     pub fn resize(&mut self, size: ViewportSize) {
+        // Keep the heading memo: which lines start a heading does not depend on the size.
         self.size = size;
     }
 
