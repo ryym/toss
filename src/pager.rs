@@ -16,6 +16,7 @@ mod layout;
 mod rows;
 mod status_line;
 
+/// The area the page uses to show document rows: the screen minus the status line.
 #[derive(Debug, Clone, Copy)]
 struct ViewportSize {
     width: usize,
@@ -41,26 +42,39 @@ impl ViewportSize {
     }
 }
 
+/// The whole page as it should currently appear, handed to the renderer to draw.
+///
+/// The row slices are laid out top to bottom: the pinned header, then the pinned heading,
+/// then the content below them. A page that cannot be filled — a document shorter than the
+/// screen — has fewer rows than [`Self::height`], and the status line moves up with them.
 #[derive(Debug)]
 pub struct PageSnapshot<'pager> {
     pub header: &'pager [Row],
     pub heading: &'pager [Row],
     pub content: &'pager [Row],
+    /// Rows the viewport may occupy, i.e. its height when the page is full.
     pub height: usize,
+    /// The search to highlight matches of, if any. During search input this is the live
+    /// preview rather than the committed query.
     pub search: Option<&'pager SearchState>,
     pub status_line: String,
 }
 
 impl<'pager> PageSnapshot<'pager> {
+    /// Rows the pinned header and heading occupy together.
     pub fn total_header_height(&self) -> usize {
         self.header.len() + self.heading.len()
     }
 
+    /// Rows the page actually fills, which is [`Self::height`] unless the page is
+    /// under-filled.
     pub fn viewport_height(&self) -> usize {
         self.total_header_height() + self.content.len()
     }
 }
 
+/// Which interaction the pager is currently in. Key handling and the status line both
+/// follow the mode.
 #[derive(Default)]
 pub enum PagerMode {
     #[default]
@@ -68,6 +82,8 @@ pub enum PagerMode {
     SearchInput(SearchInputMode),
 }
 
+/// State of an in-progress search input: the query being typed, plus what is needed to
+/// preview it and to undo the preview on cancel.
 pub struct SearchInputMode {
     direction: SearchDirection,
     editor: LineEditor,
@@ -109,6 +125,7 @@ impl SearchDraft {
 }
 
 /// Centrally manages the pagination state.
+///
 /// [`Pager`] reads the rows that fit in the display area from [`Document`] and shows them
 /// together with the status line. The whole display area is called the page, and the part
 /// that shows rows of [`Document`] lines in particular is called the viewport.
@@ -120,11 +137,9 @@ impl SearchDraft {
 /// always moves the visible content by exactly one row, whether or not a heading appeared
 /// or disappeared in the same step.
 ///
-/// The only page state [`Pager`] mutates is the anchor — the document row the viewport
-/// starts at. Everything else, including which heading is pinned and how far it has been
-/// pushed up, is derived by [`layout::compose`], so every operation reduces to picking an
-/// anchor and recomposing.
-/// [`Pager`] only holds the state but does not write anything to the screen itself.
+/// Every operation — scrolling, jumping, searching, resizing — only moves the page and
+/// updates the search state; [`Pager`] never writes anything to the screen itself. The
+/// result is published as a [`PageSnapshot`] for the renderer to draw.
 pub struct Pager {
     doc: Document,
     mode: PagerMode,
@@ -159,6 +174,7 @@ impl Pager {
         &mut self.doc
     }
 
+    /// The current page, together with the document its rows point into.
     pub fn snapshot<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
         let search = match &self.mode {
             PagerMode::SearchInput(search) => search.draft.preview().or(self.search.as_ref()),
@@ -194,12 +210,13 @@ impl Pager {
         self.compose_at(anchor);
     }
 
-    /// Returns the height of the display area (the number of rows) excluding the header region.
+    /// Number of rows currently visible below the pinned header and heading.
     pub fn content_height(&self) -> usize {
         self.frame.content().len()
     }
 
-    /// Whether the entire page fits within the specified `height`.
+    /// Whether the entire document renders within `height` rows at the current width,
+    /// i.e. it could be printed in full instead of paged.
     pub fn fits_within(&mut self, height: usize) -> bool {
         let mut total_rows = 0;
         for i in 0..self.doc.line_count() {
@@ -238,7 +255,9 @@ impl Pager {
         !self.doc.is_complete()
     }
 
-    /// Resize the page to fit the new dimensions.
+    /// Resize the page to the new screen dimensions, reflowing the rows at the new width.
+    /// The page stays at its current position unless growing it forces a pull-back toward
+    /// the start of the document.
     pub fn resize(&mut self, screen_width: usize, screen_height: usize) -> bool {
         let size = ViewportSize::new(screen_width, screen_height);
         self.layout.resize(size);
@@ -319,6 +338,7 @@ impl Pager {
         self.frame.anchor() != before
     }
 
+    /// Whether a search input is in progress and not empty.
     pub fn has_search_input(&self) -> bool {
         match &self.mode {
             PagerMode::SearchInput(mode) => !mode.editor.is_empty(),
@@ -326,6 +346,8 @@ impl Pager {
         }
     }
 
+    /// Enter search input mode. The query is previewed as it is typed, and cancelling
+    /// returns the page to where it is now.
     pub fn start_search_input(&mut self, direction: SearchDirection) -> bool {
         // Search from the top of the contiguous rows, which include the sticky rows while
         // they sit directly above the content. A match in those rows must be reachable
@@ -369,7 +391,9 @@ impl Pager {
         true
     }
 
-    /// Update the search input and scroll to the first match.
+    /// Apply one edit to the search input and move the page to the first match of the
+    /// resulting query. An input that does not compile leaves the page and the previewed
+    /// matches where they are.
     pub fn update_search_query(&mut self, edit: LineEdit) -> bool {
         let PagerMode::SearchInput(mode) = &mut self.mode else {
             return false;
