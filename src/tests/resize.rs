@@ -311,3 +311,45 @@ line 10
 ";
     assert_eq!(screen.out(), want);
 }
+
+/// Widening the screen can unwrap the document into fewer rows than the viewport holds,
+/// which pulls the status line up. The row it used to sit on must not keep showing it.
+#[test]
+fn widening_into_an_under_filled_page_leaves_no_stale_status_line() {
+    let content = "\
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+cccccccccccccccccccccccccccccccccccc
+dddddddddddddddddddddddddddddddddddd
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 8,
+        content,
+        events: vec![resize(60, 8), key('q')],
+        ..Default::default()
+    });
+    let want = "\
+aaaaaaaaaaaaaaaaaaaa>
+aaaaaaaaaaaaaaaa
+bbbbbbbbbbbbbbbbbbbb>
+bbbbbbbbbbbbbbbb
+cccccccccccccccccccc>
+cccccccccccccccc
+dddddddddddddddddddd
+{rev}lines 1-4/4 100%{/rev}
+-----
+[EVENT]:resize:60x8
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+cccccccccccccccccccccccccccccccccccc
+dddddddddddddddddddddddddddddddddddd
+{rev}lines 1-4/4 100%{/rev}
+
+
+
+-----
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}

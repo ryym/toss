@@ -51,7 +51,9 @@ struct PaintedFrame {
     /// Screen row the status line sits on. Also the number of viewport rows painted:
     /// an under-filled page pulls the status line up and leaves the rest blank.
     status_line_y: usize,
-    /// Viewport height, i.e. the rows below the status line that must stay blank.
+    /// Number of viewport rows, i.e. the screen height minus the status line, so the screen
+    /// spans rows `0..=height`. `status_line_y` never exceeds it: it equals `height` on a full
+    /// page and is smaller on an under-filled one, where the status line moves up the screen.
     height: usize,
 }
 
@@ -132,15 +134,10 @@ impl<S: Screen> Renderer<S> {
             }
         }
 
-        // Clear everything past the content: a scroll drags the rows below the viewport
-        // around too, an under-filled page leaves blank rows below the status line, and a
-        // page that shrank must erase whatever the previous one painted below it.
-        let painted_before = self.last.as_ref().map_or(0, |last| last.status_line_y);
-        let blank_end = frame
-            .height
-            .max(painted_before)
-            .max(frame.status_line_y + 1);
-        self.clear_rows(frame.status_line_y..blank_end)?;
+        // Clear the whole band from the status line to the bottom of the screen. A scroll
+        // moves every row, so the status row holds whatever slid into it, and an
+        // under-filled page leaves rows below the status line that must come out blank.
+        self.clear_rows(frame.status_line_y..(frame.height + 1))?;
         self.screen
             .write_at(frame.status_line_y, &frame.status_line)?;
 
