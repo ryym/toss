@@ -12,6 +12,7 @@ use crate::{
     search::{self, SearchDirection, SearchFrom, SearchState},
 };
 
+mod headings;
 mod layout;
 mod rows;
 mod status_line;

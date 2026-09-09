@@ -3,9 +3,10 @@ use std::ops::Range;
 use crate::{
     document::Document,
     line::Row,
-    options::{HeadingOptions, Options},
+    options::Options,
     pager::{
         ViewportSize,
+        headings::Headings,
         rows::{self, DocPos},
     },
 };
@@ -63,117 +64,6 @@ impl Layout {
             .height()
             .saturating_sub(header.len())
             .saturating_sub(1)
-    }
-}
-
-/// The heading pattern plus a memo of where the heading start lines are.
-///
-/// Composing a page needs the nearest heading start at or above a given line, which is a
-/// backward scan over the document. Without a memo that scan is proportional to the
-/// document length on every frame, and a document with no heading in it pays the worst
-/// case every time.
-///
-/// A recorded answer never goes stale: lines are immutable and the document only appends,
-/// so a line that starts a heading keeps starting one. The end of a growing document is
-/// the one place that does not hold yet, so those lines are scanned without being
-/// recorded.
-#[derive(Debug)]
-struct Headings {
-    options: HeadingOptions,
-    /// Confirmed heading start lines, ascending.
-    starts: Vec<usize>,
-    /// Lines already tested, as one contiguous range. `starts` is complete within it, so
-    /// this is exactly where the memo can also answer "no heading start here".
-    tested: Range<usize>,
-}
-
-impl Headings {
-    fn new(options: HeadingOptions) -> Self {
-        Self {
-            options,
-            starts: Vec::new(),
-            tested: 0..0,
-        }
-    }
-
-    /// The nearest heading start in `lo..=at`, touching the document only for the lines
-    /// the memo cannot answer.
-    fn start_at_or_above(&mut self, doc: &mut Document, lo: usize, at: usize) -> Option<usize> {
-        if at < lo {
-            return None;
-        }
-        let settled_end = if doc.is_complete() {
-            usize::MAX
-        } else {
-            doc.line_count()
-                .saturating_sub(self.options.num_lines.saturating_sub(1))
-        };
-
-        let mut line = at;
-        let found = loop {
-            if self.tested.contains(&line) {
-                // The memo covers this line down to `tested.start`.
-                let from = self.tested.start.max(lo);
-                if let Some(start) = self.recorded_start_in(from..(line + 1)) {
-                    break Some(start);
-                }
-                if self.tested.start <= lo {
-                    break None;
-                }
-                // The memo ran out above `lo`: keep scanning below it.
-                line = self.tested.start - 1;
-                continue;
-            }
-            if is_heading_start(doc, line, &self.options) {
-                // Memoize only lines whose following lines have all arrived; for the rest,
-                // is_heading_start can still change its answer as the document grows.
-                if line < settled_end {
-                    self.record_start(line);
-                }
-                break Some(line);
-            }
-            if line == lo {
-                break None;
-            }
-            line -= 1;
-        };
-        // Everything from `line` up to `at` has now been tested, one way or another.
-        self.mark_tested(line..(at + 1).min(settled_end));
-        found
-    }
-
-    /// The greatest recorded start within `range`.
-    fn recorded_start_in(&self, range: Range<usize>) -> Option<usize> {
-        let end = self.starts.partition_point(|&start| start < range.end);
-        let start = *self.starts[..end].last()?;
-        (start >= range.start).then_some(start)
-    }
-
-    /// Record `line_index` as a heading start, keeping [`Self::starts`] ascending.
-    /// Recording a line already known to be a start does nothing.
-    fn record_start(&mut self, line_index: usize) {
-        if let Err(i) = self.starts.binary_search(&line_index) {
-            self.starts.insert(i, line_index);
-        }
-    }
-
-    /// Record that every line in `range` has been tested, so the memo can also answer
-    /// "no heading start here" for them.
-    ///
-    /// The tested lines are tracked as a single range. A `range` that does not touch the
-    /// current one therefore replaces it instead of extending it, and the lines the memo
-    /// used to cover stop being answerable. An empty `range` records nothing.
-    fn mark_tested(&mut self, range: Range<usize>) {
-        if range.start >= range.end {
-            return;
-        }
-        let overlaps = range.start <= self.tested.end && self.tested.start <= range.end;
-        self.tested = if self.tested.is_empty() || !overlaps {
-            // Only the tested range is given up; the recorded starts stay valid either way.
-            range
-        } else {
-            self.tested.start.min(range.start)..self.tested.end.max(range.end)
-        };
     }
 }
 
@@ -355,7 +245,7 @@ fn resolve_heading(
     let width = layout.size.width();
     let headings = layout.heading.as_mut()?;
     let start_line = headings.start_at_or_above(doc, header_lines, at_line)?;
-    let line_range = start_line..(start_line + headings.options.num_lines);
+    let line_range = start_line..(start_line + headings.num_lines());
     let rows = rows::from_lines(doc, width, line_range, max_height);
     if rows.is_empty() {
         return None;
@@ -375,7 +265,7 @@ fn push_up_offset(
     header: &[Row],
     block: &HeadingBlock,
 ) -> usize {
-    let Some(options) = layout.heading.as_ref().map(|h| &h.options) else {
+    let Some(headings) = layout.heading.as_ref() else {
         return 0;
     };
     let overlay = header.len() + block.rows.len();
@@ -387,67 +277,12 @@ fn push_up_offset(
         {
             continue;
         }
-        if is_heading_start(doc, row.line_index(), options) {
+        if headings.is_start(doc, row.line_index()) {
             next_section_start = i;
             break;
         }
     }
     overlay.saturating_sub(next_section_start)
-}
-
-/// Whether the line at `line_index` starts a heading block.
-///
-/// Example: with `toss --heading '^#' --heading-lines 2`
-/// ```text
-/// # title     => is_heading_start: true
-/// sub title   => is_heading_start: false (not a start line)
-/// other line  => is_heading_start: false
-/// ```
-///
-/// Even when a line matches the heading pattern, if another line within the following
-/// `--heading-lines` lines also matches, the earlier line is NOT a heading start.
-///
-/// Example: with `toss --heading '^#' --heading-lines 2`
-/// ```text
-/// # title 1    => Not a heading as there is `## title 2`
-/// ## title 2   => Not a heading as there is `### title 3`
-/// ### title 3  => A heading and is_heading_start is true
-/// sentence 1   => A part of the heading but not a start line
-/// sentence 2   => Not a heading
-/// ```
-///
-/// A line that does not exist cannot match, so the last lines of a growing document are
-/// heading starts merely because nothing has arrived after them. Their answer changes
-/// once it does.
-///
-/// Example: with `toss --heading '^#' --heading-lines 2`, while only two lines have
-/// arrived
-/// ```text
-/// # title 1    => Not a heading as there is `# title 2`
-/// # title 2    => A heading as nothing follows it yet
-/// ```
-/// and after the next line arrives
-/// ```text
-/// # title 1    => Not a heading as there is `# title 2`
-/// # title 2    => No longer a heading as there is now `# title 3`
-/// # title 3    => A heading as nothing follows it yet
-/// ```
-fn is_heading_start(doc: &mut Document, line_index: usize, options: &HeadingOptions) -> bool {
-    match doc.line(line_index) {
-        Some(line) if line.has_match(&options.pattern) => {}
-        _ => return false,
-    }
-    for i in 1..options.num_lines {
-        match doc.line(line_index + i) {
-            Some(line) => {
-                if line.has_match(&options.pattern) {
-                    return false;
-                }
-            }
-            None => return true,
-        }
-    }
-    true
 }
 
 /// Where the heading would sit for a page showing `at_line`.
@@ -529,10 +364,8 @@ pub(super) fn anchor_backward(
 mod tests {
     use super::*;
     use crate::document::Document;
-    use crate::document::StreamMsg;
-    use crate::line::Line;
+    use crate::options::HeadingOptions;
     use regex::Regex;
-    use std::sync::mpsc;
 
     fn size(width: usize, height: usize) -> ViewportSize {
         ViewportSize { width, height }
@@ -566,70 +399,6 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         Document::from_string(s)
-    }
-
-    fn heading_options(pattern: &str, num_lines: usize) -> HeadingOptions {
-        HeadingOptions {
-            pattern: Regex::new(pattern).unwrap(),
-            num_lines,
-        }
-    }
-
-    /// 20 lines with a heading at 0, 5 and 12.
-    fn doc_with_headings() -> Document {
-        let mut lines: Vec<String> = (0..20).map(|i| format!("line{i}")).collect();
-        for i in [0, 5, 12] {
-            lines[i] = format!("# h{i}");
-        }
-        Document::from_string(lines.join("\n"))
-    }
-
-    #[test]
-    fn the_heading_memo_answers_like_a_full_scan() {
-        let mut doc = doc_with_headings();
-        let options = heading_options("^# ", 1);
-        let mut headings = Headings::new(options.clone());
-
-        // Query out of order, so the memo also meets lines far below what it has scanned.
-        for at in [19, 18, 3, 4, 13, 12, 11, 6, 0, 19] {
-            let expected = (0..=at)
-                .rev()
-                .find(|&i| is_heading_start(&mut doc, i, &options));
-            assert_eq!(
-                headings.start_at_or_above(&mut doc, 0, at),
-                expected,
-                "at line {at}"
-            );
-        }
-    }
-
-    #[test]
-    fn the_heading_memo_never_reaches_below_the_lower_bound() {
-        let mut doc = doc_with_headings();
-        let mut headings = Headings::new(heading_options("^# ", 1));
-        assert_eq!(headings.start_at_or_above(&mut doc, 0, 19), Some(12));
-        assert_eq!(headings.start_at_or_above(&mut doc, 6, 11), None);
-        assert_eq!(headings.start_at_or_above(&mut doc, 6, 19), Some(12));
-        assert_eq!(headings.start_at_or_above(&mut doc, 1, 4), None);
-    }
-
-    #[test]
-    fn a_heading_start_at_the_end_of_a_growing_document_is_not_memoized() {
-        let (tx, rx) = mpsc::channel();
-        let mut doc = Document::from_channel(rx);
-        tx.send(StreamMsg::Line(Line::new(0, "# a".into())))
-            .unwrap();
-        doc.pump();
-
-        // With --heading-lines 2, "# a" is a heading start only while the line that would
-        // follow it is still unknown.
-        let mut headings = Headings::new(heading_options("^# ", 2));
-        assert_eq!(headings.start_at_or_above(&mut doc, 0, 0), Some(0));
-
-        tx.send(StreamMsg::Line(Line::new(1, "# b".into())))
-            .unwrap();
-        doc.pump();
-        assert_eq!(headings.start_at_or_above(&mut doc, 0, 0), None);
     }
 
     #[test]
