@@ -172,10 +172,9 @@ pub(super) fn compose(doc: &mut Document, layout: &mut Layout, anchor: RowPos) -
     );
     let rows = fill_from(doc, layout, anchor);
 
-    // The heading sticks to the first row below the global header. Resolving from that row
-    // rather than from the first *visible* row is what makes the push-up transition work:
-    // a heading that has scrolled into the covered band pushes the current one out row by
-    // row, and takes over exactly when it reaches the top of the band.
+    // Resolve from the first row the global header does not cover, which is not the first
+    // visible row: a heading covers rows of its own. That reference point is what decides
+    // when one heading hands over to the next (see push_up_offset).
     let block = rows
         .get(header.len())
         .map(|row| row.line_index())
@@ -197,8 +196,9 @@ pub(super) fn compose(doc: &mut Document, layout: &mut Layout, anchor: RowPos) -
 }
 
 /// List the viewport rows starting at `anchor`, pulling the anchor back toward the start of
-/// the document when there are not enough rows left to fill the page. Keeping the page full
-/// is what makes growing the terminal near the end of the document behave like `less`.
+/// the document when there are not enough rows left to fill the page. Near the end of the
+/// document that shows earlier lines instead of leaving blank rows below the last one, so
+/// growing the terminal fills the new space with content.
 fn fill_from(doc: &mut Document, layout: &Layout, anchor: RowPos) -> Vec<Row> {
     let width = layout.size.width();
     let height = layout.size.height();
@@ -332,8 +332,6 @@ pub(super) fn anchor_forward(
 }
 
 /// The anchor `count` rows before `from`, clamped to the first row of the document.
-/// Putting a target line `count` rows below the top of the page is the same operation:
-/// pass the target as `from`.
 pub(super) fn anchor_backward(
     doc: &mut Document,
     layout: &Layout,
