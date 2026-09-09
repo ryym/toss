@@ -47,10 +47,10 @@ struct PaintedFrame {
     groups: Vec<PaintedGroup>,
     /// One entry per viewport row, sticky rows included.
     rows: Vec<PaintedRow>,
-    status: String,
+    status_line: String,
     /// Screen row the status line sits on. Also the number of viewport rows painted:
     /// an under-filled page pulls the status line up and leaves the rest blank.
-    status_y: usize,
+    status_line_y: usize,
     /// Viewport height, i.e. the rows below the status line that must stay blank.
     height: usize,
 }
@@ -135,10 +135,14 @@ impl<S: Screen> Renderer<S> {
         // Clear everything past the content: a scroll drags the rows below the viewport
         // around too, an under-filled page leaves blank rows below the status line, and a
         // page that shrank must erase whatever the previous one painted below it.
-        let painted_before = self.last.as_ref().map_or(0, |last| last.status_y);
-        let blank_end = frame.height.max(painted_before).max(frame.status_y + 1);
-        self.clear_rows(frame.status_y..blank_end)?;
-        self.screen.write_at(frame.status_y, &frame.status)?;
+        let painted_before = self.last.as_ref().map_or(0, |last| last.status_line_y);
+        let blank_end = frame
+            .height
+            .max(painted_before)
+            .max(frame.status_line_y + 1);
+        self.clear_rows(frame.status_line_y..blank_end)?;
+        self.screen
+            .write_at(frame.status_line_y, &frame.status_line)?;
 
         self.screen.end_sync()?;
         self.last = Some(frame);
@@ -190,8 +194,8 @@ fn build_frame(doc: &mut Document, page: &PageSnapshot) -> PaintedFrame {
     PaintedFrame {
         groups,
         rows,
-        status: page.status_line.clone(),
-        status_y: page.viewport_height(),
+        status_line: page.status_line.clone(),
+        status_line_y: page.viewport_height(),
         height: page.height,
     }
 }
@@ -293,8 +297,8 @@ mod tests {
         PaintedFrame {
             groups,
             rows: painted,
-            status: status.to_string(),
-            status_y: rows.len(),
+            status_line: status.to_string(),
+            status_line_y: rows.len(),
             height: rows.len(),
         }
     }
