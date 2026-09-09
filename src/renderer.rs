@@ -205,19 +205,13 @@ fn group_text(doc: &mut Document, page: &PageSnapshot, rows: &[Row]) -> Option<S
     Some(text.into_owned())
 }
 
-/// How far the screen content moved between two frames, in screen rows.
-/// A positive shift means the content moved up, i.e. the page scrolled down.
-///
-/// Every row of the new frame votes for the distance at which it finds itself in the old
-/// frame, and the winning distance is the one the terminal should be scrolled by. Because
-/// the number of rows that need no redraw is exactly the number of votes a shift got,
-/// the most voted shift is also the one that leaves the least to redraw — including a
-/// shift of zero, which competes on the same footing and means no terminal scroll.
-///
-/// Voting rather than probing a chosen row is what keeps the sticky rows from deciding the
-/// answer: they stay put while the content moves, so they vote for a shift of zero and are
-/// simply outvoted, then redrawn along with the rows the scroll exposed.
+/// Compare what was painted last with what is to be painted now, and return the scroll
+/// that leaves the fewest rows to redraw. A positive amount moves the content up, a
+/// negative one moves it down.
+/// Zero is returned when scrolling provides no benefit, which covers both a page that
+/// has barely changed and a page that shares nothing with the previous one.
 fn plan_shift(old: &PaintedFrame, new: &PaintedFrame) -> isize {
+    // 1. Collect where each row of the old frame was shown.
     let positions: HashMap<RowPos, usize> = old
         .rows
         .iter()
@@ -225,22 +219,33 @@ fn plan_shift(old: &PaintedFrame, new: &PaintedFrame) -> isize {
         .map(|(y, row)| (row.pos, y))
         .collect();
 
-    let mut votes: HashMap<isize, usize> = HashMap::new();
+    // 2. Tally how far each row moved from where it was painted last.
+    //    Only the rows that come out identical in both frames vote.
+    let mut shift_votes: HashMap<isize, usize> = HashMap::new();
     for (y, row) in new.rows.iter().enumerate() {
         let Some(&old_y) = positions.get(&row.pos) else {
             continue;
         };
         if old.matches(old_y, new, y) {
-            *votes.entry(old_y as isize - y as isize).or_insert(0) += 1;
+            *shift_votes.entry(old_y as isize - y as isize).or_insert(0) += 1;
         }
     }
 
-    // Ties go to the smallest shift, so an unmoved page never scrolls the terminal. The
-    // sign breaks a remaining tie between the two directions, which repeated rows can
-    // produce: without it the winner would follow the hash map's iteration order.
-    votes
+    // 3. Take the most voted shift. Offsetting the new frame by it lets every row that voted
+    //    for it reuse what the screen already shows, so the most voted shift is the one that
+    //    leaves the fewest rows to redraw.
+    shift_votes
         .into_iter()
-        .max_by_key(|&(shift, count)| (count, std::cmp::Reverse((shift.abs(), shift))))
+        .max_by_key(|&(shift, count)| {
+            (
+                // Prefer the most votes.
+                count,
+                // On a tie, prefer the smaller distance. If the same distance remains in
+                // both directions (+k and -k), prefer the negative one so that the outcome is
+                // deterministic; the screen comes out the same either way.
+                std::cmp::Reverse((shift.abs(), shift)),
+            )
+        })
         .map_or(0, |(shift, _)| shift)
 }
 
