@@ -28,6 +28,22 @@ An event loop basically looks like:
 It decides which lines should be displayed, reads lines from `Document`, wrap lines as needed, and updates the page state.
 But `Pager` itself never directly writes to the screen. It focuses on maintaining a correct state in memory.
 
+#### Anchor and composition
+
+The only page state `Pager` mutates is the **anchor**: the document row the viewport starts at.
+Everything else — the global header, which heading is pinned, how far that heading has been pushed up, and the content rows —
+is derived from the anchor by `pager::layout::compose`.
+Every operation therefore reduces to picking an anchor and recomposing,
+so no operation has to keep several pieces of state consistent with each other afterwards.
+
+#### Sticky rows are an overlay
+
+The header and the heading **cover** the first rows of the viewport rather than pushing them down.
+This is what keeps scrolling uniform: advancing the anchor by one row always moves the visible content by exactly one row,
+whether or not a heading appeared or disappeared in the same step.
+It is also what allows the CSS's `position: sticky` transition between sections —
+a heading that has scrolled into the covered band pushes the current one out row by row and takes over when it reaches the top of the band.
+
 ### `Renderer`
 
 `Renderer` is responsible for rendering the page state to the terminal screen correctly and effectively.
@@ -83,7 +99,8 @@ Looking at the `App`'s event loop in more detail, it is a non-blocking game-loop
    - Call appropriate operation of `Pager` to update the page state based on the event.
 3. Advance scroll animation if one is running.
 4. Render if the page state changed.
-   - Pass the page state to `Renderer` to update the screen.
+   - Each `Pager` operation reports whether anything changed; that is all the loop needs.
+   - Pass the page state to `Renderer`, which works out what actually has to be written.
 
 With this design, the application can handle user inputs while running smooth scroll animation.
 For example, the user can speed up the scroll by repeating the key quickly during scroll.

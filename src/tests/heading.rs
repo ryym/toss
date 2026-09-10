@@ -408,10 +408,6 @@ line 3
 /// section the visible content belongs to. The viewport top row after the jump is `a2`,
 /// which the 2-row header covers, and `# B` sits in the covered rows too.
 #[test]
-// BUG: `Pager::jump_to_end` resolves the heading from `viewport.rows()[0]` instead of
-// `viewport.rows()[header.height()]`, so it searches back from the covered `a2` and pins
-// `# A` while the visible content `b2` / `b3` / `b4` belongs to section B.
-#[should_panic]
 fn jump_to_end_resolves_heading_below_header() {
     let content = "\
 H1
@@ -460,13 +456,10 @@ b4
     assert_eq!(screen.out(), want);
 }
 
-/// Jumping to a match below the page (`n`) goes through `Pager::jump_to_bottom`, which has
-/// the same defect as `jump_to_end`. The viewport top row after the jump is `az` and `# B`
-/// is the next row, both covered by the 2-row header.
+/// Jumping to a match below the page (`n`) must pin the heading of the section the visible
+/// content belongs to, like jumping to the end does. The viewport top row after the jump is
+/// `az` and `# B` is the next row, both covered by the 2-row header.
 #[test]
-// BUG: `Pager::jump_to_bottom` resolves the heading from `viewport.rows()[0]`, so it pins
-// `# A` while the visible content `b2` / `b3` / `zzz` belongs to section B.
-#[should_panic]
 fn jump_to_match_below_resolves_heading_below_header() {
     let content = "\
 H1
@@ -536,6 +529,81 @@ b2
 b3
 {rev}{b}z{/rev}{/b}{rev}{line}{b}z{/rev}{/line}{/b}
 {rev}lines 4-9/10 90%{/rev}
+-----
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}
+
+/// Jumping to the top of the document from inside a section drops the sticky heading, so
+/// the rows it used to cover become content and the whole page moves further than the
+/// viewport did. Every row must end up showing what belongs there, with nothing left over
+/// from the frame before.
+#[test]
+fn jump_to_top_from_a_section_leaves_no_stale_rows() {
+    let content = "\
+intro 1
+intro 2
+# Section A
+sub title
+body 1
+body 2
+body 3
+body 4
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 6,
+        content,
+        options: Options {
+            heading: Some(HeadingOptions {
+                pattern: regex::Regex::new("^# ").unwrap(),
+                num_lines: 2,
+            }),
+            ..Default::default()
+        },
+        events: vec![key('j'), key('j'), key('j'), key('g'), key('q')],
+        ..Default::default()
+    });
+    let want = "\
+intro 1
+intro 2
+# Section A
+sub title
+body 1
+{rev}lines 1-5/8 62%{/rev}
+-----
+[EVENT]:char:j
+intro 2
+# Section A
+sub title
+body 1
+body 2
+{rev}lines 2-6/8 75%{/rev}
+-----
+[EVENT]:char:j
+# Section A
+sub title
+body 1
+body 2
+body 3
+{rev}lines 3-7/8 87%{/rev}
+-----
+[EVENT]:char:j
+# Section A
+sub title
+body 2
+body 3
+body 4
+{rev}lines 4-8/8 100%{/rev}
+-----
+[EVENT]:char:g
+intro 1
+intro 2
+# Section A
+sub title
+body 1
+{rev}lines 1-5/8 62%{/rev}
 -----
 [EVENT]:char:q
 ";

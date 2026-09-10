@@ -1,18 +1,18 @@
 use unicode_width::UnicodeWidthChar;
 
 use crate::document::Document;
-use crate::pager::{PagerMode, viewport::Viewport};
+use crate::line::Row;
+use crate::pager::PagerMode;
 
 /// ANSI reverse-video on/off, used to render the view-mode status line like `less`.
 pub(super) const STATUS_REVERSE_ON: &str = "\x1b[7m";
 pub(super) const STATUS_REVERSE_OFF: &str = "\x1b[27m";
 
 /// Build the status line for the current mode.
-pub(super) fn build(mode: &PagerMode, viewport: &Viewport, doc: &Document) -> String {
-    let width = viewport.size().width();
+pub(super) fn build(mode: &PagerMode, rows: &[Row], width: usize, doc: &Document) -> String {
     match mode {
         PagerMode::View => {
-            let line = clip(&position(viewport, doc), width);
+            let line = clip(&position(rows, doc), width);
             format!("{STATUS_REVERSE_ON}{line}{STATUS_REVERSE_OFF}")
         }
         PagerMode::SearchInput(search) => {
@@ -32,8 +32,7 @@ pub(super) fn build(mode: &PagerMode, viewport: &Viewport, doc: &Document) -> St
 /// percentage omitted. If the input ended with a read error, `[read error]` is shown
 /// in place of the percentage to flag that the content is truncated. The range covers
 /// the whole viewport, ignoring header/heading overlays.
-fn position(viewport: &Viewport, doc: &Document) -> String {
-    let rows = viewport.rows();
+fn position(rows: &[Row], doc: &Document) -> String {
     let (top, bottom) = match (rows.first(), rows.last()) {
         (Some(first), Some(last)) => (first.line_index() + 1, last.line_index() + 1),
         _ => (0, 0),

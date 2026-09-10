@@ -1,6 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test_screen};
+use super::{TestCase, esc, key, run_test_screen};
 use crate::options::Options;
 
 #[test]
@@ -287,6 +287,55 @@ line 1
 line 2
 line 3
 {rev} 1-3/5 60%{/rev}
+-----
+[EVENT]:char:q
+";
+    assert_eq!(screen.out(), want);
+}
+
+/// A `--header` wider than the document leaves no content below the header. Search input
+/// still has to find a line to start from, and the header rows are that line.
+#[test]
+fn search_starts_in_the_header_when_it_covers_the_whole_document() {
+    let content = "\
+line 1
+line 2
+line 3
+";
+    let screen = run_test_screen(TestCase {
+        screen_width: 20,
+        screen_height: 6,
+        content,
+        options: Options {
+            header: 5,
+            ..Default::default()
+        },
+        events: vec![key('/'), esc(), key('q')],
+        ..Default::default()
+    });
+    let want = "\
+line 1
+line 2
+line 3
+{rev}lines 1-3/3 100%{/rev}
+
+
+-----
+[EVENT]:char:/
+line 1
+line 2
+line 3
+/\u{2588}
+
+
+-----
+[EVENT]:esc
+line 1
+line 2
+line 3
+{rev}lines 1-3/3 100%{/rev}
+
+
 -----
 [EVENT]:char:q
 ";

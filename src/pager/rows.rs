@@ -1,3 +1,9 @@
+//! Reads runs of [`Row`]s out of a [`Document`] at a given width.
+//!
+//! A row that does not exist — past the end of the document, or not yet streamed in — is
+//! simply absent from the result rather than an error, so every function here can return
+//! fewer rows than asked for.
+
 use std::ops::Range;
 
 use crate::{document::Document, line::Row};
@@ -23,10 +29,11 @@ pub fn from_lines(
     rows
 }
 
-/// (line_index, wrap_index)
+/// A row position in the document: `(line_index, wrap_index)`.
 type RowPos = (usize, usize);
 
-/// Build a list of [`Row`]s with the given width from `start` up to `count`.
+/// Build a list of at most `count` [`Row`]s with the given width, starting at `start` and
+/// reading forward. Returns fewer rows when the document ends first.
 pub fn list_forward(doc: &mut Document, width: usize, start: RowPos, count: usize) -> Vec<Row> {
     let mut rows = Vec::new();
     let (mut line_index, mut wrap_index) = start;
@@ -48,12 +55,17 @@ pub fn list_forward(doc: &mut Document, width: usize, start: RowPos, count: usiz
     rows
 }
 
+/// Where a backward read starts from.
 pub enum DocPos<'row> {
+    /// The last row of the document.
     End,
+    /// The row just above the given one, which is itself excluded.
     Before(&'row Row),
 }
 
-/// Build a list of [`Row`]s with the given width from `start` up to `count` in the reversed order.
+/// Build a list of at most `count` [`Row`]s with the given width, reading backward from
+/// the row `start` names. Returns fewer rows when the document begins first. The rows come
+/// back in reading order, so the row `start` names is the last of them.
 pub fn list_backward(doc: &mut Document, width: usize, start: DocPos, count: usize) -> Vec<Row> {
     let (mut line_index, mut from_wrap) = match start {
         DocPos::End => match doc.line_count().checked_sub(1) {
@@ -91,7 +103,6 @@ pub fn list_backward(doc: &mut Document, width: usize, start: DocPos, count: usi
             .collect();
         rows.extend(line_rows);
         from_wrap = None;
-        // Stop once we have processed the first line (index 0).
         match line_index.checked_sub(1) {
             Some(prev) => line_index = prev,
             None => break,

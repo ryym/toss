@@ -34,10 +34,6 @@ tail
 /// new size leaves room for only 1 heading row, so heading A is shown from its start
 /// again with `# B` as the only content row below it.
 #[test]
-// BUG: the stale push-up offset (3) is applied to the rebuilt 1-row heading,
-// so `Heading::rows` panics with
-// "range start index 3 out of range for slice of length 1".
-#[should_panic]
 fn shrink_after_push_up_rebuilds_heading() {
     let screen = run_test_screen(TestCase {
         screen_width: 20,
@@ -144,10 +140,6 @@ body b2
 /// The result is what scrolling to the same top line on a 20x5 screen produces from the
 /// start: the page is a function of the top line and the size, not of the size it came from.
 #[test]
-// BUG: the push-up offset (1) survives the resize, so the heading is rendered from
-// its second row (`a1`) and one more content row (`body a2`) leaks in below it:
-//   a1 / a2 / body a2 / # B
-#[should_panic]
 fn shrink_recomputes_push_up_offset() {
     let screen = run_test_screen(TestCase {
         screen_width: 20,
@@ -216,9 +208,6 @@ a2
 /// `--heading-lines` once the screen has room again. The 20x4 screen fits only 2 of
 /// the 3 heading lines; the 20x10 screen fits all of them.
 #[test]
-// BUG: the heading keeps the line range captured for the small screen, so it stays
-// 2 rows (`# A` / `a1`) and `a2` is never shown as part of the heading.
-#[should_panic]
 fn grow_restores_full_heading_height() {
     let screen = run_test_screen(TestCase {
         screen_width: 20,
@@ -381,10 +370,6 @@ tail
 /// It then sits below the overlay instead of inside it, so the heading is no longer
 /// pushed up and is shown from its start.
 #[test]
-// BUG: the push-up offset (1) survives the resize, so the heading keeps showing only its
-// second row and the tail of the wrapped line leaks in below it:
-//   sub a / y 1 / # B
-#[should_panic]
 fn width_change_recomputes_push_up_offset() {
     let screen = run_test_screen(TestCase {
         screen_width: 12,

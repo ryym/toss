@@ -234,7 +234,7 @@ line 3
             key('o'),
             key('o'),
             key('('),
-            enter(), // ignored: input "foo(" is invalid
+            enter(), // ignored: input "foo(" is invalid, so nothing is repainted
             esc(),
             key('q'),
         ],
@@ -277,11 +277,6 @@ line 3
 /foo(█
 -----
 [EVENT]:enter
-line 1
-{rev}{b}foo{/rev}{/b} bar
-line 3
-/foo(█
------
 [EVENT]:esc
 line 1
 foo bar

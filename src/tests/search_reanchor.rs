@@ -486,7 +486,7 @@ end
 {rev}3 66%{/rev}
 -----
 [EVENT]:char:j
-f{/rev}{/line}{/b}{line}{b}oo{/line}{/b}34>
+{rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b}34>
 end
 last-
 {rev} 100%{/rev}
