@@ -331,11 +331,11 @@ mod tests {
         assert_eq!(dirty_groups(&old, &new, -1), vec![0]);
     }
 
-    /// The sticky rows do not move while the content scrolls under them, so they vote for
-    /// a shift of zero. The content has to outvote them, or the whole page would be
-    /// redrawn on every scroll.
+    /// Rows that stay put while the rest of the page scrolls under them, such as the
+    /// sticky ones, are outnumbered rather than given a say of their own. Measuring the
+    /// shift from a chosen row instead would read a sticky row as the page not moving.
     #[test]
-    fn sticky_rows_do_not_decide_the_shift() {
+    fn the_shift_is_decided_by_majority() {
         let old = frame(&[(0, "# A"), (3, "c"), (4, "d"), (5, "e")], "s");
         let new = frame(&[(0, "# A"), (4, "d"), (5, "e"), (6, "f")], "s");
         assert_eq!(plan_shift(&old, &new), 1);
