@@ -15,7 +15,7 @@ pub enum SearchDirection {
 }
 
 impl SearchDirection {
-    /// Returns the prompt character for this direction.
+    /// Return the prompt character for this direction.
     pub fn prompt(&self) -> &'static str {
         match self {
             SearchDirection::Forward => "/",
@@ -23,7 +23,7 @@ impl SearchDirection {
         }
     }
 
-    /// Returns the opposite direction.
+    /// Return the opposite direction.
     pub fn opposite(&self) -> Self {
         match self {
             SearchDirection::Forward => SearchDirection::Backward,

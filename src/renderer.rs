@@ -58,14 +58,14 @@ struct PaintedFrame {
 }
 
 impl PaintedFrame {
-    /// The text of the group screen row `y` belongs to. The outer `None` means the frame
-    /// has no such row; the inner one is [`PaintedGroup::text`] being absent.
+    /// Return the text of the group screen row `y` belongs to. The outer `None` means the
+    /// frame has no such row; the inner one is [`PaintedGroup::text`] being absent.
     fn text_at(&self, y: usize) -> Option<&Option<String>> {
         self.rows.get(y).map(|row| &self.groups[row.group].text)
     }
 
-    /// Whether screen row `y` of this frame is already showing what row `other_y` of
-    /// `other` needs, i.e. it can be reused as is.
+    /// Return whether screen row `y` of this frame is already showing what row `other_y`
+    /// of `other` needs, i.e. it can be reused as is.
     fn matches(&self, y: usize, other: &PaintedFrame, other_y: usize) -> bool {
         match (self.rows.get(y), other.rows.get(other_y)) {
             (Some(a), Some(b)) => {
@@ -197,7 +197,7 @@ fn build_frame(doc: &mut Document, page: &PageSnapshot) -> PaintedFrame {
     }
 }
 
-/// The text of one soft-wrap group, with search highlights applied.
+/// Build the text of one soft-wrap group, with search highlights applied.
 fn group_text(doc: &mut Document, page: &PageSnapshot, rows: &[Row]) -> Option<String> {
     let line = doc.line(rows[0].line_index())?;
     let raw_range = rows[0].raw_range().start..rows[rows.len() - 1].raw_range().end;
@@ -249,8 +249,8 @@ fn plan_shift(old: &PaintedFrame, new: &PaintedFrame) -> isize {
         .map_or(0, |(shift, _)| shift)
 }
 
-/// The groups of `new` that the screen does not already show once it is scrolled by
-/// `shift`. A group is redrawn as a whole because its rows are written as one string.
+/// Find the groups of `new` that the screen does not already show once it is scrolled
+/// by `shift`. A group is redrawn as a whole because its rows are written as one string.
 fn dirty_groups(old: &PaintedFrame, new: &PaintedFrame, shift: isize) -> Vec<usize> {
     let mut dirty = vec![false; new.groups.len()];
     for (y, row) in new.rows.iter().enumerate() {

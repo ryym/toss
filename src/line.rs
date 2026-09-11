@@ -48,19 +48,19 @@ impl PartialOrd for Row {
 }
 
 impl Row {
-    /// Index of the source line in the document.
+    /// Return the index of the source line in the document.
     #[inline]
     pub fn line_index(&self) -> usize {
         self.line_index
     }
 
-    /// Zero-based position of this row among the wrap rows of its line.
+    /// Return the zero-based position of this row among the wrap rows of its line.
     #[inline]
     pub fn wrap_index(&self) -> usize {
         self.wrap_index
     }
 
-    /// Byte range in the line's raw text covered by this row.
+    /// Return the byte range in the line's raw text covered by this row.
     #[inline]
     pub fn raw_range(&self) -> &Range<usize> {
         &self.raw_range
@@ -186,7 +186,7 @@ impl Line {
         }
     }
 
-    /// Returns the original raw text including ANSI escape sequences.
+    /// Return the original raw text including ANSI escape sequences.
     #[inline]
     pub fn raw(&self) -> &str {
         &self.raw
@@ -228,7 +228,7 @@ impl Line {
         rows
     }
 
-    /// Number of screen rows this line occupies at the given width.
+    /// Return the number of screen rows this line occupies at the given width.
     pub fn row_count(&self, width: usize) -> usize {
         self.wrap(width).len()
     }
@@ -289,16 +289,16 @@ impl Line {
         }
     }
 
-    /// Raw-text byte range corresponding to the match.
+    /// Return the raw-text byte range corresponding to the match.
     ///
     /// Behavior is undefined if `m` was not produced from this line.
     pub fn match_raw_range(&self, m: &MatchPosition) -> Range<usize> {
         self.plain_to_raw[m.plain_range.start]..self.plain_to_raw[m.plain_range.end]
     }
 
-    /// Raw-text byte position immediately after the first plain character of
-    /// the match. Used to style the first character of a match differently
-    /// from the rest.
+    /// Return the raw-text byte position immediately after the first plain
+    /// character of the match. Used to style the first character of a match
+    /// differently from the rest.
     ///
     /// Since matches are always non-empty, the match has at least one character,
     /// so this never returns the match's start position. For a single-character

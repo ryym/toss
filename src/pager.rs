@@ -62,13 +62,13 @@ pub struct PageSnapshot<'pager> {
 }
 
 impl<'pager> PageSnapshot<'pager> {
-    /// Rows the pinned header and heading occupy together.
+    /// Return the number of rows the pinned header and heading occupy together.
     pub fn total_header_height(&self) -> usize {
         self.header.len() + self.heading.len()
     }
 
-    /// Rows the page actually fills, which is [`Self::height`] unless the page is
-    /// under-filled.
+    /// Return the number of rows the page actually fills, which is [`Self::height`]
+    /// unless the page is under-filled.
     pub fn viewport_height(&self) -> usize {
         self.total_header_height() + self.content.len()
     }
@@ -175,7 +175,7 @@ impl Pager {
         &mut self.doc
     }
 
-    /// The current page, together with the document its rows point into.
+    /// Return the current page, together with the document its rows point into.
     pub fn snapshot<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
         let search = match &self.mode {
             PagerMode::SearchInput(search) => search.draft.preview().or(self.search.as_ref()),
@@ -211,13 +211,13 @@ impl Pager {
         self.compose_at(anchor);
     }
 
-    /// Number of rows currently visible below the pinned header and heading.
+    /// Return the number of rows currently visible below the pinned header and heading.
     pub fn content_height(&self) -> usize {
         self.frame.content().len()
     }
 
-    /// Whether the entire document renders within `height` rows at the current width,
-    /// i.e. it could be printed in full instead of paged.
+    /// Return whether the entire document renders within `height` rows at the current
+    /// width, i.e. it could be printed in full instead of paged.
     pub fn fits_within(&mut self, height: usize) -> bool {
         let mut total_rows = 0;
         for i in 0..self.doc.line_count() {
@@ -251,7 +251,7 @@ impl Pager {
         result.grew || result.reached_eof
     }
 
-    /// Whether more input may still arrive (the document is not yet complete).
+    /// Return whether more input may still arrive (the document is not yet complete).
     pub fn is_loading(&self) -> bool {
         !self.doc.is_complete()
     }
@@ -339,7 +339,7 @@ impl Pager {
         self.frame.anchor() != before
     }
 
-    /// Whether a search input is in progress and not empty.
+    /// Return whether a search input is in progress and not empty.
     pub fn has_search_input(&self) -> bool {
         match &self.mode {
             PagerMode::SearchInput(mode) => !mode.editor.is_empty(),

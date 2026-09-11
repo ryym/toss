@@ -58,13 +58,13 @@ impl LineIndex {
         Ok(Self { offsets })
     }
 
-    /// Total number of lines.
+    /// Return the total number of lines.
     pub fn line_count(&self) -> usize {
         // offsets has line_count + 1 elements (including the sentinel).
         self.offsets.len() - 1
     }
 
-    /// Byte range `(start, end)` for the given line index.
+    /// Return the byte range `(start, end)` for the given line index.
     /// The range excludes the trailing newline character.
     pub fn line_byte_range(&self, index: usize) -> Option<(u64, u64)> {
         let line_count = self.line_count();

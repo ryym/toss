@@ -82,7 +82,7 @@ impl ScrollPhysics {
         self.extract_rows()
     }
 
-    /// Whether the simulation has active motion.
+    /// Return whether the simulation has active motion.
     pub fn is_active(&self) -> bool {
         self.velocity.abs() >= MIN_VELOCITY
     }
@@ -133,7 +133,7 @@ impl ScrollPhysics {
         (lo + hi) / 2.0
     }
 
-    /// Analytical total scroll distance for a given initial velocity.
+    /// Compute the analytical total scroll distance for a given initial velocity.
     /// Derived from integrating v(t) = (v0 + F/D)*exp(-D*t) - F/D
     /// from t=0 until v = MIN_VELOCITY (matching the simulation stop condition).
     fn analytical_distance(&self, v0: f64) -> f64 {

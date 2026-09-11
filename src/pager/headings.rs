@@ -32,12 +32,12 @@ impl Headings {
         }
     }
 
-    /// How many lines a heading block spans (`--heading-lines`).
+    /// Return how many lines a heading block spans (`--heading-lines`).
     pub fn num_lines(&self) -> usize {
         self.options.num_lines
     }
 
-    /// Whether the line at `line_index` starts a heading block.
+    /// Return whether the line at `line_index` starts a heading block.
     ///
     /// Example: with `toss --heading '^#' --heading-lines 2`
     /// ```text
@@ -95,8 +95,8 @@ impl Headings {
         true
     }
 
-    /// The nearest heading start in `lo..=at`, touching the document only for the lines
-    /// the memo cannot answer.
+    /// Find the nearest heading start in `lo..=at`, touching the document only for the
+    /// lines the memo cannot answer.
     pub fn start_at_or_above(&mut self, doc: &mut Document, lo: usize, at: usize) -> Option<usize> {
         if at < lo {
             return None;
@@ -141,7 +141,7 @@ impl Headings {
         found
     }
 
-    /// The greatest recorded start within `range`.
+    /// Return the greatest recorded start within `range`.
     fn recorded_start_in(&self, range: Range<usize>) -> Option<usize> {
         let end = self.starts.partition_point(|&start| start < range.end);
         let start = *self.starts[..end].last()?;

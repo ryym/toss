@@ -46,19 +46,20 @@ impl Layout {
         &self.size
     }
 
-    /// Whether `line_index` falls in the configured header range.
+    /// Return whether `line_index` falls in the configured header range.
     /// This is the configured extent, not the number of rows the header renders as.
     pub fn is_header_line(&self, line_index: usize) -> bool {
         line_index < self.header_lines
     }
 
-    /// Rows the global header may occupy, always leaving at least one row for content.
+    /// Return the number of rows the global header may occupy, always leaving at least
+    /// one row for content.
     fn max_header_height(&self) -> usize {
         self.size.height().saturating_sub(1)
     }
 
-    /// Rows the sticky heading may occupy given the rows the header took,
-    /// always leaving at least one row for content.
+    /// Return the number of rows the sticky heading may occupy given the rows the header
+    /// took, always leaving at least one row for content.
     fn max_heading_height(&self, header: &[Row]) -> usize {
         self.size
             .height()
@@ -81,14 +82,14 @@ pub(super) struct Frame {
 }
 
 impl Frame {
-    /// The anchor this frame was composed from, after clamping.
+    /// Return the anchor this frame was composed from, after clamping.
     pub fn anchor(&self) -> RowPos {
         self.rows
             .first()
             .map_or((0, 0), |r| (r.line_index(), r.wrap_index()))
     }
 
-    /// All document rows the viewport spans, including the ones the overlay covers.
+    /// Return all document rows the viewport spans, including the ones the overlay covers.
     pub fn rows(&self) -> &[Row] {
         &self.rows
     }
@@ -101,18 +102,18 @@ impl Frame {
         &self.heading
     }
 
-    /// Number of document rows hidden behind the sticky area.
+    /// Return the number of document rows hidden behind the sticky area.
     pub fn overlay_height(&self) -> usize {
         self.header.len() + self.heading.len()
     }
 
-    /// The document rows actually visible below the sticky area.
+    /// Return the document rows actually visible below the sticky area.
     pub fn content(&self) -> &[Row] {
         let overlay = self.overlay_height().min(self.rows.len());
         &self.rows[overlay..]
     }
 
-    /// The visible rows that form a contiguous range of the document, in reading order.
+    /// Return the visible rows that form a contiguous range of the document, in reading order.
     /// The sticky rows are included only while they sit directly above the content in the
     /// document; otherwise only the content is returned.
     ///
@@ -253,7 +254,7 @@ fn resolve_heading(
     Some(HeadingBlock { start_line, rows })
 }
 
-/// How many rows the current heading must be shifted up by.
+/// Compute how many rows the current heading must be shifted up by.
 ///
 /// When another heading has scrolled into the band the overlay covers, a section
 /// transition is in progress: the current heading gives up one row for every row the new
@@ -293,8 +294,8 @@ pub(super) struct HeadingPlacement {
     pub height: usize,
 }
 
-/// Where the heading would sit on a page whose content reaches `at_line`, or `None` if no
-/// heading would be pinned there.
+/// Compute where the heading would sit on a page whose content reaches `at_line`, or
+/// `None` if no heading would be pinned there.
 pub(super) fn heading_placement(
     doc: &mut Document,
     layout: &mut Layout,
@@ -309,7 +310,7 @@ pub(super) fn heading_placement(
     })
 }
 
-/// The anchor that shows the last page of the document.
+/// Compute the anchor that shows the last page of the document.
 pub(super) fn end_anchor(doc: &mut Document, layout: &Layout) -> RowPos {
     let last_page =
         rows::list_backward(doc, layout.size.width(), DocPos::End, layout.size.height());
@@ -318,7 +319,7 @@ pub(super) fn end_anchor(doc: &mut Document, layout: &Layout) -> RowPos {
         .map_or((0, 0), |r| (r.line_index(), r.wrap_index()))
 }
 
-/// The anchor `count` rows after `from`, clamped to the last row of the document.
+/// Compute the anchor `count` rows after `from`, clamped to the last row of the document.
 pub(super) fn anchor_forward(
     doc: &mut Document,
     layout: &Layout,
@@ -331,7 +332,7 @@ pub(super) fn anchor_forward(
         .map_or(from, |r| (r.line_index(), r.wrap_index()))
 }
 
-/// The anchor `count` rows before `from`, clamped to the first row of the document.
+/// Compute the anchor `count` rows before `from`, clamped to the first row of the document.
 pub(super) fn anchor_backward(
     doc: &mut Document,
     layout: &Layout,

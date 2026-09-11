@@ -173,13 +173,13 @@ impl Document {
         result
     }
 
-    /// Display name of the document (e.g. the file path), or `None` for sources
-    /// without a name such as stdin.
+    /// Return the display name of the document (e.g. the file path), or `None` for
+    /// sources without a name such as stdin.
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
     }
 
-    /// Whether all input has been read.
+    /// Return whether all input has been read.
     /// Always true for file and in-memory sources.
     pub fn is_complete(&self) -> bool {
         match &self.source {
@@ -188,7 +188,7 @@ impl Document {
         }
     }
 
-    /// The error that ended a streamed input, if it ended abnormally.
+    /// Return the error that ended a streamed input, if it ended abnormally.
     /// `None` for a clean EOF and for file/in-memory sources. Orthogonal to
     /// [`Self::is_complete`], which stays `true` once the input has ended either way.
     pub fn stream_error(&self) -> Option<&io::Error> {
@@ -219,7 +219,7 @@ impl Document {
         }
     }
 
-    /// Total number of lines in the document.
+    /// Return the total number of lines in the document.
     pub fn line_count(&self) -> usize {
         match &self.source {
             Source::Stream { lines, .. } => lines.len(),

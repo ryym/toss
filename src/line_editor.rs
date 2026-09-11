@@ -10,7 +10,7 @@ pub enum LineEdit {
 }
 
 impl LineEdit {
-    /// Whether this edit can change the raw input text, as opposed to only the cursor.
+    /// Return whether this edit can change the raw input text, as opposed to only the cursor.
     pub fn changes_text(&self) -> bool {
         match self {
             LineEdit::AddChar(_) | LineEdit::DeleteCharBeforeCursor => true,
