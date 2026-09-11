@@ -237,7 +237,7 @@ mod tests {
             .iter()
             .map(|r| MatchPosition::new(0, r.0..r.1))
             .collect::<Vec<_>>();
-        build_highlight_positions(&matches, &matches.get(0).cloned(), line)
+        build_highlight_positions(&matches, &matches.first().cloned(), line)
     }
 
     /// Helper to apply highlight to the full raw text.
