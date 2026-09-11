@@ -183,6 +183,15 @@ mod tests {
     }
 
     #[test]
+    fn list_forward_skips_line_for_wrap_index_past_the_line() {
+        // "abcde" wraps to (0,0), (0,1), (0,2) at width 2, so (0,5) does not exist.
+        // It reads as the position just after the line's last row.
+        let mut doc = Document::from_string("abcde\nf\n".into());
+        let rows = list_forward(&mut doc, 2, RowPos::new(0, 5), 2);
+        assert_eq!(pos(&rows), vec![(1, 0)]);
+    }
+
+    #[test]
     fn list_forward_stops_at_end_of_doc() {
         let mut doc = Document::from_string("a\nb\n".into());
         let rows = list_forward(&mut doc, 80, RowPos::new(0, 0), 10);
