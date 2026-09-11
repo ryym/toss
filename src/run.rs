@@ -16,7 +16,7 @@ pub fn run() -> Result<(), AppError> {
     let stdin = io::stdin();
     let stdin_is_terminal = stdin.is_terminal();
 
-    let _ = run_inner(RunConfig {
+    let _ = run_with(RunConfig {
         args: std::env::args_os().collect(),
         terminal_size,
         shell_lines: shell_lines(),
@@ -66,9 +66,9 @@ where
     pub make_screen: MS,
 }
 
-/// Run the app. Return the screen only if it actually rendered a interactive pager.
-/// For example, it doesn't render a pager for `--help`.
-fn run_inner<R, W, S, MS>(cfg: RunConfig<R, W, S, MS>) -> Result<Option<S>, AppError>
+/// Run the app with the given config. Return the screen only if it actually rendered
+/// a interactive pager. For example, it doesn't render a pager for `--help`.
+fn run_with<R, W, S, MS>(cfg: RunConfig<R, W, S, MS>) -> Result<Option<S>, AppError>
 where
     R: BufRead + Send + 'static,
     W: Write,
