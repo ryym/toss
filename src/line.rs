@@ -12,7 +12,7 @@
 //! how wrapping and search highlighting work correctly in the presence of escape sequences.
 //! See the `plain_to_raw` field documentation for a concrete example.
 
-use std::{cmp::Ordering, ops::Range};
+use std::ops::Range;
 
 use regex::Regex;
 use unicode_width::UnicodeWidthChar;
@@ -24,27 +24,11 @@ use crate::ansi;
 /// When a line is too wide for the given width, it is split into multiple rows.
 /// Each `Row` represents one of those wrap segments, carrying enough information
 /// to locate the corresponding text in the original line.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct Row {
     line_index: usize,
     wrap_index: usize,
     raw_range: Range<usize>,
-}
-
-impl Ord for Row {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let ordering = self.line_index.cmp(&other.line_index);
-        match ordering {
-            Ordering::Equal => self.wrap_index.cmp(&other.wrap_index),
-            _ => ordering,
-        }
-    }
-}
-
-impl PartialOrd for Row {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
 }
 
 impl Row {
