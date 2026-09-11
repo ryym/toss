@@ -6,7 +6,10 @@
 
 use std::ops::Range;
 
-use crate::{document::Document, line::Row};
+use crate::{
+    document::Document,
+    line::{Row, RowPos},
+};
 
 /// Build a list of [`Row`]s with `width` from lines in the given range.
 /// It truncates rows by `max_rows`. In that case, a line might be cut off mid-way.
@@ -29,14 +32,14 @@ pub fn from_lines(
     rows
 }
 
-/// A row position in the document: `(line_index, wrap_index)`.
-type RowPos = (usize, usize);
-
 /// Build a list of at most `count` [`Row`]s with the given width, starting at `start` and
 /// reading forward. Returns fewer rows when the document ends first.
 pub fn list_forward(doc: &mut Document, width: usize, start: RowPos, count: usize) -> Vec<Row> {
     let mut rows = Vec::new();
-    let (mut line_index, mut wrap_index) = start;
+    let RowPos {
+        mut line_index,
+        mut wrap_index,
+    } = start;
     while rows.len() < count {
         let line = match doc.line(line_index) {
             Some(l) => l,
@@ -163,7 +166,7 @@ mod tests {
     #[test]
     fn list_forward_returns_rows_starting_at_position() {
         let mut doc = Document::from_string("a\nb\nc\nd\n".into());
-        let rows = list_forward(&mut doc, 80, (1, 0), 2);
+        let rows = list_forward(&mut doc, 80, RowPos::new(1, 0), 2);
         assert_eq!(pos(&rows), vec![(1, 0), (2, 0)]);
     }
 
@@ -171,14 +174,14 @@ mod tests {
     fn list_forward_starts_from_mid_wrap() {
         // "abcde" wraps to (0,0), (0,1), (0,2) at width 2.
         let mut doc = Document::from_string("abcde\nf\n".into());
-        let rows = list_forward(&mut doc, 2, (0, 1), 3);
+        let rows = list_forward(&mut doc, 2, RowPos::new(0, 1), 3);
         assert_eq!(pos(&rows), vec![(0, 1), (0, 2), (1, 0)]);
     }
 
     #[test]
     fn list_forward_stops_at_end_of_doc() {
         let mut doc = Document::from_string("a\nb\n".into());
-        let rows = list_forward(&mut doc, 80, (0, 0), 10);
+        let rows = list_forward(&mut doc, 80, RowPos::new(0, 0), 10);
         assert_eq!(pos(&rows), vec![(0, 0), (1, 0)]);
     }
 

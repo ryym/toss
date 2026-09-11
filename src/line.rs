@@ -49,6 +49,15 @@ impl Row {
     pub fn raw_range(&self) -> &Range<usize> {
         &self.raw_range
     }
+
+    /// Return the position of this row in the document.
+    #[inline]
+    pub fn pos(&self) -> RowPos {
+        RowPos {
+            line_index: self.line_index,
+            wrap_index: self.wrap_index,
+        }
+    }
 }
 
 impl Row {
@@ -58,6 +67,28 @@ impl Row {
             wrap_index,
             raw_range,
         }
+    }
+}
+
+/// Position of a [`Row`] in the document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RowPos {
+    pub line_index: usize,
+    pub wrap_index: usize,
+}
+
+impl RowPos {
+    /// Create a position from its line index and wrap index.
+    pub fn new(line_index: usize, wrap_index: usize) -> Self {
+        Self {
+            line_index,
+            wrap_index,
+        }
+    }
+
+    /// Return the position of the first row of the given line.
+    pub fn line_start(line_index: usize) -> Self {
+        Self::new(line_index, 0)
     }
 }
 
