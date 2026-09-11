@@ -26,8 +26,7 @@ use crate::ansi;
 /// to locate the corresponding text in the original line.
 #[derive(Debug, Clone)]
 pub struct Row {
-    line_index: usize,
-    wrap_index: usize,
+    pos: RowPos,
     raw_range: Range<usize>,
 }
 
@@ -35,13 +34,13 @@ impl Row {
     /// Return the index of the source line in the document.
     #[inline]
     pub fn line_index(&self) -> usize {
-        self.line_index
+        self.pos.line_index
     }
 
     /// Return the zero-based position of this row among the wrap rows of its line.
     #[inline]
     pub fn wrap_index(&self) -> usize {
-        self.wrap_index
+        self.pos.wrap_index
     }
 
     /// Return the byte range in the line's raw text covered by this row.
@@ -53,18 +52,14 @@ impl Row {
     /// Return the position of this row in the document.
     #[inline]
     pub fn pos(&self) -> RowPos {
-        RowPos {
-            line_index: self.line_index,
-            wrap_index: self.wrap_index,
-        }
+        self.pos
     }
 }
 
 impl Row {
     fn new(line_index: usize, wrap_index: usize, raw_range: Range<usize>) -> Self {
         Self {
-            line_index,
-            wrap_index,
+            pos: RowPos::new(line_index, wrap_index),
             raw_range,
         }
     }
@@ -214,11 +209,7 @@ impl Line {
     /// correct output including escape sequences.
     pub fn wrap(&self, width: usize) -> Vec<Row> {
         if width == 0 {
-            return vec![Row {
-                line_index: self.index,
-                wrap_index: 0,
-                raw_range: 0..self.raw.len(),
-            }];
+            return vec![Row::new(self.index, 0, 0..self.raw.len())];
         }
 
         let mut rows = Vec::new();
