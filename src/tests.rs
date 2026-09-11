@@ -47,6 +47,7 @@ pub fn resize(width: u16, height: u16) -> Event {
     Event::Resize(width, height)
 }
 
+#[non_exhaustive]
 pub struct TestCase {
     pub content: &'static str,
     pub screen_width: u16,
