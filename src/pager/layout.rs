@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use crate::{
     document::Document,
-    line::Row,
+    line::{Row, RowPos},
     options::Options,
     pager::{
         ViewportSize,
@@ -10,9 +10,6 @@ use crate::{
         rows::{self, DocPos},
     },
 };
-
-/// A row position in the document: `(line_index, wrap_index)`.
-pub(super) type RowPos = (usize, usize);
 
 /// Everything needed to compose a [`Frame`] except the anchor.
 /// This is the static part of the page: only a resize changes what it describes.
@@ -84,9 +81,7 @@ pub(super) struct Frame {
 impl Frame {
     /// Return the anchor this frame was composed from, after clamping.
     pub fn anchor(&self) -> RowPos {
-        self.rows
-            .first()
-            .map_or((0, 0), |r| (r.line_index(), r.wrap_index()))
+        self.rows.first().map_or(RowPos::line_start(0), Row::pos)
     }
 
     /// Return all document rows the viewport spans, including the ones the overlay covers.
@@ -314,9 +309,7 @@ pub(super) fn heading_placement(
 pub(super) fn end_anchor(doc: &mut Document, layout: &Layout) -> RowPos {
     let last_page =
         rows::list_backward(doc, layout.size.width(), DocPos::End, layout.size.height());
-    last_page
-        .first()
-        .map_or((0, 0), |r| (r.line_index(), r.wrap_index()))
+    last_page.first().map_or(RowPos::line_start(0), Row::pos)
 }
 
 /// Compute the anchor `count` rows after `from`, clamped to the last row of the document.
@@ -327,9 +320,7 @@ pub(super) fn anchor_forward(
     count: usize,
 ) -> RowPos {
     let ahead = rows::list_forward(doc, layout.size.width(), from, count + 1);
-    ahead
-        .last()
-        .map_or(from, |r| (r.line_index(), r.wrap_index()))
+    ahead.last().map_or(from, Row::pos)
 }
 
 /// Compute the anchor `count` rows before `from`, clamped to the first row of the document.
@@ -343,20 +334,17 @@ pub(super) fn anchor_backward(
         return from;
     }
     let width = layout.size.width();
-    let (line_index, wrap_index) = from;
     let from_row = {
-        let Some(line) = doc.line(line_index) else {
+        let Some(line) = doc.line(from.line_index) else {
             return from;
         };
-        match line.wrap(width).into_iter().nth(wrap_index) {
+        match line.wrap(width).into_iter().nth(from.wrap_index) {
             Some(row) => row,
             None => return from,
         }
     };
     let earlier = rows::list_backward(doc, width, DocPos::Before(&from_row), count);
-    earlier
-        .first()
-        .map_or(from, |r| (r.line_index(), r.wrap_index()))
+    earlier.first().map_or(from, Row::pos)
 }
 
 #[cfg(test)]
@@ -404,7 +392,7 @@ mod tests {
     fn composes_from_the_top_of_the_document() {
         let mut doc = doc_lines(10);
         let mut layout = layout(0, None, size(10, 4));
-        let frame = compose(&mut doc, &mut layout, (0, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(0, 0));
         assert!(frame.header().is_empty());
         assert!(frame.heading().is_empty());
         assert_eq!(pos(frame.content()), vec![(0, 0), (1, 0), (2, 0), (3, 0)]);
@@ -414,7 +402,7 @@ mod tests {
     fn short_document_leaves_the_page_partially_filled() {
         let mut doc = doc_lines(2);
         let mut layout = layout(0, None, size(10, 5));
-        let frame = compose(&mut doc, &mut layout, (0, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(0, 0));
         assert_eq!(lines(frame.content()), vec![0, 1]);
     }
 
@@ -422,7 +410,7 @@ mod tests {
     fn header_covers_the_rows_it_duplicates() {
         let mut doc = doc_lines(10);
         let mut layout = layout(2, None, size(10, 5));
-        let frame = compose(&mut doc, &mut layout, (0, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(0, 0));
         // The header shows lines 0-1, which also occupy the first two viewport rows.
         assert_eq!(lines(frame.header()), vec![0, 1]);
         assert_eq!(lines(frame.rows()), vec![0, 1, 2, 3, 4]);
@@ -434,7 +422,7 @@ mod tests {
         let mut doc = doc_lines(10);
         // Viewport height 5 leaves at most 4 rows for a header.
         let mut layout = layout(5, None, size(10, 5));
-        let frame = compose(&mut doc, &mut layout, (0, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(0, 0));
         assert_eq!(lines(frame.header()), vec![0, 1, 2, 3]);
     }
 
@@ -443,8 +431,8 @@ mod tests {
         let mut doc = doc_lines(6);
         let mut layout = layout(0, None, size(10, 4));
         // Only two rows are left below line 4, so the anchor moves back to line 2.
-        let frame = compose(&mut doc, &mut layout, (4, 0));
-        assert_eq!(frame.anchor(), (2, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(4, 0));
+        assert_eq!(frame.anchor(), RowPos::new(2, 0));
         assert_eq!(lines(frame.content()), vec![2, 3, 4, 5]);
     }
 
@@ -452,7 +440,7 @@ mod tests {
     fn anchor_past_the_end_falls_back_to_the_last_page() {
         let mut doc = doc_lines(6);
         let mut layout = layout(0, None, size(10, 4));
-        let frame = compose(&mut doc, &mut layout, (99, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(99, 0));
         assert_eq!(lines(frame.content()), vec![2, 3, 4, 5]);
     }
 
@@ -469,7 +457,7 @@ b3
 ";
         let mut doc = Document::from_string(content.into());
         let mut layout = layout(0, Some(("^# ", 1)), size(10, 4));
-        let frame = compose(&mut doc, &mut layout, (2, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(2, 0));
         // Line 2 belongs to section A, so "# A" is pinned and covers line 2.
         assert_eq!(lines(frame.heading()), vec![0]);
         assert_eq!(lines(frame.content()), vec![3, 4, 5]);
@@ -492,7 +480,7 @@ b5
         // --heading-lines 2 so the heading occupies two rows and can be pushed up by one.
         let mut layout = layout(0, Some(("^# ", 2)), size(10, 6));
         // Anchor at line 2: the covered band is lines 2-3 and line 3 starts section B.
-        let frame = compose(&mut doc, &mut layout, (2, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(2, 0));
         // "# A" is pushed up by one row, leaving only its second line pinned.
         assert_eq!(lines(frame.heading()), vec![1]);
         // The row freed by the push-up reveals "# B" as content.
@@ -511,7 +499,7 @@ b3
         let mut doc = Document::from_string(content.into());
         // Lines 0-1 are the global header, so neither may become the heading.
         let mut layout = layout(2, Some(("^# ", 1)), size(10, 5));
-        let frame = compose(&mut doc, &mut layout, (2, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(2, 0));
         assert!(frame.heading().is_empty());
         assert_eq!(lines(frame.header()), vec![0, 1]);
     }
@@ -526,7 +514,7 @@ b1
 ";
         let mut doc = Document::from_string(content.into());
         let mut layout = layout(0, Some(("^# ", 1)), size(10, 3));
-        let frame = compose(&mut doc, &mut layout, (0, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(0, 0));
         assert!(frame.heading().is_empty());
     }
 
@@ -541,7 +529,7 @@ a3
 ";
         let mut doc = Document::from_string(content.into());
         let mut layout = layout(1, Some(("^# ", 1)), size(10, 4));
-        let frame = compose(&mut doc, &mut layout, (0, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(0, 0));
         // The header displays line 0 and covers it, the heading does the same for line 1,
         // so the whole page reads as one contiguous range.
         assert_eq!(lines(frame.header()), vec![0]);
@@ -562,7 +550,7 @@ a5
 ";
         let mut doc = Document::from_string(content.into());
         let mut layout = layout(1, Some(("^# ", 1)), size(10, 4));
-        let frame = compose(&mut doc, &mut layout, (3, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(3, 0));
         // The heading (line 1) is far above the content (lines 5-6), so only content remains.
         assert_eq!(lines(frame.heading()), vec![1]);
         assert_eq!(lines(&frame.contiguous_rows()), vec![5, 6]);
@@ -572,7 +560,7 @@ a5
     fn wrapped_lines_occupy_several_rows() {
         let mut doc = Document::from_string("abcde\nf\ng\n".into());
         let mut layout = layout(0, None, size(2, 4));
-        let frame = compose(&mut doc, &mut layout, (0, 0));
+        let frame = compose(&mut doc, &mut layout, RowPos::new(0, 0));
         assert_eq!(pos(frame.content()), vec![(0, 0), (0, 1), (0, 2), (1, 0)]);
     }
 }

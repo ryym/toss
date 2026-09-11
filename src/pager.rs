@@ -4,10 +4,10 @@ use regex::Regex;
 
 use crate::{
     document::Document,
-    line::{MatchPosition, Row},
+    line::{MatchPosition, Row, RowPos},
     line_editor::{LineEdit, LineEditor},
     options::Options,
-    pager::layout::{Frame, Layout, RowPos},
+    pager::layout::{Frame, Layout},
     screen::ScreenSize,
     search::{self, SearchDirection, SearchFrom, SearchState},
 };
@@ -153,7 +153,7 @@ impl Pager {
     pub fn new(mut doc: Document, options: Options, screen_size: ScreenSize) -> Self {
         let size = ViewportSize::new(screen_size.width(), screen_size.height());
         let mut layout = Layout::new(options, size);
-        let frame = layout::compose(&mut doc, &mut layout, (0, 0));
+        let frame = layout::compose(&mut doc, &mut layout, RowPos::line_start(0));
         Self {
             doc,
             mode: PagerMode::View,
@@ -290,8 +290,12 @@ impl Pager {
         };
 
         let rows_above = self.frame.header().len() + heading_height;
-        let anchor =
-            layout::anchor_backward(&mut self.doc, &self.layout, (line_index, 0), rows_above);
+        let anchor = layout::anchor_backward(
+            &mut self.doc,
+            &self.layout,
+            RowPos::line_start(line_index),
+            rows_above,
+        );
         self.compose_at(anchor);
         true
     }
@@ -317,8 +321,12 @@ impl Pager {
             .map(|l| l.row_count(width))
             .unwrap_or(1);
         let rows_above = self.layout.size().height().saturating_sub(row_count);
-        let anchor =
-            layout::anchor_backward(&mut self.doc, &self.layout, (line_index, 0), rows_above);
+        let anchor = layout::anchor_backward(
+            &mut self.doc,
+            &self.layout,
+            RowPos::line_start(line_index),
+            rows_above,
+        );
         self.compose_at(anchor);
         true
     }
@@ -1151,6 +1159,6 @@ mod tests {
             .collect();
         assert_eq!(line6_wraps, vec![0, 1]);
         let last = snap.content.last().unwrap();
-        assert_eq!((last.line_index(), last.wrap_index()), (6, 1));
+        assert_eq!(last.pos(), RowPos::new(6, 1));
     }
 }
