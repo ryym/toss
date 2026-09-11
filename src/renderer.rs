@@ -6,13 +6,10 @@ use crossterm::event::Event;
 
 use crate::{
     document::Document,
-    line::Row,
+    line::{Row, RowPos},
     pager::PageSnapshot,
     screen::{Direction, Screen, Scroll},
 };
-
-/// A row position in the document: `(line_index, wrap_index)`.
-type RowPos = (usize, usize);
 
 /// A run of consecutive screen rows that render one document line.
 ///
@@ -30,9 +27,9 @@ struct PaintedGroup {
 
 /// What one screen row holds, as the identity used to diff two frames.
 ///
-/// `raw` is part of the identity because the same `(line_index, wrap_index)` covers
-/// different text at different widths: a reflow can leave the position untouched while
-/// the row now has to show more or less of the line.
+/// `raw` is part of the identity because the same `pos` covers different text at different
+/// widths: a reflow can leave the position untouched while the row now has to show more or
+/// less of the line.
 #[derive(Debug)]
 struct PaintedRow {
     pos: RowPos,
@@ -180,7 +177,7 @@ fn build_frame(doc: &mut Document, page: &PageSnapshot) -> PaintedFrame {
             });
             for row in &section[start..i] {
                 rows.push(PaintedRow {
-                    pos: (row.line_index(), row.wrap_index()),
+                    pos: row.pos(),
                     raw: row.raw_range().clone(),
                     group,
                 });
@@ -291,7 +288,7 @@ mod tests {
                 text: Some(text.to_string()),
             });
             painted.push(PaintedRow {
-                pos: (line_index, 0),
+                pos: RowPos::line_start(line_index),
                 raw: 0..text.len(),
                 group: y,
             });
