@@ -45,6 +45,8 @@ pub fn list_forward(doc: &mut Document, width: usize, start: RowPos, count: usiz
             Some(l) => l,
             None => break,
         };
+        // A `wrap_index` past the line's rows (e.g. from another width) skips the whole
+        // line, so the read starts from the next line.
         let line_rows: Vec<Row> = line
             .wrap(width)
             .into_iter()
@@ -59,11 +61,11 @@ pub fn list_forward(doc: &mut Document, width: usize, start: RowPos, count: usiz
 }
 
 /// Where a backward read starts from.
-pub enum DocPos<'row> {
+pub enum DocPos {
     /// The last row of the document.
     End,
-    /// The row just above the given one, which is itself excluded.
-    Before(&'row Row),
+    /// The row just above the given position, which is itself excluded.
+    Before(RowPos),
 }
 
 /// Build a list of at most `count` [`Row`]s with the given width, reading backward from
@@ -75,14 +77,14 @@ pub fn list_backward(doc: &mut Document, width: usize, start: DocPos, count: usi
             Some(i) => (i, None),
             None => return vec![],
         },
-        DocPos::Before(row) => {
-            if row.wrap_index() == 0 {
-                match row.line_index().checked_sub(1) {
+        DocPos::Before(pos) => {
+            if pos.wrap_index == 0 {
+                match pos.line_index.checked_sub(1) {
                     Some(i) => (i, None),
                     None => return vec![],
                 }
             } else {
-                (row.line_index(), Some(row.wrap_index() - 1))
+                (pos.line_index, Some(pos.wrap_index - 1))
             }
         }
     };
@@ -96,7 +98,9 @@ pub fn list_backward(doc: &mut Document, width: usize, start: DocPos, count: usi
         let line_rows = line.wrap(width);
         let wrap_index_rev = match from_wrap {
             None => 0,
-            Some(w) => line_rows.len() - 1 - w,
+            // Clamp `w` to the line's last row when it points past the line (e.g. from
+            // another width), so the read starts from that last row.
+            Some(w) => line_rows.len() - 1 - w.min(line_rows.len() - 1),
         };
         let line_rows: Vec<Row> = line_rows
             .into_iter()
@@ -179,6 +183,15 @@ mod tests {
     }
 
     #[test]
+    fn list_forward_skips_line_for_wrap_index_past_the_line() {
+        // "abcde" wraps to (0,0), (0,1), (0,2) at width 2, so (0,5) does not exist.
+        // It reads as the position just after the line's last row.
+        let mut doc = Document::from_string("abcde\nf\n".into());
+        let rows = list_forward(&mut doc, 2, RowPos::new(0, 5), 2);
+        assert_eq!(pos(&rows), vec![(1, 0)]);
+    }
+
+    #[test]
     fn list_forward_stops_at_end_of_doc() {
         let mut doc = Document::from_string("a\nb\n".into());
         let rows = list_forward(&mut doc, 80, RowPos::new(0, 0), 10);
@@ -195,8 +208,7 @@ mod tests {
     #[test]
     fn list_backward_from_before_row() {
         let mut doc = Document::from_string("a\nb\nc\nd\n".into());
-        let pivot = doc.line(2).unwrap().wrap(80)[0].clone();
-        let rows = list_backward(&mut doc, 80, DocPos::Before(&pivot), 2);
+        let rows = list_backward(&mut doc, 80, DocPos::Before(RowPos::new(2, 0)), 2);
         assert_eq!(pos(&rows), vec![(0, 0), (1, 0)]);
     }
 
@@ -204,16 +216,32 @@ mod tests {
     fn list_backward_from_before_wrapped_row() {
         // "abcde" wraps to (0,0), (0,1), (0,2) at width 2.
         let mut doc = Document::from_string("abcde\nf\n".into());
-        let pivot = doc.line(0).unwrap().wrap(2)[2].clone();
-        let rows = list_backward(&mut doc, 2, DocPos::Before(&pivot), 2);
+        let rows = list_backward(&mut doc, 2, DocPos::Before(RowPos::new(0, 2)), 2);
         assert_eq!(pos(&rows), vec![(0, 0), (0, 1)]);
+    }
+
+    #[test]
+    fn list_backward_clamps_wrap_index_past_the_line() {
+        // "abcde" wraps to (0,0), (0,1), (0,2) at width 2, so (0,5) does not exist.
+        // It reads as the position just after the line's last row.
+        let mut doc = Document::from_string("abcde\nf\n".into());
+        let rows = list_backward(&mut doc, 2, DocPos::Before(RowPos::new(0, 5)), 2);
+        assert_eq!(pos(&rows), vec![(0, 1), (0, 2)]);
+    }
+
+    #[test]
+    fn list_backward_from_before_line_after_last_reads_from_doc_end() {
+        // The line right after the last one does not exist, but reading before its start
+        // is the same as reading from the end of the document.
+        let mut doc = Document::from_string("a\nb\nc\n".into());
+        let rows = list_backward(&mut doc, 80, DocPos::Before(RowPos::new(3, 0)), 2);
+        assert_eq!(pos(&rows), vec![(1, 0), (2, 0)]);
     }
 
     #[test]
     fn list_backward_returns_empty_at_doc_start() {
         let mut doc = Document::from_string("a\nb\n".into());
-        let pivot = doc.line(0).unwrap().wrap(80)[0].clone();
-        let rows = list_backward(&mut doc, 80, DocPos::Before(&pivot), 5);
+        let rows = list_backward(&mut doc, 80, DocPos::Before(RowPos::new(0, 0)), 5);
         assert!(rows.is_empty());
     }
 

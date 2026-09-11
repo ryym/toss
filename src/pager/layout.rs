@@ -205,7 +205,7 @@ fn fill_from(doc: &mut Document, layout: &Layout, anchor: RowPos) -> Vec<Row> {
 
     let missing = height - rows.len();
     let earlier = match rows.first() {
-        Some(first) => rows::list_backward(doc, width, DocPos::Before(first), missing),
+        Some(first) => rows::list_backward(doc, width, DocPos::Before(first.pos()), missing),
         // The anchor is past the end of the document: fall back to its last page.
         None => return rows::list_backward(doc, width, DocPos::End, height),
     };
@@ -333,17 +333,7 @@ pub(super) fn anchor_backward(
     if count == 0 {
         return from;
     }
-    let width = layout.size.width();
-    let from_row = {
-        let Some(line) = doc.line(from.line_index) else {
-            return from;
-        };
-        match line.wrap(width).into_iter().nth(from.wrap_index) {
-            Some(row) => row,
-            None => return from,
-        }
-    };
-    let earlier = rows::list_backward(doc, width, DocPos::Before(&from_row), count);
+    let earlier = rows::list_backward(doc, layout.size.width(), DocPos::Before(from), count);
     earlier.first().map_or(from, Row::pos)
 }
 
