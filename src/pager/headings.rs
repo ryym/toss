@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::{document::Document, options::HeadingOptions};
+use crate::{document::Document, pager::options::HeadingOptions};
 
 /// The heading pattern plus a memo of where the heading start lines are.
 ///

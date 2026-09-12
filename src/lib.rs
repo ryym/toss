@@ -5,7 +5,6 @@ mod document;
 mod line;
 mod line_editor;
 mod logger;
-mod options;
 mod pager;
 mod renderer;
 mod run;

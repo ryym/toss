@@ -3,10 +3,10 @@ use std::ops::Range;
 use crate::{
     document::Document,
     line::{Row, RowPos},
-    options::Options,
     pager::{
         ViewportSize,
         headings::Headings,
+        options::Options,
         rows::{self, DocPos},
     },
 };
@@ -341,7 +341,7 @@ pub(super) fn anchor_backward(
 mod tests {
     use super::*;
     use crate::document::Document;
-    use crate::options::HeadingOptions;
+    use crate::pager::options::HeadingOptions;
     use regex::Regex;
 
     fn size(width: usize, height: usize) -> ViewportSize {

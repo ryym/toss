@@ -7,7 +7,7 @@ use super::mock_screen::MockScreen;
 use crate::app::App;
 use crate::document::{Document, StreamMsg};
 use crate::line::Line;
-use crate::options::Options;
+use crate::pager::Options;
 use crate::pager::Pager;
 use crate::screen::ScreenSize;
 use crate::tests::output_to_string;

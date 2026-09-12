@@ -7,7 +7,6 @@ use crate::{
     document::Document,
     line::{MatchPosition, Row, RowPos},
     line_editor::{LineEdit, LineEditor},
-    options::Options,
     pager::layout::{Frame, Layout},
     screen::ScreenSize,
     search::{self, SearchDirection, SearchFrom, SearchState},
@@ -15,8 +14,11 @@ use crate::{
 
 mod headings;
 mod layout;
+mod options;
 mod rows;
 mod status_line;
+
+pub use options::{HeadingOptions, Options};
 
 /// The area the page uses to show document rows: the screen minus the status line.
 #[derive(Debug, Clone, Copy)]
@@ -559,7 +561,7 @@ mod tests {
     use super::*;
     use crate::document::StreamMsg;
     use crate::line::Line;
-    use crate::options::{HeadingOptions, Options};
+    use crate::pager::options::{HeadingOptions, Options};
     use crate::pager::status_line::{STATUS_REVERSE_OFF, STATUS_REVERSE_ON};
     use regex::Regex;
     use std::sync::mpsc;

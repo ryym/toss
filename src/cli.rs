@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use crate::AppError;
-use crate::options::{HeadingOptions, Options};
+use crate::pager::{HeadingOptions, Options};
 
 impl From<lexopt::Error> for AppError {
     fn from(err: lexopt::Error) -> Self {
