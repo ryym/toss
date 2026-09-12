@@ -1,4 +1,4 @@
-use std::io;
+use std::io::{self, Write};
 use std::mem;
 
 use regex::Regex;
@@ -168,14 +168,6 @@ impl Pager {
         &self.mode
     }
 
-    pub fn doc(&self) -> &Document {
-        &self.doc
-    }
-
-    pub fn doc_mut(&mut self) -> &mut Document {
-        &mut self.doc
-    }
-
     /// Return the current page, together with the document its rows point into.
     pub fn snapshot<'pager>(&'pager mut self) -> (PageSnapshot<'pager>, &'pager mut Document) {
         let search = match &self.mode {
@@ -230,6 +222,20 @@ impl Pager {
             }
         }
         true
+    }
+
+    /// Write every line of the document to `out` as it is, without paginating it,
+    /// then consume the pager.
+    ///
+    /// Returns the stream error like [`Self::into_stream_error`], since the pager is
+    /// done with once its content has been written.
+    pub fn print_all(mut self, out: &mut impl Write) -> io::Result<Option<io::Error>> {
+        for i in 0..self.doc.line_count() {
+            if let Some(line) = self.doc.line(i) {
+                writeln!(out, "{}", line.raw())?;
+            }
+        }
+        Ok(self.into_stream_error())
     }
 
     /// Consume the pager and return the error that ended its input, if it ended

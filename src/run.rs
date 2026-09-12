@@ -136,25 +136,20 @@ where
 
     let mut pager = Pager::new(doc, parsed.options, size);
 
-    if quit_if_one_screen && pager.fits_within(one_screen) {
-        // Print the whole document without pagination and quit.
-        for i in 0..pager.doc_mut().line_count() {
-            if let Some(line) = pager.doc_mut().line(i) {
-                writeln!(stdout, "{}", line.raw()).context("Error writing to stdout")?;
-            }
+    let stream_error = if quit_if_one_screen && pager.fits_within(one_screen) {
+        pager
+            .print_all(&mut stdout)
+            .context("Error writing to stdout")?
+    } else {
+        let screen = (cfg.make_screen)(stdout)?;
+        let mut app = App::new(screen, pager)?;
+        if cfg.instant_scroll {
+            app.set_instant_scroll();
         }
-        check_stdin_read(pager.doc())?;
-        return Ok(());
-    }
-
-    // Run the interactive pager app.
-    let screen = (cfg.make_screen)(stdout)?;
-    let mut app = App::new(screen, pager)?;
-    if cfg.instant_scroll {
-        app.set_instant_scroll();
-    }
-    if let Some(e) = app.run()? {
-        return Err(stdin_read_error(&e));
+        app.run()?
+    };
+    if let Some(e) = stream_error {
+        return Err(AppError::new(format!("Error reading stdin: {e}")));
     }
 
     Ok(())
@@ -195,18 +190,4 @@ fn wait_until_exceeds_or_complete(doc: &mut Document, max: usize) {
         }
         std::thread::sleep(STARTUP_POLL_INTERVAL);
     }
-}
-
-/// Fail if the input stream ended abnormally.
-/// Returns `Ok(())` for a clean EOF and for non-streaming sources.
-fn check_stdin_read(doc: &Document) -> Result<(), AppError> {
-    match doc.stream_error() {
-        Some(e) => Err(stdin_read_error(e)),
-        None => Ok(()),
-    }
-}
-
-/// Build the error reported when the input stream ended abnormally.
-fn stdin_read_error(e: &io::Error) -> AppError {
-    AppError::new(format!("Error reading stdin: {e}"))
 }
