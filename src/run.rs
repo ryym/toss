@@ -50,7 +50,7 @@ where
     R: BufRead + Send + 'static,
     W: Write,
     S: Screen,
-    MS: FnOnce() -> Result<S, AppError>,
+    MS: FnOnce(W) -> Result<S, AppError>,
 {
     pub args: Vec<OsString>,
     pub terminal_size: ScreenSize,
@@ -69,7 +69,7 @@ where
     R: BufRead + Send + 'static,
     W: Write,
     S: Screen,
-    MS: FnOnce() -> Result<S, AppError>,
+    MS: FnOnce(W) -> Result<S, AppError>,
 {
     let _log_guard = logger::setup_file_logger()?;
     let mut stdout = cfg.stdout;
@@ -121,7 +121,7 @@ where
     }
 
     // Run the interactive pager app.
-    let screen = (cfg.make_screen)()?;
+    let screen = (cfg.make_screen)(stdout)?;
     let mut app = App::new(screen, pager)?;
     if cfg.instant_scroll {
         app.set_instant_scroll();

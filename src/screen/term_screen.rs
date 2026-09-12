@@ -1,4 +1,4 @@
-use std::io::{self, BufWriter, Stdout, Write};
+use std::io::{self, BufWriter, Write};
 
 use crossterm::{
     cursor,
@@ -19,25 +19,25 @@ fn to_u16(value: usize) -> u16 {
 }
 
 /// crossterm-based terminal screen.
-pub struct TermScreen {
-    stdout: BufWriter<Stdout>,
+/// Writes to the sink given at construction.
+pub struct TermScreen<W: Write> {
+    stdout: BufWriter<W>,
 }
 
-impl TermScreen {
-    pub fn new() -> Result<Self, AppError> {
-        Self::setup().context("Error initializing terminal")
+impl<W: Write> TermScreen<W> {
+    pub fn new(stdout: W) -> Result<Self, AppError> {
+        Self::setup(stdout).context("Error initializing terminal")
     }
 
-    fn setup() -> io::Result<Self> {
+    fn setup(stdout: W) -> io::Result<Self> {
         terminal::enable_raw_mode()?;
-        let stdout = io::stdout();
         let mut stdout = BufWriter::with_capacity(16384, stdout);
         execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide,)?;
         Ok(Self { stdout })
     }
 }
 
-impl Drop for TermScreen {
+impl<W: Write> Drop for TermScreen<W> {
     fn drop(&mut self) {
         let _ = execute!(
             self.stdout,
@@ -49,7 +49,7 @@ impl Drop for TermScreen {
     }
 }
 
-impl Screen for TermScreen {
+impl<W: Write> Screen for TermScreen<W> {
     fn size(&self) -> io::Result<ScreenSize> {
         let (w, h) = terminal::size()?;
         Ok(ScreenSize::new(w, h))
