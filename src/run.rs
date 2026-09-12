@@ -9,15 +9,15 @@ use crate::{AppError, Context, cli, logger};
 
 /// Run the toss pipeline: parse CLI args, load the document, render the page.
 pub fn run() -> Result<(), AppError> {
-    let (w, h) = crossterm::terminal::size().context("Error getting terminal size")?;
-    let terminal_size = ScreenSize::new(w, h);
-
     let stdin = io::stdin();
     let stdin_is_terminal = stdin.is_terminal();
 
     run_with(RunConfig {
         args: std::env::args_os().collect(),
-        terminal_size,
+        get_terminal_size: || {
+            let (w, h) = crossterm::terminal::size().context("Error getting terminal size")?;
+            Ok(ScreenSize::new(w, h))
+        },
         shell_lines: shell_lines(),
         instant_scroll: false,
         stdin: BufReader::new(stdin),
@@ -41,38 +41,38 @@ fn shell_lines() -> usize {
 }
 
 /// Inputs required to run the toss pager pipeline.
-///
-/// `make_screen` is a factory rather than a value so the screen is only
-/// constructed when actually needed — the `-F` short-circuit and the
-/// help/version paths skip it, which lets the binary avoid acquiring raw
-/// terminal mode in those cases.
-pub(crate) struct RunConfig<R, W, S, MS>
+pub(crate) struct RunConfig<R, W, S, MS, TS>
 where
     R: BufRead + Send + 'static,
     W: Write,
     S: Screen,
     MS: FnOnce(W) -> Result<S, AppError>,
+    TS: FnOnce() -> Result<ScreenSize, AppError>,
 {
     pub args: Vec<OsString>,
-    pub terminal_size: ScreenSize,
     pub shell_lines: usize,
     pub instant_scroll: bool,
     pub stdin: R,
     pub stdin_is_terminal: bool,
     pub stdout: W,
+    /// A factory so that the terminal is left alone, without raw mode,
+    /// unless the pager actually runs.
     pub make_screen: MS,
+    /// A factory so that toss also runs where there is no terminal to ask.
+    pub get_terminal_size: TS,
     /// Block until the whole input has been read before starting the pager. Used for testing.
     pub wait_for_all_input: bool,
 }
 
 /// Run the app with the given config. Return the screen only if it actually rendered
 /// a interactive pager. For example, it doesn't render a pager for `--help`.
-pub(crate) fn run_with<R, W, S, MS>(cfg: RunConfig<R, W, S, MS>) -> Result<(), AppError>
+pub(crate) fn run_with<R, W, S, MS, TS>(cfg: RunConfig<R, W, S, MS, TS>) -> Result<(), AppError>
 where
     R: BufRead + Send + 'static,
     W: Write,
     S: Screen,
     MS: FnOnce(W) -> Result<S, AppError>,
+    TS: FnOnce() -> Result<ScreenSize, AppError>,
 {
     let _log_guard = logger::setup_file_logger()?;
     let mut stdout = cfg.stdout;
@@ -97,7 +97,7 @@ where
         return Err(AppError::new("Usage: toss <file> OR command | toss"));
     };
 
-    let size = cfg.terminal_size;
+    let size = (cfg.get_terminal_size)()?;
     let quit_if_one_screen = parsed.options.quit_if_one_screen;
     let one_screen = size.height().saturating_sub(cfg.shell_lines);
 
