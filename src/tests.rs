@@ -87,20 +87,20 @@ pub fn run_test(tc: TestCase) -> TestResult {
     let mut args: Vec<OsString> = vec!["toss".into()];
     args.extend(tc.args.iter().map(OsString::from));
 
-    let (width, height) = (tc.screen_width, tc.screen_height);
+    let size = ScreenSize::new(tc.screen_width, tc.screen_height);
     let events = tc.events;
 
     let mut buf: Vec<u8> = Vec::new();
     if let Err(err) = run_with(RunConfig {
         args,
-        terminal_size: ScreenSize::new(width, height),
+        terminal_size: size,
         shell_lines: 1,
         instant_scroll: true,
         stdin: io::Cursor::new(tc.content.as_bytes().to_vec()),
         stdin_is_terminal: false,
         stdout: &mut buf,
         make_screen: |w| {
-            let mut screen = MockScreen::new(w, width, height);
+            let mut screen = MockScreen::new(w, size);
             screen.set_events(events);
             Ok(screen)
         },

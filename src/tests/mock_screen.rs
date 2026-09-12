@@ -32,20 +32,18 @@ impl GridRow {
 /// the non-interactive output paths write to.
 pub struct MockScreen<W: Write> {
     writer: W,
-    width: u16,
-    height: u16,
+    size: ScreenSize,
     grid: Vec<GridRow>,
     events: Vec<Event>,
     event_index: usize,
 }
 
 impl<W: Write> MockScreen<W> {
-    pub fn new(writer: W, width: u16, height: u16) -> Self {
-        let grid = vec![GridRow::new(); height as usize];
+    pub fn new(writer: W, size: ScreenSize) -> Self {
+        let grid = vec![GridRow::new(); size.height()];
         Self {
             writer,
-            width,
-            height,
+            size,
             grid,
             events: Vec::new(),
             event_index: 0,
@@ -79,9 +77,8 @@ impl<W: Write> MockScreen<W> {
     /// Simulate a terminal resize: update the tracked size and the grid to match,
     /// then log the event so it shows up in the output like a key event does.
     fn log_resize(&mut self, width: u16, height: u16) -> io::Result<()> {
-        self.width = width;
-        self.height = height;
-        self.grid.resize(height as usize, GridRow::new());
+        self.size = ScreenSize::new(width, height);
+        self.grid.resize(self.size.height(), GridRow::new());
         writeln!(self.writer, "[EVENT]:resize:{width}x{height}")
     }
 
@@ -136,7 +133,7 @@ fn escape_to_label(seq: &str) -> String {
 
 impl<W: Write> Screen for MockScreen<W> {
     fn size(&self) -> io::Result<ScreenSize> {
-        Ok(ScreenSize::new(self.width, self.height))
+        Ok(self.size)
     }
 
     fn poll_event(&mut self, _timeout: std::time::Duration) -> io::Result<Option<Event>> {
@@ -162,7 +159,6 @@ impl<W: Write> Screen for MockScreen<W> {
     }
 
     fn write_at(&mut self, screen_y: usize, text: &str) -> io::Result<()> {
-        let width = self.width as usize;
         let mut y = screen_y;
         let mut col = 0;
 
@@ -170,22 +166,22 @@ impl<W: Write> Screen for MockScreen<W> {
             match part {
                 ansi::Text::Control(s) => {
                     // Control sequences have zero display width; append as-is.
-                    if y < self.height as usize {
+                    if y < self.size.height() {
                         self.grid[y].text.push_str(s);
                     }
                 }
                 ansi::Text::Plain(s) => {
                     for ch in s.chars() {
                         let ch_w = ch.width().unwrap_or(0);
-                        if col > 0 && col + ch_w > width {
+                        if col > 0 && col + ch_w > self.size.width() {
                             self.grid[y].soft_wrapped = true;
                             y += 1;
                             col = 0;
-                            if y >= self.height as usize {
+                            if y >= self.size.height() {
                                 break;
                             }
                         }
-                        if y >= self.height as usize {
+                        if y >= self.size.height() {
                             break;
                         }
                         self.grid[y].text.push(ch);
@@ -198,12 +194,11 @@ impl<W: Write> Screen for MockScreen<W> {
     }
 
     fn scroll_terminal(&mut self, scroll: &Scroll) -> io::Result<()> {
-        let height = self.height as usize;
         let num_rows = scroll.num_rows.get();
         match scroll.direction {
             Direction::Down => {
                 // Content moves up: remove n rows from top, add blank at bottom.
-                let remove = num_rows.min(height);
+                let remove = num_rows.min(self.size.height());
                 for _ in 0..remove {
                     self.grid.remove(0);
                     self.grid.push(GridRow::new());
@@ -211,7 +206,7 @@ impl<W: Write> Screen for MockScreen<W> {
             }
             Direction::Up => {
                 // Content moves down: remove n rows from bottom, add blank at top.
-                let remove = num_rows.min(height);
+                let remove = num_rows.min(self.size.height());
                 for _ in 0..remove {
                     self.grid.pop();
                     self.grid.insert(0, GridRow::new());
