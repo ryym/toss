@@ -142,23 +142,23 @@ impl<S: Screen> App<S> {
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 return AppAction::Quit;
             }
-            KeyCode::Char('j') | KeyCode::Down => self.scroll_immediate(1),
-            KeyCode::Char('k') | KeyCode::Up => self.scroll_immediate(-1),
+            KeyCode::Char('j') | KeyCode::Down => self.scroll_by_line(1),
+            KeyCode::Char('k') | KeyCode::Up => self.scroll_by_line(-1),
             KeyCode::Char('d') => {
                 let half = self.pager.content_height() as i32 / 2;
-                self.scroll_animated(half)
+                self.scroll_by_page(half)
             }
             KeyCode::Char('u') => {
                 let half = -(self.pager.content_height() as i32 / 2);
-                self.scroll_animated(half)
+                self.scroll_by_page(half)
             }
             KeyCode::Char('f') | KeyCode::Char(' ') => {
                 let full = self.pager.content_height() as i32;
-                self.scroll_animated(full)
+                self.scroll_by_page(full)
             }
             KeyCode::Char('b') => {
                 let full = -(self.pager.content_height() as i32);
-                self.scroll_animated(full)
+                self.scroll_by_page(full)
             }
             KeyCode::Char('g') => {
                 self.scroll_physics.stop();
@@ -203,14 +203,15 @@ impl<S: Screen> App<S> {
     }
 
     /// Scroll by `rows` at once, cancelling any animation in flight.
-    fn scroll_immediate(&mut self, rows: i32) -> bool {
+    /// Line-sized moves are never animated: they are short enough to read as a jump.
+    fn scroll_by_line(&mut self, rows: i32) -> bool {
         self.scroll_physics.stop();
         self.apply_scroll(rows)
     }
 
-    /// Start or add momentum for a scroll animated over the following frames.
-    /// Under [`ScrollMode::Instant`] the whole distance is applied at once instead.
-    fn scroll_animated(&mut self, total_rows: i32) -> bool {
+    /// Move by `total_rows`, a page or half a page. Under [`ScrollMode::Smooth`] the
+    /// distance is eased over the following frames; otherwise it is applied at once.
+    fn scroll_by_page(&mut self, total_rows: i32) -> bool {
         match self.scroll_mode {
             ScrollMode::Smooth => {
                 log::debug!("Scroll animation impulse: rows={total_rows}");
