@@ -23,7 +23,7 @@ pub fn run() -> Result<(), AppError> {
         stdin: BufReader::new(stdin),
         stdin_is_terminal,
         stdout: io::stdout(),
-        make_screen: || TermScreen::new().context("Error initializing terminal"),
+        make_screen: TermScreen::new,
     })?;
 
     Ok(())
@@ -74,15 +74,14 @@ where
     let stdin = cfg.stdin;
     let mut stdout = cfg.stdout;
 
-    let _log_guard = logger::setup_file_logger().context("Error setting up logger")?;
+    let _log_guard = logger::setup_file_logger()?;
 
-    let parsed = match cli::parse_from_args(cfg.args) {
-        Ok(cli::Action::Run(args)) => args,
-        Ok(cli::Action::Print(msg)) => {
+    let parsed = match cli::parse_from_args(cfg.args)? {
+        cli::Action::Run(args) => args,
+        cli::Action::Print(msg) => {
             writeln!(stdout, "{msg}").context("Error writing to stdout")?;
             return Ok(None);
         }
-        Err(e) => return Err(AppError::new(format!("Error: {e}"), DEFAULT_EXIT_CODE)),
     };
 
     let mut doc = if let Some(path) = parsed.file.as_ref() {

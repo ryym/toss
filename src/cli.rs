@@ -3,6 +3,13 @@
 use std::path::PathBuf;
 
 use crate::options::{HeadingOptions, Options};
+use crate::{AppError, DEFAULT_EXIT_CODE};
+
+impl From<lexopt::Error> for AppError {
+    fn from(err: lexopt::Error) -> Self {
+        AppError::new(format!("Error: {err}"), DEFAULT_EXIT_CODE)
+    }
+}
 
 const VERSION: &str = "0.0.0";
 

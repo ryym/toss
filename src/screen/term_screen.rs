@@ -9,6 +9,7 @@ use crossterm::{
 };
 
 use super::{Direction, Screen, ScreenSize, Scroll};
+use crate::{AppError, Context};
 
 /// Convert an internal `usize` coordinate to the `u16` crossterm expects.
 /// Coordinates never exceed the terminal size (well within `u16`), but clamp
@@ -23,7 +24,11 @@ pub struct TermScreen {
 }
 
 impl TermScreen {
-    pub fn new() -> io::Result<Self> {
+    pub fn new() -> Result<Self, AppError> {
+        Self::setup().context("Error initializing terminal")
+    }
+
+    fn setup() -> io::Result<Self> {
         terminal::enable_raw_mode()?;
         let stdout = io::stdout();
         let mut stdout = BufWriter::with_capacity(16384, stdout);
