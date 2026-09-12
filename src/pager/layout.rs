@@ -355,7 +355,6 @@ mod tests {
                 pattern: Regex::new(pattern).unwrap(),
                 num_lines,
             }),
-            quit_if_one_screen: false,
         };
         Layout::new(options, size)
     }

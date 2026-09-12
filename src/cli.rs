@@ -44,6 +44,8 @@ pub enum Action {
 #[derive(Debug)]
 pub struct Args {
     pub file: Option<PathBuf>,
+    /// Quit automatically if the entire content fits on one screen.
+    pub quit_if_one_screen: bool,
     pub options: Options,
 }
 
@@ -112,11 +114,8 @@ fn parse_from(mut parser: lexopt::Parser) -> Result<Action, lexopt::Error> {
 
     Ok(Action::Run(Args {
         file,
-        options: Options {
-            quit_if_one_screen,
-            header,
-            heading,
-        },
+        quit_if_one_screen,
+        options: Options { header, heading },
     }))
 }
 
@@ -158,7 +157,7 @@ mod tests {
     fn no_args() {
         let args = unwrap_run(parse(&[]));
         assert!(args.file.is_none());
-        assert!(!args.options.quit_if_one_screen);
+        assert!(!args.quit_if_one_screen);
         assert_eq!(args.options.header, 0);
         assert!(args.options.heading.is_none());
     }
@@ -172,13 +171,13 @@ mod tests {
     #[test]
     fn quit_if_one_screen_short() {
         let args = unwrap_run(parse(&["-F"]));
-        assert!(args.options.quit_if_one_screen);
+        assert!(args.quit_if_one_screen);
     }
 
     #[test]
     fn quit_if_one_screen_long() {
         let args = unwrap_run(parse(&["--quit-if-one-screen"]));
-        assert!(args.options.quit_if_one_screen);
+        assert!(args.quit_if_one_screen);
     }
 
     #[test]

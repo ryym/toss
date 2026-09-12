@@ -119,12 +119,11 @@ where
     };
 
     let size = (cfg.get_terminal_size)()?;
-    let quit_if_one_screen = parsed.options.quit_if_one_screen;
     let one_screen = size.height().saturating_sub(cfg.shell_lines);
 
     if cfg.wait_for_all_input {
         wait_until_exceeds_or_complete(&mut doc, usize::MAX);
-    } else if quit_if_one_screen {
+    } else if parsed.quit_if_one_screen {
         // With -F we must know whether everything fits on one screen. Read enough to
         // exceed a screen's worth of lines, or until the input ends.
         wait_until_exceeds_or_complete(&mut doc, one_screen);
@@ -136,7 +135,7 @@ where
 
     let mut pager = Pager::new(doc, parsed.options, size);
 
-    let stream_error = if quit_if_one_screen && pager.fits_within(one_screen) {
+    let stream_error = if parsed.quit_if_one_screen && pager.fits_within(one_screen) {
         pager
             .print_all(&mut stdout)
             .context("Error writing to stdout")?

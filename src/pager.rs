@@ -817,7 +817,6 @@ mod tests {
         let opts = Options {
             header: 3,
             heading: Some(heading_opts("^# ", 1)),
-            ..Default::default()
         };
         let mut pager = Pager::new(doc, opts, ScreenSize::new(20, 10));
 
