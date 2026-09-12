@@ -1,4 +1,4 @@
-use std::io;
+use std::io::{self, Write};
 
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use unicode_width::UnicodeWidthChar;
@@ -22,37 +22,33 @@ impl GridRow {
     }
 }
 
-/// Recorded output entry from MockScreen.
-enum OutputEntry {
-    /// Key event log line (e.g. "[EVENT]:char:j\n").
-    Event(String),
-    /// Grid snapshot taken on flush.
-    Snapshot(String),
-}
-
 /// In-memory screen for e2e testing.
 /// Tracks a grid of cells and logs output on each flush.
 /// Simulates soft wrapping: when write_at overflows a row, it continues
 /// to the next row and marks the overflow row with '>'.
-pub struct MockScreen {
+///
+/// The log is written to `writer` as it is produced — consumed events right
+/// away, grid snapshots on flush — so a test can capture it from the same sink
+/// the non-interactive output paths write to.
+pub struct MockScreen<W: Write> {
+    writer: W,
     width: u16,
     height: u16,
     grid: Vec<GridRow>,
     events: Vec<Event>,
     event_index: usize,
-    entries: Vec<OutputEntry>,
 }
 
-impl MockScreen {
-    pub fn new(width: u16, height: u16) -> Self {
+impl<W: Write> MockScreen<W> {
+    pub fn new(writer: W, width: u16, height: u16) -> Self {
         let grid = vec![GridRow::new(); height as usize];
         Self {
+            writer,
             width,
             height,
             grid,
             events: Vec::new(),
             event_index: 0,
-            entries: Vec::new(),
         }
     }
 
@@ -61,23 +57,7 @@ impl MockScreen {
         self.event_index = 0;
     }
 
-    /// Build the full output log by concatenating all entries.
-    /// Each snapshot is followed by a "-----" separator.
-    pub fn out(&self) -> String {
-        let mut out = String::new();
-        for entry in &self.entries {
-            match entry {
-                OutputEntry::Event(s) => out.push_str(s),
-                OutputEntry::Snapshot(s) => {
-                    out.push_str(s);
-                    out.push_str("-----\n");
-                }
-            }
-        }
-        out
-    }
-
-    fn log_key(&mut self, key: &KeyEvent) {
+    fn log_key(&mut self, key: &KeyEvent) -> io::Result<()> {
         let text = match key.code {
             KeyCode::Char(ch) => {
                 if ch.is_control() {
@@ -93,21 +73,20 @@ impl MockScreen {
             KeyCode::Right => "[EVENT]:right\n".to_string(),
             _ => format!("[EVENT]:ERROR:unexpected:{}\n", key.code),
         };
-        self.entries.push(OutputEntry::Event(text));
+        self.writer.write_all(text.as_bytes())
     }
 
     /// Simulate a terminal resize: update the tracked size and the grid to match,
     /// then log the event so it shows up in the output like a key event does.
-    fn log_resize(&mut self, width: u16, height: u16) {
+    fn log_resize(&mut self, width: u16, height: u16) -> io::Result<()> {
         self.width = width;
         self.height = height;
         self.grid.resize(height as usize, GridRow::new());
-        self.entries.push(OutputEntry::Event(format!(
-            "[EVENT]:resize:{width}x{height}\n"
-        )));
+        writeln!(self.writer, "[EVENT]:resize:{width}x{height}")
     }
 
-    fn take_snapshot(&mut self) {
+    /// Write the current grid as a snapshot, terminated by a "-----" separator.
+    fn take_snapshot(&mut self) -> io::Result<()> {
         let mut snap = String::new();
         for row in &self.grid {
             snap.push_str(&visualize_escapes(&row.text));
@@ -116,7 +95,15 @@ impl MockScreen {
             }
             snap.push('\n');
         }
-        self.entries.push(OutputEntry::Snapshot(snap));
+        snap.push_str("-----\n");
+        self.writer.write_all(snap.as_bytes())
+    }
+}
+
+impl MockScreen<Vec<u8>> {
+    /// Return the log accumulated in the in-memory writer.
+    pub fn out(&self) -> String {
+        String::from_utf8_lossy(&self.writer).into_owned()
     }
 }
 
@@ -154,7 +141,7 @@ fn escape_to_label(seq: &str) -> String {
     }
 }
 
-impl Screen for MockScreen {
+impl<W: Write> Screen for MockScreen<W> {
     fn size(&self) -> io::Result<ScreenSize> {
         Ok(ScreenSize::new(self.width, self.height))
     }
@@ -164,8 +151,8 @@ impl Screen for MockScreen {
             let event = self.events[self.event_index].clone();
             self.event_index += 1;
             match &event {
-                Event::Key(key) => self.log_key(key),
-                Event::Resize(w, h) => self.log_resize(*w, *h),
+                Event::Key(key) => self.log_key(key)?,
+                Event::Resize(w, h) => self.log_resize(*w, *h)?,
                 _ => {}
             }
             Ok(Some(event))
@@ -250,7 +237,6 @@ impl Screen for MockScreen {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.take_snapshot();
-        Ok(())
+        self.take_snapshot()
     }
 }

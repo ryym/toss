@@ -31,7 +31,7 @@ fn event_loop_renders_input_that_arrives_after_start() {
 
     // viewport height = screen_height - 1 = 4.
     let pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
-    let mut screen = MockScreen::new(20, 5);
+    let mut screen = MockScreen::new(Vec::new(), 20, 5);
     screen.set_events(vec![key('q')]);
     let mut app = App::new(screen, pager).unwrap();
     app.set_instant_scroll();
@@ -66,7 +66,7 @@ fn event_loop_surfaces_read_error_through_the_app() {
     doc.pump();
 
     let pager = Pager::new(doc, Options::default(), ScreenSize::new(40, 5));
-    let mut screen = MockScreen::new(40, 5);
+    let mut screen = MockScreen::new(Vec::new(), 40, 5);
     screen.set_events(vec![key('q')]);
     let mut app = App::new(screen, pager).unwrap();
     app.set_instant_scroll();

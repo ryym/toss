@@ -68,7 +68,7 @@ impl Default for TestCase {
     }
 }
 
-pub fn run_test_screen(tc: TestCase) -> MockScreen {
+pub fn run_test_screen(tc: TestCase) -> MockScreen<Vec<u8>> {
     let _log_guard = match logger::setup_file_logger() {
         Ok(guard) => guard,
         Err(err) => panic!("failed to setup logger: {}", err),
@@ -79,7 +79,7 @@ pub fn run_test_screen(tc: TestCase) -> MockScreen {
         tc.options,
         ScreenSize::new(tc.screen_width, tc.screen_height),
     );
-    let mut screen = MockScreen::new(tc.screen_width, tc.screen_height);
+    let mut screen = MockScreen::new(Vec::new(), tc.screen_width, tc.screen_height);
     screen.set_events(tc.events);
     let mut app = App::new(screen, pager).unwrap();
     app.set_instant_scroll();
