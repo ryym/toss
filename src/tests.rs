@@ -85,7 +85,7 @@ impl TestResult {
 /// The document is piped in as stdin would be, so it takes the same route
 /// through `run_with` as `command | toss` does.
 pub fn run_test(tc: TestCase) -> TestResult {
-    let mut args: Vec<OsString> = vec!["toss".into()];
+    let mut args: Vec<OsString> = vec!["toss".into(), "--scroll".into(), "instant".into()];
     args.extend(tc.args.iter().map(OsString::from));
 
     let size = ScreenSize::new(tc.screen_width, tc.screen_height);
@@ -96,7 +96,6 @@ pub fn run_test(tc: TestCase) -> TestResult {
         args,
         get_terminal_size: || Ok(size),
         shell_lines: 1,
-        instant_scroll: true,
         stdin: io::Cursor::new(tc.content.as_bytes().to_vec()),
         stdin_is_terminal: false,
         stdout: &mut buf,

@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use crate::AppError;
+use crate::app::ScrollMode;
 use crate::pager::{HeadingOptions, Options};
 
 impl From<lexopt::Error> for AppError {
@@ -24,6 +25,7 @@ Options:
       --header <N>           Fix the top N lines of the input as a global header
       --heading <REGEX>      Regex matching section heading lines (sticky per section)
       --heading-lines <N>    Number of lines per section heading (default 1)
+      --scroll <MODE>        Scroll mode: smooth (default) or instant
   -h, --help                 Print help
   -v, --version              Print version
 
@@ -46,6 +48,8 @@ pub struct Args {
     pub file: Option<PathBuf>,
     /// Quit automatically if the entire content fits on one screen.
     pub quit_if_one_screen: bool,
+    /// How a page-sized scroll reaches its destination.
+    pub scroll_mode: ScrollMode,
     pub options: Options,
 }
 
@@ -63,6 +67,7 @@ fn parse_from(mut parser: lexopt::Parser) -> Result<Action, lexopt::Error> {
 
     let mut file = None;
     let mut quit_if_one_screen = false;
+    let mut scroll_mode = ScrollMode::Smooth;
     let mut header = 0;
     let mut heading_pattern: Option<String> = None;
     let mut heading_lines: Option<usize> = None;
@@ -88,6 +93,9 @@ fn parse_from(mut parser: lexopt::Parser) -> Result<Action, lexopt::Error> {
                     return Err("--heading-lines must be at least 1".into());
                 }
                 heading_lines = Some(n);
+            }
+            Long("scroll") => {
+                scroll_mode = parser.value()?.parse()?;
             }
             Value(val) if file.is_none() => {
                 file = Some(PathBuf::from(val));
@@ -115,6 +123,7 @@ fn parse_from(mut parser: lexopt::Parser) -> Result<Action, lexopt::Error> {
     Ok(Action::Run(Args {
         file,
         quit_if_one_screen,
+        scroll_mode,
         options: Options { header, heading },
     }))
 }
@@ -158,6 +167,7 @@ mod tests {
         let args = unwrap_run(parse(&[]));
         assert!(args.file.is_none());
         assert!(!args.quit_if_one_screen);
+        assert_eq!(args.scroll_mode, ScrollMode::Smooth);
         assert_eq!(args.options.header, 0);
         assert!(args.options.heading.is_none());
     }
@@ -178,6 +188,30 @@ mod tests {
     fn quit_if_one_screen_long() {
         let args = unwrap_run(parse(&["--quit-if-one-screen"]));
         assert!(args.quit_if_one_screen);
+    }
+
+    #[test]
+    fn scroll_instant() {
+        let args = unwrap_run(parse(&["--scroll", "instant"]));
+        assert_eq!(args.scroll_mode, ScrollMode::Instant);
+    }
+
+    #[test]
+    fn scroll_smooth() {
+        let args = unwrap_run(parse(&["--scroll", "smooth"]));
+        assert_eq!(args.scroll_mode, ScrollMode::Smooth);
+    }
+
+    #[test]
+    fn scroll_last_value_wins() {
+        let args = unwrap_run(parse(&["--scroll", "instant", "--scroll", "smooth"]));
+        assert_eq!(args.scroll_mode, ScrollMode::Smooth);
+    }
+
+    #[test]
+    fn scroll_unknown_mode_is_error() {
+        let err = parse_err(&["--scroll", "fast"]);
+        assert!(err.contains("'smooth' or 'instant'"), "{err}");
     }
 
     #[test]

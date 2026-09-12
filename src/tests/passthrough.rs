@@ -25,7 +25,6 @@ fn run_passthrough<W: Write>(
             panic!("the terminal size must not be read without a terminal")
         },
         shell_lines: 1,
-        instant_scroll: true,
         stdin: io::Cursor::new(input.to_vec()),
         stdin_is_terminal,
         stdout,

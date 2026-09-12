@@ -22,7 +22,6 @@ pub fn run() -> Result<(), AppError> {
             Ok(ScreenSize::new(w, h))
         },
         shell_lines: shell_lines(),
-        instant_scroll: false,
         stdin: BufReader::new(stdin),
         stdin_is_terminal,
         stdout,
@@ -55,7 +54,6 @@ where
 {
     pub args: Vec<OsString>,
     pub shell_lines: usize,
-    pub instant_scroll: bool,
     pub stdin: R,
     pub stdin_is_terminal: bool,
     pub stdout: W,
@@ -141,11 +139,7 @@ where
             .context("Error writing to stdout")?
     } else {
         let screen = (cfg.make_screen)(stdout)?;
-        let mut app = App::new(screen, pager)?;
-        if cfg.instant_scroll {
-            app.set_instant_scroll();
-        }
-        app.run()?
+        App::new(screen, pager, parsed.scroll_mode)?.run()?
     };
     if let Some(e) = stream_error {
         return Err(AppError::new(format!("Error reading stdin: {e}")));

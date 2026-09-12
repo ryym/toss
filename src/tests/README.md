@@ -12,6 +12,10 @@ Build a `TestCase` (content, screen size, key `events`) and pass it to
 See `mod.rs` for `TestCase`/`run_test` and shared event helpers
 (`key`, `esc`, `enter`, `backspace`, `resize`).
 
+`run_test` runs the pager with `--scroll instant` by default, since a running
+scroll animation makes the expected output cumbersome to compare against. A
+test case can override `--scroll` through `TestCase.args` when it needs to.
+
 Bind the document to a `content` variable before the `TestCase` and write it as
 a raw multi-line string rather than embedding `\n`, so the test source shows the
 document exactly as it appears on screen:

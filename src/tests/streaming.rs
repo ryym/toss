@@ -4,7 +4,7 @@ use pretty_assertions::assert_eq;
 
 use super::key;
 use super::mock_screen::MockScreen;
-use crate::app::App;
+use crate::app::{App, ScrollMode};
 use crate::document::{Document, StreamMsg};
 use crate::line::Line;
 use crate::pager::Options;
@@ -37,8 +37,7 @@ fn event_loop_renders_input_that_arrives_after_start() {
     let pager = Pager::new(doc, Options::default(), size);
     let mut screen = MockScreen::new(&mut buf, size);
     screen.set_events(vec![key('q')]);
-    let mut app = App::new(screen, pager).unwrap();
-    app.set_instant_scroll();
+    let app = App::new(screen, pager, ScrollMode::Instant).unwrap();
 
     // The rest of the input becomes available only after the app has started.
     send_lines(&tx, 1, 9);
@@ -74,8 +73,7 @@ fn event_loop_surfaces_read_error_through_the_app() {
     let pager = Pager::new(doc, Options::default(), size);
     let mut screen = MockScreen::new(&mut buf, size);
     screen.set_events(vec![key('q')]);
-    let mut app = App::new(screen, pager).unwrap();
-    app.set_instant_scroll();
+    let app = App::new(screen, pager, ScrollMode::Instant).unwrap();
 
     // The reader fails after the first line rather than reaching EOF.
     send_lines(&tx, 1, 2);

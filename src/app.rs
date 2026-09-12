@@ -1,4 +1,5 @@
 use std::io;
+use std::str::FromStr;
 use std::time::Duration;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
@@ -19,6 +20,27 @@ const FRAME_DURATION_IDLE: Duration = Duration::from_millis(50);
 /// without the busy cost of the animation cadence.
 const FRAME_DURATION_LOADING: Duration = Duration::from_millis(16);
 
+/// How a page-sized scroll reaches its destination.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrollMode {
+    /// Ease over several frames.
+    Smooth,
+    /// Land at once.
+    Instant,
+}
+
+impl FromStr for ScrollMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "smooth" => Ok(Self::Smooth),
+            "instant" => Ok(Self::Instant),
+            _ => Err("expected 'smooth' or 'instant'".to_owned()),
+        }
+    }
+}
+
 /// Result of handling a terminal event or key input.
 /// `Continue` carries whether the page state changed and so needs a render.
 enum AppAction {
@@ -32,17 +54,16 @@ enum AppAction {
 /// [`App`] owns the event loop. It polls for input at a cadence that follows what is in
 /// flight (a running scroll animation, streaming input, or neither), asks [`Pager`] to
 /// update the page state, and hands the resulting page to [`Renderer`]. Scrolling by a
-/// page or half a page is animated by [`ScrollPhysics`], unless
-/// [`Self::set_instant_scroll`] turned the animation off.
+/// page or half a page is animated by [`ScrollPhysics`] under [`ScrollMode::Smooth`].
 pub struct App<S: Screen> {
     renderer: Renderer<S>,
     pager: Pager,
     scroll_physics: ScrollPhysics,
-    instant_scroll: bool,
+    scroll_mode: ScrollMode,
 }
 
 impl<S: Screen> App<S> {
-    pub fn new(screen: S, pager: Pager) -> io::Result<Self> {
+    pub fn new(screen: S, pager: Pager, scroll_mode: ScrollMode) -> io::Result<Self> {
         let size = screen.size()?;
         let renderer = Renderer::new(screen);
         let mut scroll_physics = ScrollPhysics::new();
@@ -51,14 +72,8 @@ impl<S: Screen> App<S> {
             renderer,
             pager,
             scroll_physics,
-            instant_scroll: false,
+            scroll_mode,
         })
-    }
-
-    /// Make animated scrolls land immediately instead of easing over several frames.
-    /// Tests need the page to settle within the call that scrolled it.
-    pub fn set_instant_scroll(&mut self) {
-        self.instant_scroll = true;
     }
 
     /// Run the event loop until the user quits, rendering whenever the page changed.
@@ -194,15 +209,18 @@ impl<S: Screen> App<S> {
     }
 
     /// Start or add momentum for a scroll animated over the following frames.
-    /// Under [`Self::set_instant_scroll`] the whole distance is applied at once instead.
+    /// Under [`ScrollMode::Instant`] the whole distance is applied at once instead.
     fn scroll_animated(&mut self, total_rows: i32) -> bool {
-        if self.instant_scroll {
-            self.scroll_physics.stop();
-            self.apply_scroll(total_rows)
-        } else {
-            log::debug!("Scroll animation impulse: rows={total_rows}");
-            self.scroll_physics.impulse(f64::from(total_rows));
-            false
+        match self.scroll_mode {
+            ScrollMode::Smooth => {
+                log::debug!("Scroll animation impulse: rows={total_rows}");
+                self.scroll_physics.impulse(f64::from(total_rows));
+                false
+            }
+            ScrollMode::Instant => {
+                self.scroll_physics.stop();
+                self.apply_scroll(total_rows)
+            }
         }
     }
 
