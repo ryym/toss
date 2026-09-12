@@ -1,3 +1,4 @@
+use std::io;
 use std::mem;
 
 use regex::Regex;
@@ -229,6 +230,12 @@ impl Pager {
             }
         }
         true
+    }
+
+    /// Consume the pager and return the error that ended its input, if it ended
+    /// abnormally. See [`Document::stream_error`].
+    pub fn into_stream_error(self) -> Option<io::Error> {
+        self.doc.into_stream_error()
     }
 
     /// Drain pending streamed input and reflect it in the page.

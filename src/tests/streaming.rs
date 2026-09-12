@@ -82,13 +82,10 @@ fn event_loop_surfaces_read_error_through_the_app() {
     tx.send(StreamMsg::Error(std::io::Error::other("boom")))
         .unwrap();
 
-    app.run().unwrap();
-    // The error reached the document and remains readable after the session, so
+    // The error reached the document and is reported back when the session ends, so
     // run_inner can map it to a non-zero exit.
-    assert_eq!(
-        app.doc().stream_error().map(|e| e.to_string()),
-        Some("boom".into())
-    );
+    let stream_error = app.run().unwrap();
+    assert_eq!(stream_error.map(|e| e.to_string()), Some("boom".into()));
     // The already-read lines stay visible; the status flags the truncation.
     let want = "\
 line0

@@ -198,6 +198,16 @@ impl Document {
         }
     }
 
+    /// Consume the document and return the error that ended a streamed input, if any.
+    /// The owned counterpart of [`Self::stream_error`], for callers that are done with
+    /// the document and only need to report how its input ended.
+    pub fn into_stream_error(self) -> Option<io::Error> {
+        match self.source {
+            Source::Stream { error, .. } => error,
+            Source::File { .. } => None,
+        }
+    }
+
     /// Get a line by index. Returns None if out of bounds.
     /// For file-backed documents, loads from disk and caches on miss.
     pub fn line(&mut self, index: usize) -> Option<&Line> {

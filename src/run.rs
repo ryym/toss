@@ -153,9 +153,9 @@ where
     if cfg.instant_scroll {
         app.set_instant_scroll();
     }
-    app.run()?;
-
-    check_stdin_read(app.doc())?;
+    if let Some(e) = app.run()? {
+        return Err(stdin_read_error(&e));
+    }
 
     Ok(())
 }
@@ -201,7 +201,12 @@ fn wait_until_exceeds_or_complete(doc: &mut Document, max: usize) {
 /// Returns `Ok(())` for a clean EOF and for non-streaming sources.
 fn check_stdin_read(doc: &Document) -> Result<(), AppError> {
     match doc.stream_error() {
-        Some(e) => Err(AppError::new(format!("Error reading stdin: {e}"))),
+        Some(e) => Err(stdin_read_error(e)),
         None => Ok(()),
     }
+}
+
+/// Build the error reported when the input stream ended abnormally.
+fn stdin_read_error(e: &io::Error) -> AppError {
+    AppError::new(format!("Error reading stdin: {e}"))
 }

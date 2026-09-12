@@ -61,18 +61,17 @@ impl<S: Screen> App<S> {
         self.instant_scroll = true;
     }
 
-    pub fn doc(&self) -> &crate::document::Document {
-        self.pager.doc()
-    }
-
     /// Run the event loop until the user quits, rendering whenever the page changed.
-    pub fn run(&mut self) -> io::Result<()> {
+    ///
+    /// Consumes the app and returns the error that ended its input, if the input ended
+    /// abnormally. See [`Pager::into_stream_error`].
+    pub fn run(mut self) -> io::Result<Option<io::Error>> {
         self.pager.pump_input();
         self.render()?;
 
         loop {
             let event_changed = match self.handle_terminal_event()? {
-                AppAction::Quit => return Ok(()),
+                AppAction::Quit => return Ok(self.pager.into_stream_error()),
                 AppAction::Continue(changed) => changed,
             };
             let input_changed = self.pager.pump_input();
