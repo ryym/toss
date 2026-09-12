@@ -21,9 +21,6 @@ use std::io;
 
 pub use run::run;
 
-/// Exit code used for every failure that has no specific code of its own.
-pub(crate) const DEFAULT_EXIT_CODE: i32 = 1;
-
 /// An error to report to the user before exiting.
 pub struct AppError {
     pub message: String,
@@ -31,10 +28,10 @@ pub struct AppError {
 }
 
 impl AppError {
-    pub fn new(message: impl Into<String>, exit_code: i32) -> Self {
+    pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
-            exit_code,
+            exit_code: 1, // exit with 1 by default.
         }
     }
 }
@@ -47,7 +44,7 @@ impl fmt::Display for AppError {
 
 impl From<io::Error> for AppError {
     fn from(err: io::Error) -> Self {
-        Self::new(err.to_string(), DEFAULT_EXIT_CODE)
+        Self::new(err.to_string())
     }
 }
 
@@ -62,10 +59,10 @@ pub trait Context<T> {
 
 impl<T, E: fmt::Display> Context<T> for Result<T, E> {
     fn context(self, msg: impl fmt::Display) -> Result<T, AppError> {
-        self.map_err(|e| AppError::new(format!("{msg}: {e}"), DEFAULT_EXIT_CODE))
+        self.map_err(|e| AppError::new(format!("{msg}: {e}")))
     }
 
     fn with_context<D: fmt::Display>(self, msg: impl FnOnce() -> D) -> Result<T, AppError> {
-        self.map_err(|e| AppError::new(format!("{}: {e}", msg()), DEFAULT_EXIT_CODE))
+        self.map_err(|e| AppError::new(format!("{}: {e}", msg())))
     }
 }

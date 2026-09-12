@@ -2,12 +2,12 @@
 
 use std::path::PathBuf;
 
+use crate::AppError;
 use crate::options::{HeadingOptions, Options};
-use crate::{AppError, DEFAULT_EXIT_CODE};
 
 impl From<lexopt::Error> for AppError {
     fn from(err: lexopt::Error) -> Self {
-        AppError::new(format!("Error: {err}"), DEFAULT_EXIT_CODE)
+        AppError::new(format!("Error: {err}"))
     }
 }
 

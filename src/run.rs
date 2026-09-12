@@ -5,7 +5,7 @@ use crate::app::App;
 use crate::document::Document;
 use crate::pager::Pager;
 use crate::screen::{Screen, ScreenSize, TermScreen};
-use crate::{AppError, Context, DEFAULT_EXIT_CODE, cli, logger};
+use crate::{AppError, Context, cli, logger};
 
 /// Run the toss pipeline: parse CLI args, load the document, render the page.
 pub fn run() -> Result<(), AppError> {
@@ -91,10 +91,7 @@ where
         log::debug!("Read from stdin");
         Document::from_reader(stdin)
     } else {
-        return Err(AppError::new(
-            "Usage: toss <file> OR command | toss",
-            DEFAULT_EXIT_CODE,
-        ));
+        return Err(AppError::new("Usage: toss <file> OR command | toss"));
     };
 
     let size = cfg.terminal_size;
@@ -154,10 +151,7 @@ fn wait_until_exceeds_or_complete(doc: &mut Document, max: usize) {
 /// Returns `Ok(())` for a clean EOF and for non-streaming sources.
 fn check_stdin_read(doc: &Document) -> Result<(), AppError> {
     match doc.stream_error() {
-        Some(e) => Err(AppError::new(
-            format!("Error reading stdin: {e}"),
-            DEFAULT_EXIT_CODE,
-        )),
+        Some(e) => Err(AppError::new(format!("Error reading stdin: {e}"))),
         None => Ok(()),
     }
 }
