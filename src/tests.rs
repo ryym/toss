@@ -5,6 +5,7 @@ mod heading;
 mod heading_multi;
 mod heading_resize;
 mod mock_screen;
+mod passthrough;
 mod resize;
 mod scroll;
 mod scroll_wrap;
@@ -93,12 +94,13 @@ pub fn run_test(tc: TestCase) -> TestResult {
     let mut buf: Vec<u8> = Vec::new();
     if let Err(err) = run_with(RunConfig {
         args,
-        terminal_size: size,
+        get_terminal_size: || Ok(size),
         shell_lines: 1,
         instant_scroll: true,
         stdin: io::Cursor::new(tc.content.as_bytes().to_vec()),
         stdin_is_terminal: false,
         stdout: &mut buf,
+        stdout_is_terminal: true,
         make_screen: |w| {
             let mut screen = MockScreen::new(w, size);
             screen.set_events(events);
