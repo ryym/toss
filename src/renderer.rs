@@ -92,10 +92,6 @@ impl<S: Screen> Renderer<S> {
         Self { screen, last: None }
     }
 
-    pub fn into_screen(self) -> S {
-        self.screen
-    }
-
     pub fn poll_event(&mut self, timeout: std::time::Duration) -> io::Result<Option<Event>> {
         self.screen.poll_event(timeout)
     }

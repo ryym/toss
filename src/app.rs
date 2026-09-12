@@ -61,10 +61,6 @@ impl<S: Screen> App<S> {
         self.instant_scroll = true;
     }
 
-    pub fn into_screen(self) -> S {
-        self.renderer.into_screen()
-    }
-
     pub fn doc(&self) -> &crate::document::Document {
         self.pager.doc()
     }

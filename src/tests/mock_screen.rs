@@ -100,13 +100,6 @@ impl<W: Write> MockScreen<W> {
     }
 }
 
-impl MockScreen<Vec<u8>> {
-    /// Return the log accumulated in the in-memory writer.
-    pub fn out(&self) -> String {
-        String::from_utf8_lossy(&self.writer).into_owned()
-    }
-}
-
 /// Replace ANSI escape sequences with readable plain text for test output.
 /// This makes test failure diffs much easier to read since raw escape sequences
 /// would be interpreted by the terminal.

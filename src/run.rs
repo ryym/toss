@@ -15,7 +15,7 @@ pub fn run() -> Result<(), AppError> {
     let stdin = io::stdin();
     let stdin_is_terminal = stdin.is_terminal();
 
-    let _ = run_with(RunConfig {
+    run_with(RunConfig {
         args: std::env::args_os().collect(),
         terminal_size,
         shell_lines: shell_lines(),
@@ -67,7 +67,7 @@ where
 
 /// Run the app with the given config. Return the screen only if it actually rendered
 /// a interactive pager. For example, it doesn't render a pager for `--help`.
-pub(crate) fn run_with<R, W, S, MS>(cfg: RunConfig<R, W, S, MS>) -> Result<Option<S>, AppError>
+pub(crate) fn run_with<R, W, S, MS>(cfg: RunConfig<R, W, S, MS>) -> Result<(), AppError>
 where
     R: BufRead + Send + 'static,
     W: Write,
@@ -82,7 +82,7 @@ where
         cli::Action::Run(args) => args,
         cli::Action::Print(msg) => {
             writeln!(stdout, "{msg}").context("Error writing to stdout")?;
-            return Ok(None);
+            return Ok(());
         }
     };
 
@@ -123,7 +123,7 @@ where
             }
         }
         check_stdin_read(pager.doc())?;
-        return Ok(None);
+        return Ok(());
     }
 
     // Run the interactive pager app.
@@ -136,7 +136,7 @@ where
 
     check_stdin_read(app.doc())?;
 
-    Ok(Some(app.into_screen()))
+    Ok(())
 }
 
 /// How long to wait between pumps while blocking for streamed input at startup.
