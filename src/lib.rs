@@ -22,6 +22,7 @@ use std::io;
 pub use run::run;
 
 /// An error to report to the user before exiting.
+#[derive(Debug)]
 pub struct AppError {
     pub message: String,
     pub exit_code: i32,
