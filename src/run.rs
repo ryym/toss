@@ -5,12 +5,11 @@ use crate::app::App;
 use crate::document::Document;
 use crate::pager::Pager;
 use crate::screen::{Screen, ScreenSize, TermScreen};
-use crate::{AppError, cli, logger};
+use crate::{AppError, Context, DEFAULT_EXIT_CODE, cli, logger};
 
 /// Run the toss pipeline: parse CLI args, load the document, render the page.
 pub fn run() -> Result<(), AppError> {
-    let (w, h) = crossterm::terminal::size()
-        .map_err(|e| AppError::new(format!("Error getting terminal size: {e}"), 1))?;
+    let (w, h) = crossterm::terminal::size().context("Error getting terminal size")?;
     let terminal_size = ScreenSize::new(w, h);
 
     let stdin = io::stdin();
@@ -24,10 +23,7 @@ pub fn run() -> Result<(), AppError> {
         stdin: BufReader::new(stdin),
         stdin_is_terminal,
         stdout: io::stdout(),
-        make_screen: || {
-            TermScreen::new()
-                .map_err(|e| AppError::new(format!("Error initializing terminal: {e}"), 1))
-        },
+        make_screen: || TermScreen::new().context("Error initializing terminal"),
     })?;
 
     Ok(())
@@ -78,28 +74,28 @@ where
     let stdin = cfg.stdin;
     let mut stdout = cfg.stdout;
 
-    let _log_guard = logger::setup_file_logger()
-        .map_err(|e| AppError::new(format!("Error setting up logger: {e}"), 1))?;
+    let _log_guard = logger::setup_file_logger().context("Error setting up logger")?;
 
     let parsed = match cli::parse_from_args(cfg.args) {
         Ok(cli::Action::Run(args)) => args,
         Ok(cli::Action::Print(msg)) => {
-            writeln!(stdout, "{msg}")
-                .map_err(|e| AppError::new(format!("Error writing to stdout: {e}"), 1))?;
+            writeln!(stdout, "{msg}").context("Error writing to stdout")?;
             return Ok(None);
         }
-        Err(e) => return Err(AppError::new(format!("Error: {e}"), 1)),
+        Err(e) => return Err(AppError::new(format!("Error: {e}"), DEFAULT_EXIT_CODE)),
     };
 
     let mut doc = if let Some(path) = parsed.file.as_ref() {
         log::debug!("Read file: {}", path.display());
-        Document::from_file(path)
-            .map_err(|e| AppError::new(format!("Error reading {}: {e}", path.display()), 1))?
+        Document::from_file(path).with_context(|| format!("Error reading {}", path.display()))?
     } else if !cfg.stdin_is_terminal {
         log::debug!("Read from stdin");
         Document::from_reader(stdin)
     } else {
-        return Err(AppError::new("Usage: toss <file> OR command | toss", 1));
+        return Err(AppError::new(
+            "Usage: toss <file> OR command | toss",
+            DEFAULT_EXIT_CODE,
+        ));
     };
 
     let size = cfg.terminal_size;
@@ -121,8 +117,7 @@ where
     if quit_if_one_screen && pager.fits_within(one_screen) {
         for i in 0..pager.doc_mut().line_count() {
             if let Some(line) = pager.doc_mut().line(i) {
-                writeln!(stdout, "{}", line.raw())
-                    .map_err(|e| AppError::new(format!("Error writing to stdout: {e}"), 1))?;
+                writeln!(stdout, "{}", line.raw()).context("Error writing to stdout")?;
             }
         }
         if let Some(err) = stdin_read_error(pager.doc()) {
@@ -132,11 +127,11 @@ where
     }
 
     let screen = (cfg.make_screen)()?;
-    let mut app = App::new(screen, pager).map_err(|e| AppError::new(format!("{e}"), 1))?;
+    let mut app = App::new(screen, pager)?;
     if cfg.instant_scroll {
         app.set_instant_scroll();
     }
-    app.run().map_err(|e| AppError::new(format!("{e}"), 1))?;
+    app.run()?;
 
     if let Some(err) = stdin_read_error(app.doc()) {
         return Err(err);
@@ -164,5 +159,5 @@ fn wait_until_exceeds_or_complete(doc: &mut Document, max: usize) {
 /// Returns `None` for a clean EOF and for non-streaming sources.
 fn stdin_read_error(doc: &Document) -> Option<AppError> {
     doc.stream_error()
-        .map(|e| AppError::new(format!("Error reading stdin: {e}"), 1))
+        .map(|e| AppError::new(format!("Error reading stdin: {e}"), DEFAULT_EXIT_CODE))
 }
