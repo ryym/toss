@@ -71,11 +71,10 @@ where
     S: Screen,
     MS: FnOnce() -> Result<S, AppError>,
 {
-    let stdin = cfg.stdin;
+    let _log_guard = logger::setup_file_logger()?;
     let mut stdout = cfg.stdout;
 
-    let _log_guard = logger::setup_file_logger()?;
-
+    // Parse CLI arguments.
     let parsed = match cli::parse_from_args(cfg.args)? {
         cli::Action::Run(args) => args,
         cli::Action::Print(msg) => {
@@ -84,12 +83,13 @@ where
         }
     };
 
+    // Construct a document to paginate.
     let mut doc = if let Some(path) = parsed.file.as_ref() {
         log::debug!("Read file: {}", path.display());
         Document::from_file(path).with_context(|| format!("Error reading {}", path.display()))?
     } else if !cfg.stdin_is_terminal {
         log::debug!("Read from stdin");
-        Document::from_reader(stdin)
+        Document::from_reader(cfg.stdin)
     } else {
         return Err(AppError::new("Usage: toss <file> OR command | toss"));
     };
@@ -101,7 +101,6 @@ where
     // The pager assumes at least one line, so block until the first line is
     // available (or input ends). For non-streaming sources this returns at once.
     wait_until_exceeds_or_complete(&mut doc, 0);
-
     // With -F we must know whether everything fits on one screen. Read enough to
     // exceed a screen's worth of lines, or until the input ends.
     if quit_if_one_screen {
@@ -111,6 +110,7 @@ where
     let mut pager = Pager::new(doc, parsed.options, size);
 
     if quit_if_one_screen && pager.fits_within(one_screen) {
+        // Print the whole document without pagination and quit.
         for i in 0..pager.doc_mut().line_count() {
             if let Some(line) = pager.doc_mut().line(i) {
                 writeln!(stdout, "{}", line.raw()).context("Error writing to stdout")?;
@@ -120,6 +120,7 @@ where
         return Ok(None);
     }
 
+    // Run the interactive pager app.
     let screen = (cfg.make_screen)()?;
     let mut app = App::new(screen, pager)?;
     if cfg.instant_scroll {
