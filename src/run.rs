@@ -119,9 +119,7 @@ where
                 writeln!(stdout, "{}", line.raw()).context("Error writing to stdout")?;
             }
         }
-        if let Some(err) = stdin_read_error(pager.doc()) {
-            return Err(err);
-        }
+        check_stdin_read(pager.doc())?;
         return Ok(None);
     }
 
@@ -132,9 +130,7 @@ where
     }
     app.run()?;
 
-    if let Some(err) = stdin_read_error(app.doc()) {
-        return Err(err);
-    }
+    check_stdin_read(app.doc())?;
 
     Ok(Some(app.into_screen()))
 }
@@ -154,9 +150,14 @@ fn wait_until_exceeds_or_complete(doc: &mut Document, max: usize) {
     }
 }
 
-/// Map an abnormal stream termination to a non-zero-exit [`AppError`].
-/// Returns `None` for a clean EOF and for non-streaming sources.
-fn stdin_read_error(doc: &Document) -> Option<AppError> {
-    doc.stream_error()
-        .map(|e| AppError::new(format!("Error reading stdin: {e}"), DEFAULT_EXIT_CODE))
+/// Fail if the input stream ended abnormally.
+/// Returns `Ok(())` for a clean EOF and for non-streaming sources.
+fn check_stdin_read(doc: &Document) -> Result<(), AppError> {
+    match doc.stream_error() {
+        Some(e) => Err(AppError::new(
+            format!("Error reading stdin: {e}"),
+            DEFAULT_EXIT_CODE,
+        )),
+        None => Ok(()),
+    }
 }
