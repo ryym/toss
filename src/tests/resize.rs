@@ -1,6 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, resize, run_test_screen};
+use super::{TestCase, key, resize, run_test};
 
 // Growing the screen after scrolling should keep the current top line anchored
 // and fill the newly available rows below it with more content.
@@ -18,7 +18,7 @@ line 8
 line 9
 line 10
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 4,
         content,
@@ -53,7 +53,7 @@ line 7
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Shrinking the screen after scrolling should keep the current top line anchored,
@@ -73,7 +73,7 @@ line 8
 line 9
 line 10
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 8,
         content,
@@ -118,7 +118,7 @@ line 5
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Widening the screen after content has wrapped should reflow it without a soft wrap,
@@ -130,7 +130,7 @@ fn width_change_reflows_wrapped_lines() {
 abcdefgh
 short
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 5,
         screen_height: 5,
         content,
@@ -160,7 +160,7 @@ short
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Growing the screen while at the end of the document should re-anchor the top
@@ -181,7 +181,7 @@ line 8
 line 9
 line 10
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 4,
         content,
@@ -249,7 +249,7 @@ line 7
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Growing the screen past the document's total size should show the whole
@@ -269,7 +269,7 @@ line 8
 line 9
 line 10
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 4,
         content,
@@ -309,7 +309,7 @@ line 10
 [EVENT]:char:j
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Widening the screen can unwrap the document into fewer rows than the viewport holds,
@@ -322,7 +322,7 @@ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 cccccccccccccccccccccccccccccccccccc
 dddddddddddddddddddddddddddddddddddd
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 8,
         content,
@@ -351,5 +351,5 @@ dddddddddddddddddddddddddddddddddddd
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

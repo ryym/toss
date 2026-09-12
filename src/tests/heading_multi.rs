@@ -1,14 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test_screen};
-use crate::options::{HeadingOptions, Options};
-
-fn heading_opts_n(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
-    Some(HeadingOptions {
-        pattern: regex::Regex::new(pattern).unwrap(),
-        num_lines,
-    })
-}
+use super::{TestCase, key, run_test};
 
 #[test]
 fn sticky_heading() {
@@ -21,14 +13,11 @@ line 3
 line 4
 line 5
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "2"],
         screen_width: 20,
         screen_height: 6,
         content,
-        options: Options {
-            heading: heading_opts_n("^# ", 2),
-            ..Default::default()
-        },
         events: vec![key('j'), key('j'), key('q')],
         ..Default::default()
     });
@@ -58,7 +47,7 @@ line 5
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 #[test]
@@ -78,14 +67,11 @@ line 7
 line 8
 line 10
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "2"],
         screen_width: 20,
         screen_height: 6,
         content,
-        options: Options {
-            heading: heading_opts_n("^# ", 2),
-            ..Default::default()
-        },
         events: vec![
             key('j'),
             key('j'),
@@ -155,7 +141,7 @@ line 7
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 #[test]
@@ -172,14 +158,11 @@ line 4
 line 5
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "2"],
         screen_width: 7,
         screen_height: 6,
         content,
-        options: Options {
-            heading: heading_opts_n("^# ", 2),
-            ..Default::default()
-        },
         events: vec![
             key('j'),
             key('j'),
@@ -249,7 +232,7 @@ line 5
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// When a line within the heading block also matches the section pattern,
@@ -266,14 +249,11 @@ fn pattern_match_within_heading_block() {
 - Added `/terminal-setup` support for Kitty, Alacritty, Zed, and Warp terminals
 - Added ctrl+t shortcut in `/theme` to toggle syntax highlighting on/off
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "3"],
         screen_width: 68,
         screen_height: 6,
         content,
-        options: Options {
-            heading: heading_opts_n("^#", 3),
-            ..Default::default()
-        },
         events: vec![key('j'), key('j'), key('j'), key('q')],
         ..Default::default()
     });
@@ -311,7 +291,7 @@ atures like go-to-definition, find references, and hover documentati
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 #[test]
@@ -330,14 +310,11 @@ fn regression_wrapped_heading_switching() {
 - Added alt-y yank-pop to cycle through kill ring history after ctrl-y yank
 - Added search filtering to the plugin discover screen (type to filter by name, description, or marketplace)
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "3"],
         screen_width: 68,
         screen_height: 7,
         content,
-        options: Options {
-            heading: heading_opts_n("^##", 3),
-            ..Default::default()
-        },
         events: vec![
             key('j'),
             key('j'),
@@ -444,7 +421,7 @@ e default viewer
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// When heading-lines N equals the viewport content rows, the heading
@@ -464,14 +441,11 @@ body 3
 body 4
 body 5
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "4"],
         screen_width: 20,
         screen_height: 5,
         content,
-        options: Options {
-            heading: heading_opts_n("^# ", 4),
-            ..Default::default()
-        },
         events: vec![
             key('j'),
             key('j'),
@@ -550,7 +524,7 @@ desc 1
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// When heading-lines N exceeds the viewport content rows, only the first
@@ -572,14 +546,11 @@ body 2
 body 3
 body 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "6"],
         screen_width: 20,
         screen_height: 5,
         content,
-        options: Options {
-            heading: heading_opts_n("^# ", 6),
-            ..Default::default()
-        },
         events: vec![
             key('j'),
             key('j'),
@@ -658,5 +629,5 @@ desc 1
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

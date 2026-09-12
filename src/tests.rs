@@ -17,13 +17,12 @@ mod search_with_header;
 mod search_wrap;
 mod streaming;
 
+use std::ffi::OsString;
+use std::io;
+
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
-use crate::app::App;
-use crate::document::Document;
-use crate::logger;
-use crate::options::Options;
-use crate::pager::Pager;
+use crate::run::{RunConfig, run_with};
 use crate::screen::ScreenSize;
 use mock_screen::MockScreen;
 
@@ -49,11 +48,11 @@ pub fn resize(width: u16, height: u16) -> Event {
 
 #[non_exhaustive]
 pub struct TestCase {
+    pub args: Vec<&'static str>,
     pub content: &'static str,
     pub screen_width: u16,
     pub screen_height: u16,
     pub events: Vec<Event>,
-    pub options: Options,
 }
 
 impl Default for TestCase {
@@ -63,26 +62,59 @@ impl Default for TestCase {
             screen_width: 80,
             screen_height: 24,
             events: vec![],
-            options: Options::default(),
+            args: vec![],
         }
     }
 }
 
-pub fn run_test_screen(tc: TestCase) -> MockScreen<Vec<u8>> {
-    let _log_guard = match logger::setup_file_logger() {
-        Ok(guard) => guard,
-        Err(err) => panic!("failed to setup logger: {}", err),
-    };
-    let doc = Document::from_string(tc.content.to_string());
-    let pager = Pager::new(
-        doc,
-        tc.options,
-        ScreenSize::new(tc.screen_width, tc.screen_height),
-    );
-    let mut screen = MockScreen::new(Vec::new(), tc.screen_width, tc.screen_height);
-    screen.set_events(tc.events);
-    let mut app = App::new(screen, pager).unwrap();
-    app.set_instant_scroll();
-    app.run().unwrap();
-    app.into_screen()
+#[derive(Debug)]
+pub struct TestResult {
+    output: String,
+}
+
+impl TestResult {
+    /// The output log: consumed events and grid snapshots, in order.
+    /// See src/tests/README.md for the format.
+    pub fn output(&self) -> &str {
+        &self.output
+    }
+}
+
+/// Run a test case using [`MockScreen`] through the real entry point and return its output.
+/// The document is piped in as stdin would be, so it takes the same route
+/// through `run_with` as `command | toss` does.
+pub fn run_test(tc: TestCase) -> TestResult {
+    let mut args: Vec<OsString> = vec!["toss".into()];
+    args.extend(tc.args.iter().map(OsString::from));
+
+    let (width, height) = (tc.screen_width, tc.screen_height);
+    let events = tc.events;
+
+    let mut buf: Vec<u8> = Vec::new();
+    if let Err(err) = run_with(RunConfig {
+        args,
+        terminal_size: ScreenSize::new(width, height),
+        shell_lines: 1,
+        instant_scroll: true,
+        stdin: io::Cursor::new(tc.content.as_bytes().to_vec()),
+        stdin_is_terminal: false,
+        stdout: &mut buf,
+        make_screen: |w| {
+            let mut screen = MockScreen::new(w, width, height);
+            screen.set_events(events);
+            Ok(screen)
+        },
+        // Settle the document before rendering to keep the first frame deterministic.
+        wait_for_all_input: true,
+    }) {
+        panic!("run failed: {err}");
+    }
+
+    TestResult {
+        output: output_to_string(&buf),
+    }
+}
+
+fn output_to_string(buf: &[u8]) -> String {
+    String::from_utf8_lossy(buf).into_owned()
 }

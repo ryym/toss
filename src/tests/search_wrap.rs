@@ -1,6 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, enter, key, run_test_screen};
+use super::{TestCase, enter, key, run_test};
 
 // Search match spans across the wrap boundary.
 // The line "01234abcde" wraps at width 6 into "01234a" and "bcde".
@@ -12,7 +12,7 @@ line 1
 01234abcde
 line 3
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 6,
         screen_height: 4,
         content,
@@ -51,7 +51,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Search match in the second row of a wrapped line (after the wrap boundary).
@@ -62,7 +62,7 @@ line 1
 01234abcde
 line 3
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 6,
         screen_height: 4,
         content,
@@ -107,7 +107,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Search match in the first row of a wrapped line.
@@ -118,7 +118,7 @@ fn match_in_first_row_of_wrapped_line() {
     let content = "\
 abcde_XX_fghij
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 4,
         content,
@@ -157,5 +157,5 @@ ghij
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

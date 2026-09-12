@@ -3,15 +3,7 @@
 
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, resize, run_test_screen};
-use crate::options::{HeadingOptions, Options};
-
-fn heading_opts_n(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
-    Some(HeadingOptions {
-        pattern: regex::Regex::new(pattern).unwrap(),
-        num_lines,
-    })
-}
+use super::{TestCase, key, resize, run_test};
 
 const CONTENT: &str = "\
 # A
@@ -35,14 +27,11 @@ tail
 /// again with `# B` as the only content row below it.
 #[test]
 fn shrink_after_push_up_rebuilds_heading() {
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "4"],
         screen_width: 20,
         screen_height: 8,
         content: CONTENT,
-        options: Options {
-            heading: heading_opts_n("^# ", 4),
-            ..Default::default()
-        },
         events: vec![
             key('j'),
             key('j'),
@@ -121,7 +110,7 @@ body b2
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Shrinking the screen should re-derive how far the heading is pushed up.
@@ -141,14 +130,11 @@ body b2
 /// start: the page is a function of the top line and the size, not of the size it came from.
 #[test]
 fn shrink_recomputes_push_up_offset() {
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "4"],
         screen_width: 20,
         screen_height: 8,
         content: CONTENT,
-        options: Options {
-            heading: heading_opts_n("^# ", 4),
-            ..Default::default()
-        },
         events: vec![key('j'), key('j'), key('j'), resize(20, 5), key('q')],
         ..Default::default()
     });
@@ -201,7 +187,7 @@ a2
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// A heading truncated to fit a small screen should grow back to its configured
@@ -209,14 +195,11 @@ a2
 /// the 3 heading lines; the 20x10 screen fits all of them.
 #[test]
 fn grow_restores_full_heading_height() {
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "3"],
         screen_width: 20,
         screen_height: 4,
         content: CONTENT,
-        options: Options {
-            heading: heading_opts_n("^# ", 3),
-            ..Default::default()
-        },
         events: vec![key('j'), key('j'), resize(20, 10), key('q')],
         ..Default::default()
     });
@@ -252,7 +235,7 @@ body b1
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Shrinking the width so the header line wraps into two rows must not disqualify the
@@ -271,15 +254,11 @@ b6
 b7
 b8
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "1", "--heading", "^#", "--heading-lines", "1"],
         screen_width: 20,
         screen_height: 5,
         content,
-        options: Options {
-            header: 1,
-            heading: heading_opts_n("^# ", 1),
-            ..Default::default()
-        },
         events: vec![resize(8, 5), key('G'), key('q')],
         ..Default::default()
     });
@@ -306,7 +285,7 @@ b8
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Lines inside the global header never become a heading, even when they match the
@@ -319,15 +298,11 @@ fn resize_when_document_fits_entirely_in_header() {
 h2
 h3
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "3", "--heading", "^#", "--heading-lines", "1"],
         screen_width: 20,
         screen_height: 5,
         content,
-        options: Options {
-            header: 3,
-            heading: heading_opts_n("^# ", 1),
-            ..Default::default()
-        },
         events: vec![resize(20, 7), key('q')],
         ..Default::default()
     });
@@ -349,7 +324,7 @@ h3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 const WRAP_CONTENT: &str = "\
@@ -371,14 +346,11 @@ tail
 /// pushed up and is shown from its start.
 #[test]
 fn width_change_recomputes_push_up_offset() {
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "2"],
         screen_width: 12,
         screen_height: 7,
         content: WRAP_CONTENT,
-        options: Options {
-            heading: heading_opts_n("^# ", 2),
-            ..Default::default()
-        },
         events: vec![key('j'), key('j'), resize(8, 7), key('q')],
         ..Default::default()
     });
@@ -420,5 +392,5 @@ body b2
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

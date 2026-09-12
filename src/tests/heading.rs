@@ -1,14 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, enter, key, run_test_screen};
-use crate::options::{HeadingOptions, Options};
-
-fn heading_opts(pattern: &str) -> Option<HeadingOptions> {
-    Some(HeadingOptions {
-        pattern: regex::Regex::new(pattern).unwrap(),
-        num_lines: 1,
-    })
-}
+use super::{TestCase, enter, key, run_test};
 
 /// Section line is visible in the viewport at the top, so no sticky heading.
 /// Scrolling down 1 makes it sticky. Scrolling back up removes the sticky.
@@ -21,14 +13,11 @@ line 2
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#"],
         screen_width: 20,
         screen_height: 5,
         content,
-        options: Options {
-            heading: heading_opts("^# "),
-            ..Default::default()
-        },
         events: vec![key('j'), key('k'), key('q')],
         ..Default::default()
     });
@@ -55,7 +44,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Scrolling through two sections: section A becomes sticky first,
@@ -70,14 +59,11 @@ line 2
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#"],
         screen_width: 20,
         screen_height: 5,
         content,
-        options: Options {
-            heading: heading_opts("^# "),
-            ..Default::default()
-        },
         events: vec![key('j'), key('j'), key('q')],
         ..Default::default()
     });
@@ -104,7 +90,7 @@ line 4
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Fixed header stays, and heading appears below it when scrolled.
@@ -119,15 +105,11 @@ line 2
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "1", "--heading", "^#"],
         screen_width: 20,
         screen_height: 6,
         content,
-        options: Options {
-            header: 1,
-            heading: heading_opts("^# "),
-            ..Default::default()
-        },
         events: vec![key('j'), key('j'), key('q')],
         ..Default::default()
     });
@@ -157,7 +139,7 @@ line 4
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Jump to end with headings. Section B is at the top of
@@ -173,14 +155,11 @@ line 3
 line 4
 line 5
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#"],
         screen_width: 20,
         screen_height: 5,
         content,
-        options: Options {
-            heading: heading_opts("^# "),
-            ..Default::default()
-        },
         events: vec![key('G'), key('q')],
         ..Default::default()
     });
@@ -200,7 +179,7 @@ line 5
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// No section above viewport means no sticky heading.
@@ -213,14 +192,11 @@ line 3
 # Section A
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#"],
         screen_width: 20,
         screen_height: 5,
         content,
-        options: Options {
-            heading: heading_opts("^# "),
-            ..Default::default()
-        },
         events: vec![key('j'), key('q')],
         ..Default::default()
     });
@@ -240,7 +216,7 @@ line 4
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Heading with fixed header where section line is within the
@@ -255,15 +231,11 @@ line 3
 line 4
 line 5
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "1", "--heading", "^#"],
         screen_width: 20,
         screen_height: 6,
         content,
-        options: Options {
-            header: 1,
-            heading: heading_opts("^# "),
-            ..Default::default()
-        },
         events: vec![key('j'), key('q')],
         ..Default::default()
     });
@@ -287,7 +259,7 @@ line 5
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// A heading right below a wrapped header still becomes sticky when scrolled past.
@@ -305,15 +277,11 @@ b6
 b7
 b8
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "1", "--heading", "^#"],
         screen_width: 8,
         screen_height: 7,
         content,
-        options: Options {
-            header: 1,
-            heading: heading_opts("^# "),
-            ..Default::default()
-        },
         events: vec![key('G'), key('q')],
         ..Default::default()
     });
@@ -337,7 +305,7 @@ b8
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Scroll down enough so that section B is fully above viewport,
@@ -352,14 +320,11 @@ line 3
 line 4
 line 5
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#"],
         screen_width: 20,
         screen_height: 5,
         content,
-        options: Options {
-            heading: heading_opts("^# "),
-            ..Default::default()
-        },
         events: vec![key('j'), key('j'), key('j'), key('k'), key('k'), key('q')],
         ..Default::default()
     });
@@ -401,7 +366,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Jumping to the end with a global header configured should pin the heading of the
@@ -421,15 +386,11 @@ b2
 b3
 b4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "2", "--heading", "^#"],
         screen_width: 20,
         screen_height: 7,
         content,
-        options: Options {
-            header: 2,
-            heading: heading_opts("^# "),
-            ..Default::default()
-        },
         events: vec![key('G'), key('q')],
         ..Default::default()
     });
@@ -453,7 +414,7 @@ b4
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Jumping to a match below the page (`n`) must pin the heading of the section the visible
@@ -473,15 +434,11 @@ b3
 zz
 b4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "2", "--heading", "^#"],
         screen_width: 20,
         screen_height: 7,
         content,
-        options: Options {
-            header: 2,
-            heading: heading_opts("^# "),
-            ..Default::default()
-        },
         events: vec![key('/'), key('z'), enter(), key('n'), key('q')],
         ..Default::default()
     });
@@ -532,7 +489,7 @@ b3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Jumping to the top of the document from inside a section drops the sticky heading, so
@@ -551,17 +508,11 @@ body 2
 body 3
 body 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "2"],
         screen_width: 20,
         screen_height: 6,
         content,
-        options: Options {
-            heading: Some(HeadingOptions {
-                pattern: regex::Regex::new("^# ").unwrap(),
-                num_lines: 2,
-            }),
-            ..Default::default()
-        },
         events: vec![key('j'), key('j'), key('j'), key('g'), key('q')],
         ..Default::default()
     });
@@ -607,5 +558,5 @@ body 1
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

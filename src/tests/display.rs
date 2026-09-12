@@ -1,6 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test_screen};
+use super::{TestCase, key, run_test};
 
 #[test]
 fn open_and_quit() {
@@ -11,7 +11,7 @@ line 3
 line 4
 line 5
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 4,
         content,
@@ -26,7 +26,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Lines with ANSI escape sequences should display correctly.
@@ -43,7 +43,7 @@ fn ansi_escape_sequences() {
 \x1b[31mabcde\x1b[0mfgh
 end
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 5,
         screen_height: 5,
         content,
@@ -59,7 +59,7 @@ end
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Verify the status line appears on the last row and survives scroll operations.
@@ -72,7 +72,7 @@ line 3
 line 4
 line 5
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 4,
         content,
@@ -99,5 +99,5 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

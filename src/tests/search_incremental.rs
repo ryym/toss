@@ -1,6 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, backspace, enter, esc, key, run_test_screen};
+use super::{TestCase, backspace, enter, esc, key, run_test};
 
 // Each keystroke updates the preview highlight and jumps to the first match.
 #[test]
@@ -13,7 +13,7 @@ line 4
 line 5
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -58,7 +58,7 @@ foo bar
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Enter commits the search preview; highlights persist in view mode.
@@ -72,7 +72,7 @@ line 4
 line 5
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -145,7 +145,7 @@ line 5
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // After committing, n/N navigate between matches.
@@ -158,7 +158,7 @@ foo 2
 baz
 foo 3
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -217,7 +217,7 @@ bar
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Esc cancels the search and restores the original scroll position.
@@ -230,7 +230,7 @@ line 3
 line 4
 target here
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -304,7 +304,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Esc after scrolling restores the pre-search scroll position, not the top.
@@ -317,7 +317,7 @@ line 3
 line 4
 target here
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -398,7 +398,7 @@ line 4
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Backspace on empty input cancels search like Esc.
@@ -410,7 +410,7 @@ line 2
 line 3
 target here
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -437,7 +437,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Backspace updates the preview to match the shorter query.
@@ -449,7 +449,7 @@ abc there
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -508,7 +508,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Enter on empty input exits search without changing committed state.
@@ -520,7 +520,7 @@ line 2
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -586,7 +586,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Esc discards preview without affecting previous committed search.
@@ -598,7 +598,7 @@ bar there
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -686,7 +686,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // When the query stops matching, the previous match highlight should disappear.
@@ -698,7 +698,7 @@ line 2
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -743,7 +743,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Starting a new search after a committed one must not leave the previous
@@ -758,7 +758,7 @@ foo bbb
 foo ccc
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -847,7 +847,7 @@ bar aaa {rev}{b}foo{/rev}{/b}
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Preview shows all matches on screen, not just the current one.
@@ -863,7 +863,7 @@ line 4
 line 5
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 30,
         screen_height: 4,
         content,
@@ -908,7 +908,7 @@ foo third
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Highlights on rows that a scroll leaves untouched are still cleared once the
@@ -923,7 +923,7 @@ foo 4
 foo 5
 foo 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 5,
         content,
@@ -1013,5 +1013,5 @@ foo 5
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

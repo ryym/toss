@@ -1,14 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, enter, key, run_test_screen};
-use crate::options::{HeadingOptions, Options};
-
-fn heading_opts(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
-    Some(HeadingOptions {
-        pattern: regex::Regex::new(pattern).unwrap(),
-        num_lines,
-    })
-}
+use super::{TestCase, enter, key, run_test};
 
 /// When searching with a global header,
 /// the matched line is visible below the header, not hidden behind it.
@@ -22,14 +14,11 @@ line 3
 line 4
 line 5
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "1"],
         screen_width: 20,
         screen_height: 4,
         content,
-        options: Options {
-            header: 1,
-            ..Default::default()
-        },
         events: vec![key('/'), key('3'), enter(), key('q')],
         ..Default::default()
     });
@@ -59,7 +48,7 @@ line 4
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// When searching and jumping with a global header,
@@ -77,14 +66,11 @@ line 5
 AC
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "1"],
         screen_width: 20,
         screen_height: 5,
         content,
-        options: Options {
-            header: 1,
-            ..Default::default()
-        },
         events: vec![
             // Search by "A"
             key('/'),
@@ -149,7 +135,7 @@ line 5
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// When searching with a heading,
@@ -165,14 +151,11 @@ line 4
 line 5
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "1"],
         screen_width: 20,
         screen_height: 4,
         content,
-        options: Options {
-            heading: heading_opts("^# ", 1),
-            ..Default::default()
-        },
         events: vec![key('/'), key('3'), enter(), key('q')],
         ..Default::default()
     });
@@ -202,7 +185,7 @@ line 4
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// When searching and jumping with a heading,
@@ -222,14 +205,11 @@ line 5
 AAC
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "1"],
         screen_width: 20,
         screen_height: 5,
         content,
-        options: Options {
-            heading: heading_opts("^# ", 1),
-            ..Default::default()
-        },
         events: vec![
             // Search by "AA"
             key('/'),
@@ -303,7 +283,7 @@ line 4
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 #[test]
@@ -319,14 +299,11 @@ fn search_with_heading_jump_back_one_line() {
 133
 134
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "1"],
         screen_width: 20,
         screen_height: 4,
         content,
-        options: Options {
-            heading: heading_opts("^# ", 1),
-            ..Default::default()
-        },
         events: vec![
             // Search by "13"
             key('/'),
@@ -399,7 +376,7 @@ fn search_with_heading_jump_back_one_line() {
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 #[test]
@@ -423,14 +400,11 @@ line 6
 line 7
 line 8
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "3"],
         screen_width: 20,
         screen_height: 6,
         content,
-        options: Options {
-            heading: heading_opts("^# ", 3),
-            ..Default::default()
-        },
         events: vec![
             // Search with "A"
             key('/'),
@@ -493,7 +467,7 @@ description 2-2
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 #[test]
@@ -512,14 +486,11 @@ AZ
 line 6
 line 7
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "1"],
         screen_width: 20,
         screen_height: 4,
         content,
-        options: Options {
-            heading: heading_opts("^# ", 1),
-            ..Default::default()
-        },
         events: vec![
             // Search with "A"
             key('/'),
@@ -598,5 +569,5 @@ line 4
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

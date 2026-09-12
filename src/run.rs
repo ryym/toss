@@ -24,6 +24,7 @@ pub fn run() -> Result<(), AppError> {
         stdin_is_terminal,
         stdout: io::stdout(),
         make_screen: TermScreen::new,
+        wait_for_all_input: false,
     })?;
 
     Ok(())
@@ -45,7 +46,7 @@ fn shell_lines() -> usize {
 /// constructed when actually needed — the `-F` short-circuit and the
 /// help/version paths skip it, which lets the binary avoid acquiring raw
 /// terminal mode in those cases.
-struct RunConfig<R, W, S, MS>
+pub(crate) struct RunConfig<R, W, S, MS>
 where
     R: BufRead + Send + 'static,
     W: Write,
@@ -60,11 +61,13 @@ where
     pub stdin_is_terminal: bool,
     pub stdout: W,
     pub make_screen: MS,
+    /// Block until the whole input has been read before starting the pager. Used for testing.
+    pub wait_for_all_input: bool,
 }
 
 /// Run the app with the given config. Return the screen only if it actually rendered
 /// a interactive pager. For example, it doesn't render a pager for `--help`.
-fn run_with<R, W, S, MS>(cfg: RunConfig<R, W, S, MS>) -> Result<Option<S>, AppError>
+pub(crate) fn run_with<R, W, S, MS>(cfg: RunConfig<R, W, S, MS>) -> Result<Option<S>, AppError>
 where
     R: BufRead + Send + 'static,
     W: Write,
@@ -98,13 +101,16 @@ where
     let quit_if_one_screen = parsed.options.quit_if_one_screen;
     let one_screen = size.height().saturating_sub(cfg.shell_lines);
 
-    // The pager assumes at least one line, so block until the first line is
-    // available (or input ends). For non-streaming sources this returns at once.
-    wait_until_exceeds_or_complete(&mut doc, 0);
-    // With -F we must know whether everything fits on one screen. Read enough to
-    // exceed a screen's worth of lines, or until the input ends.
-    if quit_if_one_screen {
+    if cfg.wait_for_all_input {
+        wait_until_exceeds_or_complete(&mut doc, usize::MAX);
+    } else if quit_if_one_screen {
+        // With -F we must know whether everything fits on one screen. Read enough to
+        // exceed a screen's worth of lines, or until the input ends.
         wait_until_exceeds_or_complete(&mut doc, one_screen);
+    } else {
+        // The pager assumes at least one line, so block until the first line is
+        // available (or input ends). For non-streaming sources this returns at once.
+        wait_until_exceeds_or_complete(&mut doc, 0);
     }
 
     let mut pager = Pager::new(doc, parsed.options, size);

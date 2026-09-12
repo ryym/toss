@@ -1,7 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, esc, key, run_test_screen};
-use crate::options::Options;
+use super::{TestCase, esc, key, run_test};
 
 #[test]
 fn header_pinned_at_top() {
@@ -13,14 +12,11 @@ line 4
 line 5
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "2"],
         screen_width: 10,
         screen_height: 5,
         content,
-        options: Options {
-            header: 2,
-            ..Default::default()
-        },
         events: vec![key('q')],
         ..Default::default()
     });
@@ -33,7 +29,7 @@ line 4
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 #[test]
@@ -46,14 +42,11 @@ line 4
 line 5
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "2"],
         screen_width: 10,
         screen_height: 5,
         content,
-        options: Options {
-            header: 2,
-            ..Default::default()
-        },
         events: vec![key('j'), key('j'), key('q')],
         ..Default::default()
     });
@@ -80,7 +73,7 @@ line 6
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 #[test]
@@ -93,14 +86,11 @@ line 4
 line 5
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "2"],
         screen_width: 10,
         screen_height: 5,
         content,
-        options: Options {
-            header: 2,
-            ..Default::default()
-        },
         events: vec![key('j'), key('j'), key('k'), key('q')],
         ..Default::default()
     });
@@ -134,7 +124,7 @@ line 5
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// Scrolling up should not go above the header lines.
@@ -147,14 +137,11 @@ line 3
 line 4
 line 5
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "2"],
         screen_width: 10,
         screen_height: 5,
         content,
-        options: Options {
-            header: 2,
-            ..Default::default()
-        },
         events: vec![key('k'), key('k'), key('q')],
         ..Default::default()
     });
@@ -169,7 +156,7 @@ line 4
 [EVENT]:char:k
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// 'g' should jump to the first non-header line.
@@ -183,14 +170,11 @@ line 4
 line 5
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "1"],
         screen_width: 10,
         screen_height: 5,
         content,
-        options: Options {
-            header: 1,
-            ..Default::default()
-        },
         events: vec![key('G'), key('g'), key('q')],
         ..Default::default()
     });
@@ -217,7 +201,7 @@ line 4
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// 'G' should jump to the end while keeping the header.
@@ -231,14 +215,11 @@ line 4
 line 5
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "1"],
         screen_width: 10,
         screen_height: 5,
         content,
-        options: Options {
-            header: 1,
-            ..Default::default()
-        },
         events: vec![key('G'), key('q')],
         ..Default::default()
     });
@@ -258,7 +239,7 @@ line 6
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// header=0 should behave identically to no header.
@@ -271,14 +252,11 @@ line 3
 line 4
 line 5
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "0"],
         screen_width: 10,
         screen_height: 4,
         content,
-        options: Options {
-            header: 0,
-            ..Default::default()
-        },
         events: vec![key('q')],
         ..Default::default()
     });
@@ -290,7 +268,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 /// A `--header` wider than the document leaves no content below the header. Search input
@@ -302,14 +280,11 @@ line 1
 line 2
 line 3
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--header", "5"],
         screen_width: 20,
         screen_height: 6,
         content,
-        options: Options {
-            header: 5,
-            ..Default::default()
-        },
         events: vec![key('/'), esc(), key('q')],
         ..Default::default()
     });
@@ -339,5 +314,5 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

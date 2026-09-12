@@ -10,6 +10,7 @@ use crate::line::Line;
 use crate::options::Options;
 use crate::pager::Pager;
 use crate::screen::ScreenSize;
+use crate::tests::output_to_string;
 
 fn send_lines(tx: &mpsc::Sender<StreamMsg>, start: usize, count: usize) {
     for i in 0..count {
@@ -29,9 +30,11 @@ fn event_loop_renders_input_that_arrives_after_start() {
     send_lines(&tx, 0, 1);
     doc.pump();
 
+    let mut buf: Vec<u8> = Vec::new();
+
     // viewport height = screen_height - 1 = 4.
     let pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
-    let mut screen = MockScreen::new(Vec::new(), 20, 5);
+    let mut screen = MockScreen::new(&mut buf, 20, 5);
     screen.set_events(vec![key('q')]);
     let mut app = App::new(screen, pager).unwrap();
     app.set_instant_scroll();
@@ -52,7 +55,7 @@ line3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(app.into_screen().out(), want);
+    assert_eq!(output_to_string(&buf), want);
 }
 
 /// A read error that arrives mid-stream is surfaced through the running app so
@@ -65,8 +68,9 @@ fn event_loop_surfaces_read_error_through_the_app() {
     send_lines(&tx, 0, 1);
     doc.pump();
 
+    let mut buf: Vec<u8> = Vec::new();
     let pager = Pager::new(doc, Options::default(), ScreenSize::new(40, 5));
-    let mut screen = MockScreen::new(Vec::new(), 40, 5);
+    let mut screen = MockScreen::new(&mut buf, 40, 5);
     screen.set_events(vec![key('q')]);
     let mut app = App::new(screen, pager).unwrap();
     app.set_instant_scroll();
@@ -93,5 +97,5 @@ line2
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(app.into_screen().out(), want);
+    assert_eq!(output_to_string(&buf), want);
 }

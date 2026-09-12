@@ -1,6 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, key, run_test_screen};
+use super::{TestCase, key, run_test};
 
 // "abcdefgh" wraps to "abcde" + "fgh" at width 5.
 // Initial display shows them with soft wrap marker '>'.
@@ -11,7 +11,7 @@ short
 abcdefgh
 end
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 5,
         screen_height: 4,
         content,
@@ -39,7 +39,7 @@ fgh
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // When scrolling down reveals a new wrap row, the entire visible
@@ -52,7 +52,7 @@ xx
 aaabbbccc
 yy
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 3,
         screen_height: 5,
         content,
@@ -79,7 +79,7 @@ yy
 [EVENT]:char:j
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Scrolling up to reveal a new wrap row that has the same line as rows below.
@@ -90,7 +90,7 @@ xx
 abcdefgh
 yy
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 5,
         screen_height: 4,
         content,
@@ -123,7 +123,7 @@ fgh
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 #[test]
@@ -133,7 +133,7 @@ line1
 line2
 abcdefgh
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 5,
         screen_height: 4,
         content,
@@ -164,7 +164,7 @@ abcde
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // When the top of the screen shows the middle of a wrapped line,
@@ -176,7 +176,7 @@ fn midline_at_top_of_screen() {
 abcdefghijk
 end
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 5,
         screen_height: 4,
         content,
@@ -201,5 +201,5 @@ end
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

@@ -1,6 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, enter, key, run_test_screen};
+use super::{TestCase, enter, key, run_test};
 
 // Forward search: /foo + Enter jumps to the line containing "foo"
 // and highlights the match with reverse video.
@@ -13,7 +13,7 @@ line 3
 target foo here
 line 5
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -58,7 +58,7 @@ line 5
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Backward search: ?top + Enter from the bottom jumps back to match.
@@ -72,7 +72,7 @@ line 3
 line 4
 line 5
 ";
-    let out = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -86,8 +86,7 @@ line 5
             key('q'),
         ],
         ..Default::default()
-    })
-    .out();
+    });
     let want = "\
 top line
 line 2
@@ -132,7 +131,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(out, want);
+    assert_eq!(result.output(), want);
 }
 
 // n key: jump to next match in search direction.
@@ -147,7 +146,7 @@ foo 2
 baz
 foo 3
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -206,7 +205,7 @@ bar
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // N key: jump to previous match (reverse direction).
@@ -219,7 +218,7 @@ foo 2
 baz
 foo 3
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -278,7 +277,7 @@ baz
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // No match: position stays the same.
@@ -290,7 +289,7 @@ line 2
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -335,7 +334,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Wrap around: search wraps from end to beginning.
@@ -348,7 +347,7 @@ line 3
 line 4
 line 5
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -428,7 +427,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Highlighting with ANSI escape sequences: match spans across escape sequences.
@@ -440,7 +439,7 @@ This is \x1b[1mCargo\x1b[0m.toml
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 30,
         screen_height: 4,
         content,
@@ -509,7 +508,7 @@ line 4
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Re-searching with a different keyword replaces the highlights.
@@ -523,7 +522,7 @@ line 4
 line 5
 line 6
 ";
-    let out = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -547,8 +546,7 @@ line 6
             key('q'),
         ],
         ..Default::default()
-    })
-    .out();
+    });
     let want = "\
 line 1
 line 2
@@ -629,7 +627,7 @@ li{rev}{line}{b}n{/rev}{/line}{/b}{line}{b}e{/line}{/b} 5
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(out, want);
+    assert_eq!(result.output(), want);
 }
 
 // Multiple matches on the same line: the current match (first) uses reverse + bold,
@@ -643,7 +641,7 @@ line 2
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 30,
         screen_height: 4,
         content,
@@ -688,7 +686,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // When jumping to a match near the end of the document, the status line
@@ -705,7 +703,7 @@ line 4
 target foo here
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 5,
         content,
@@ -792,7 +790,7 @@ line 6
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // When search jumps to a match near the end, downward scrolling should be
@@ -811,7 +809,7 @@ line 8
 line 9
 line 10
 ";
-    let out = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 5,
         content,
@@ -828,8 +826,7 @@ line 10
             key('q'),
         ],
         ..Default::default()
-    })
-    .out();
+    });
     let want = "\
 line 1
 line 2
@@ -875,7 +872,7 @@ line 10
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(out, want);
+    assert_eq!(result.output(), want);
 }
 
 // Verify final state after scrolling past a near-end match.
@@ -893,7 +890,7 @@ line 8
 line 9
 line 10
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 5,
         content,
@@ -960,5 +957,5 @@ line {rev}{b}9{/rev}{/b}
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

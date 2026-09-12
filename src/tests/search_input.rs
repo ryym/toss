@@ -1,7 +1,7 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, backspace, enter, esc, key, run_test_screen};
+use super::{TestCase, backspace, enter, esc, key, run_test};
 
 fn left() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))
@@ -22,7 +22,7 @@ line 2
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 4,
         content,
@@ -63,7 +63,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Typing ? enters backward search mode with "?" prompt.
@@ -76,7 +76,7 @@ line 2
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 4,
         content,
@@ -109,7 +109,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Backspace removes the last character from input.
@@ -121,7 +121,7 @@ line 2
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 4,
         content,
@@ -166,7 +166,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Arrow keys move the cursor within the search input.
@@ -178,7 +178,7 @@ line 2
 line 3
 line 4
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 10,
         screen_height: 4,
         content,
@@ -258,5 +258,5 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

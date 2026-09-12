@@ -8,8 +8,8 @@ checks what a user would actually see and do.
 ## Writing a test
 
 Build a `TestCase` (content, screen size, key `events`) and pass it to
-`run_test_screen`, then compare `screen.out()` against an expected string.
-See `mod.rs` for `TestCase`/`run_test_screen` and shared event helpers
+`run_test`, then compare `result.output()` against an expected string.
+See `mod.rs` for `TestCase`/`run_test` and shared event helpers
 (`key`, `esc`, `enter`, `backspace`, `resize`).
 
 Bind the document to a `content` variable before the `TestCase` and write it as
@@ -23,11 +23,11 @@ line 2
 ";
 ```
 
-`streaming.rs` bypasses `run_test_screen` and drives `App`/`MockScreen`
+`streaming.rs` bypasses `run_test` and drives `App`/`MockScreen`
 directly, since it needs to push lines through a channel between app
 construction and `run()`.
 
-## Output format (`screen.out()`)
+## Output format (`result.output()`)
 
 The log alternates between input and output:
 

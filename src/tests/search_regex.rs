@@ -1,6 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, backspace, enter, esc, key, run_test_screen};
+use super::{TestCase, backspace, enter, esc, key, run_test};
 
 // Metacharacters in the input are interpreted as regex syntax, not literal text.
 #[test]
@@ -10,7 +10,7 @@ line 1
 abc
 line 3
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -55,7 +55,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // While the raw input is a syntactically invalid regex (e.g. right after typing an
@@ -68,7 +68,7 @@ line 1
 foo bar
 line 3
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -134,7 +134,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Once a preview is showing, making the input invalid again (e.g. by appending an
@@ -146,7 +146,7 @@ line 1
 foo bar
 line 3
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -212,7 +212,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Enter must be ignored (staying in search input mode) while the raw input is an
@@ -224,7 +224,7 @@ line 1
 foo bar
 line 3
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -285,7 +285,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // A zero-width-matching pattern (`a*`) must not hang the incremental search.
@@ -296,7 +296,7 @@ bbb
 aaa
 line 3
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -335,5 +335,5 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

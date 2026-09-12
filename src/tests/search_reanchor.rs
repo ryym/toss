@@ -1,14 +1,6 @@
 use pretty_assertions::assert_eq;
 
-use super::{TestCase, enter, key, run_test_screen};
-use crate::options::{HeadingOptions, Options};
-
-fn heading_opts(pattern: &str, num_lines: usize) -> Option<HeadingOptions> {
-    Some(HeadingOptions {
-        pattern: regex::Regex::new(pattern).unwrap(),
-        num_lines,
-    })
-}
+use super::{TestCase, enter, key, run_test};
 
 // When the cursor is outside the viewport and visible matches exist,
 // pressing n re-anchors the cursor to the first visible match without scrolling.
@@ -27,7 +19,7 @@ line 8
 A 9
 line 10
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -86,7 +78,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // When the cursor is outside the viewport and no matches are visible,
@@ -103,7 +95,7 @@ line 6
 line 7
 A 8
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -170,7 +162,7 @@ line 7
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // When the cursor is still within the viewport, n jumps normally.
@@ -184,7 +176,7 @@ A 4
 line 5
 line 6
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -236,7 +228,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // Reverse search (N) also re-anchors when cursor is off-screen.
@@ -252,7 +244,7 @@ A 6
 line 7
 A 8
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 20,
         screen_height: 4,
         content,
@@ -312,7 +304,7 @@ line 5
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // When a heading overlay hides a match, re-anchor should skip it
@@ -332,14 +324,11 @@ line 6
 A 7
 line 8
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
+        args: vec!["--heading", "^#", "--heading-lines", "1"],
         screen_width: 20,
         screen_height: 5,
         content,
-        options: Options {
-            heading: heading_opts("^# ", 1),
-            ..Default::default()
-        },
         events: vec![
             key('/'),
             key('A'),
@@ -408,7 +397,7 @@ line 3
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }
 
 // When a long line wraps and only the later wrap rows are visible,
@@ -427,7 +416,7 @@ short
 foo12foo34end
 last-foo
 ";
-    let screen = run_test_screen(TestCase {
+    let result = run_test(TestCase {
         screen_width: 5,
         screen_height: 4,
         content,
@@ -505,5 +494,5 @@ foo{/rev}{/b}
 -----
 [EVENT]:char:q
 ";
-    assert_eq!(screen.out(), want);
+    assert_eq!(result.output(), want);
 }

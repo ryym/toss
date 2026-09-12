@@ -32,7 +32,7 @@ The crash is invisible on the terminal — see
 `printf '' | toss`, then press `/` (or `?`). The pager exits at once with code 101.
 
 ```rust
-run_test_screen(TestCase {
+run_test(TestCase {
     screen_width: 10,
     screen_height: 4,
     content: "",
@@ -44,7 +44,7 @@ run_test_screen(TestCase {
 ### 1-row terminal, non-empty document
 
 ```rust
-run_test_screen(TestCase {
+run_test(TestCase {
     screen_width: 10,
     screen_height: 1,
     content: "line 1\nline 2\nline 3\n",
@@ -75,7 +75,7 @@ Two unrelated spots, both assuming a size the caller never guarantees.
 
 Nothing upstream rules the cases out. `src/lib.rs` states the non-empty assumption but does not
 enforce it: `wait_until_exceeds_or_complete(&mut doc, 0)` blocks until the first line arrives
-*or the input ends*, so it only covers the streaming case; an already-complete 0-line source
+_or the input ends_, so it only covers the streaming case; an already-complete 0-line source
 passes straight through.
 
 ## Plan
@@ -124,6 +124,7 @@ A usable page needs 1 content row plus the status row, so the minimum screen hei
   Without the suspend flag the page would still not crash — writes past the last row are clamped
   by the terminal — but every row would be overwritten onto the single visible line for no
   benefit.
+
 - Make `ViewportSize::height` a `NonZeroUsize` so the guarantee is visible in the signature.
   This also removes the `screen_height - 1` underflow.
 - `ScrollPhysics::configure` (`src/scroll.rs`) divides `REFERENCE_HEIGHT` by the terminal
