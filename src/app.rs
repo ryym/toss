@@ -139,7 +139,7 @@ impl<S: Screen> App<S> {
     fn handle_key_view(&mut self, key: KeyEvent) -> AppAction {
         let changed = match key.code {
             KeyCode::Char('q') | KeyCode::Esc => return AppAction::Quit,
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => {
                 return AppAction::Quit;
             }
             KeyCode::Char('j') | KeyCode::Down => self.scroll_by_line(1),
