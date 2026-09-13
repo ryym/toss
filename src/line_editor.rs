@@ -7,14 +7,23 @@ pub enum LineEdit {
     MoveCursorLeft,
     /// Move the cursor one position to the right.
     MoveCursorRight,
+    /// Move the cursor to the start of the input.
+    MoveCursorToStart,
+    /// Move the cursor to the end of the input.
+    MoveCursorToEnd,
+    /// Delete everything from the cursor to the end of the input.
+    DeleteToEnd,
 }
 
 impl LineEdit {
     /// Return whether this edit can change the raw input text, as opposed to only the cursor.
     pub fn changes_text(&self) -> bool {
         match self {
-            LineEdit::AddChar(_) | LineEdit::DeleteCharBeforeCursor => true,
-            LineEdit::MoveCursorLeft | LineEdit::MoveCursorRight => false,
+            LineEdit::AddChar(_) | LineEdit::DeleteCharBeforeCursor | LineEdit::DeleteToEnd => true,
+            LineEdit::MoveCursorLeft
+            | LineEdit::MoveCursorRight
+            | LineEdit::MoveCursorToStart
+            | LineEdit::MoveCursorToEnd => false,
         }
     }
 }
@@ -61,6 +70,9 @@ impl LineEditor {
                     self.cursor += 1;
                 }
             }
+            LineEdit::MoveCursorToStart => self.cursor = 0,
+            LineEdit::MoveCursorToEnd => self.cursor = self.input.len(),
+            LineEdit::DeleteToEnd => self.input.truncate(self.cursor),
         }
     }
 
@@ -180,5 +192,48 @@ mod tests {
         assert!(LineEdit::DeleteCharBeforeCursor.changes_text());
         assert!(!LineEdit::MoveCursorLeft.changes_text());
         assert!(!LineEdit::MoveCursorRight.changes_text());
+        assert!(!LineEdit::MoveCursorToStart.changes_text());
+        assert!(!LineEdit::MoveCursorToEnd.changes_text());
+        assert!(LineEdit::DeleteToEnd.changes_text());
+    }
+
+    #[test]
+    fn move_to_start_and_end() {
+        let mut editor = LineEditor::new();
+        editor.edit(LineEdit::MoveCursorToStart);
+        editor.edit(LineEdit::MoveCursorToEnd);
+        assert_eq!(editor.cursor, 0);
+
+        editor.edit(LineEdit::AddChar('a'));
+        editor.edit(LineEdit::AddChar('b'));
+        editor.edit(LineEdit::AddChar('c'));
+        editor.edit(LineEdit::MoveCursorLeft);
+
+        editor.edit(LineEdit::MoveCursorToStart);
+        assert_eq!(editor.input_with_cursor(), "█abc");
+
+        editor.edit(LineEdit::MoveCursorToEnd);
+        assert_eq!(editor.input_with_cursor(), "abc█");
+    }
+
+    #[test]
+    fn delete_to_end() {
+        let mut editor = LineEditor::new();
+        for ch in "abcd".chars() {
+            editor.edit(LineEdit::AddChar(ch));
+        }
+
+        // At the end, nothing to delete.
+        editor.edit(LineEdit::DeleteToEnd);
+        assert_eq!(editor.input_with_cursor(), "abcd█");
+
+        editor.edit(LineEdit::MoveCursorLeft);
+        editor.edit(LineEdit::MoveCursorLeft);
+        editor.edit(LineEdit::DeleteToEnd);
+        assert_eq!(editor.input_with_cursor(), "ab█");
+
+        editor.edit(LineEdit::MoveCursorToStart);
+        editor.edit(LineEdit::DeleteToEnd);
+        assert_eq!(editor.input_with_cursor(), "█");
     }
 }
