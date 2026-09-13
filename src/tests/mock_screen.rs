@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use crossterm::event::{Event, KeyCode, KeyEvent};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use unicode_width::UnicodeWidthChar;
 
 use crate::ansi;
@@ -56,21 +56,28 @@ impl<W: Write> MockScreen<W> {
     }
 
     fn log_key(&mut self, key: &KeyEvent) -> io::Result<()> {
-        let text = match key.code {
+        let mut modifiers = key.modifiers;
+        let kind = match key.code {
             KeyCode::Char(ch) => {
+                // Shift is already reflected in the character itself.
+                modifiers = modifiers.difference(KeyModifiers::SHIFT);
                 if ch.is_control() {
-                    format!("[EVENT]:char:{ch:?}\n")
+                    format!("char:{ch:?}")
                 } else {
-                    format!("[EVENT]:char:{ch}\n")
+                    format!("char:{ch}")
                 }
             }
-            KeyCode::Esc => "[EVENT]:esc\n".to_string(),
-            KeyCode::Enter => "[EVENT]:enter\n".to_string(),
-            KeyCode::Backspace => "[EVENT]:backspace\n".to_string(),
-            KeyCode::Left => "[EVENT]:left\n".to_string(),
-            KeyCode::Right => "[EVENT]:right\n".to_string(),
-            _ => format!("[EVENT]:ERROR:unexpected:{}\n", key.code),
+            KeyCode::Esc => "esc".to_string(),
+            KeyCode::Enter => "enter".to_string(),
+            KeyCode::Backspace => "backspace".to_string(),
+            KeyCode::Left => "left".to_string(),
+            KeyCode::Right => "right".to_string(),
+            _ => {
+                let text = format!("[EVENT]:ERROR:unexpected:{}\n", key.code);
+                return self.writer.write_all(text.as_bytes());
+            }
         };
+        let text = format!("[EVENT]:{}{kind}\n", modifiers_prefix(modifiers));
         self.writer.write_all(text.as_bytes())
     }
 
@@ -95,6 +102,24 @@ impl<W: Write> MockScreen<W> {
         snap.push_str("-----\n");
         self.writer.write_all(snap.as_bytes())
     }
+}
+
+/// Build the prefix that precedes a key kind in the event log, e.g. `ctrl+alt+`, or an empty
+/// string when there are no modifiers.
+fn modifiers_prefix(modifiers: KeyModifiers) -> String {
+    let names = [
+        (KeyModifiers::CONTROL, "ctrl"),
+        (KeyModifiers::ALT, "alt"),
+        (KeyModifiers::SHIFT, "shift"),
+        (KeyModifiers::SUPER, "super"),
+        (KeyModifiers::HYPER, "hyper"),
+        (KeyModifiers::META, "meta"),
+    ];
+    names
+        .iter()
+        .filter(|(modifier, _)| modifiers.contains(*modifier))
+        .map(|(_, name)| format!("{name}+"))
+        .collect()
 }
 
 /// Replace ANSI escape sequences with readable plain text for test output.

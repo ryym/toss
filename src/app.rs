@@ -139,7 +139,7 @@ impl<S: Screen> App<S> {
     fn handle_key_view(&mut self, key: KeyEvent) -> AppAction {
         let changed = match key.code {
             KeyCode::Char('q') | KeyCode::Esc => return AppAction::Quit,
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => {
                 return AppAction::Quit;
             }
             KeyCode::Char('j') | KeyCode::Down => self.scroll_by_line(1),
@@ -184,21 +184,37 @@ impl<S: Screen> App<S> {
     }
 
     fn handle_key_search(&mut self, key: KeyEvent) -> bool {
+        if key.modifiers == KeyModifiers::CONTROL {
+            return match key.code {
+                KeyCode::Char('f') => self.pager.update_search_query(LineEdit::MoveCursorRight),
+                KeyCode::Char('b') => self.pager.update_search_query(LineEdit::MoveCursorLeft),
+                KeyCode::Char('a') => self.pager.update_search_query(LineEdit::MoveCursorToStart),
+                KeyCode::Char('e') => self.pager.update_search_query(LineEdit::MoveCursorToEnd),
+                KeyCode::Char('k') => self.pager.update_search_query(LineEdit::DeleteToEnd),
+                KeyCode::Char('h') => self.delete_char_or_cancel_search(),
+                KeyCode::Char('g') | KeyCode::Char('c') => self.pager.cancel_search_input(),
+                _ => false,
+            };
+        }
         match key.code {
             KeyCode::Enter => self.pager.submit_search(),
             KeyCode::Esc => self.pager.cancel_search_input(),
-            KeyCode::Backspace => {
-                if self.pager.has_search_input() {
-                    self.pager
-                        .update_search_query(LineEdit::DeleteCharBeforeCursor)
-                } else {
-                    self.pager.cancel_search_input()
-                }
-            }
+            KeyCode::Backspace => self.delete_char_or_cancel_search(),
             KeyCode::Char(ch) => self.pager.update_search_query(LineEdit::AddChar(ch)),
             KeyCode::Left => self.pager.update_search_query(LineEdit::MoveCursorLeft),
             KeyCode::Right => self.pager.update_search_query(LineEdit::MoveCursorRight),
             _ => false,
+        }
+    }
+
+    /// Delete the character before the search cursor, or leave search input mode when
+    /// there is nothing left to delete.
+    fn delete_char_or_cancel_search(&mut self) -> bool {
+        if self.pager.has_search_input() {
+            self.pager
+                .update_search_query(LineEdit::DeleteCharBeforeCursor)
+        } else {
+            self.pager.cancel_search_input()
         }
     }
 

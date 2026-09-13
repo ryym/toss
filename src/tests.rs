@@ -31,6 +31,10 @@ pub fn key(ch: char) -> Event {
     Event::Key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE))
 }
 
+pub fn ctrl(ch: char) -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::CONTROL))
+}
+
 pub fn esc() -> Event {
     Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
 }
