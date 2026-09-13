@@ -184,7 +184,7 @@ impl<S: Screen> App<S> {
     }
 
     fn handle_key_search(&mut self, key: KeyEvent) -> bool {
-        if key.modifiers.contains(KeyModifiers::CONTROL) {
+        if key.modifiers == KeyModifiers::CONTROL {
             return match key.code {
                 KeyCode::Char('f') => self.pager.update_search_query(LineEdit::MoveCursorRight),
                 KeyCode::Char('b') => self.pager.update_search_query(LineEdit::MoveCursorLeft),
