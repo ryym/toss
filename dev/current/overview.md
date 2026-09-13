@@ -19,4 +19,7 @@ Handling Ctrl-modified keys explicitly fixes that as well: unbound Ctrl keys sho
 `Ctrl-c` quits the pager in view mode, but in search input mode it only cancels the search.
 This matches the usual shell/readline feel where `Ctrl-c` aborts the current input first; pressing it again in view mode quits.
 
-Out of scope: other readline bindings such as `Ctrl-d`, `Ctrl-u`, `Ctrl-w`, a kill ring with `Ctrl-y`, and Home/End keys.
+Out of scope:
+
+- Other readline bindings such as `Ctrl-d`, `Ctrl-u`, `Ctrl-w`, a kill ring with `Ctrl-y`, and Home/End keys.
+- Keys with modifiers other than Ctrl alone (e.g. `Alt-f`, `Ctrl-Alt-f`). They are not handled as bindings and still insert their character.
