@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use crossterm::event::{Event, KeyCode, KeyEvent};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use unicode_width::UnicodeWidthChar;
 
 use crate::ansi;
@@ -57,6 +57,9 @@ impl<W: Write> MockScreen<W> {
 
     fn log_key(&mut self, key: &KeyEvent) -> io::Result<()> {
         let text = match key.code {
+            KeyCode::Char(ch) if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                format!("[EVENT]:ctrl:{ch}\n")
+            }
             KeyCode::Char(ch) => {
                 if ch.is_control() {
                     format!("[EVENT]:char:{ch:?}\n")

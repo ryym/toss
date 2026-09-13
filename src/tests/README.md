@@ -10,7 +10,7 @@ checks what a user would actually see and do.
 Build a `TestCase` (content, screen size, key `events`) and pass it to
 `run_test`, then compare `result.output()` against an expected string.
 See `mod.rs` for `TestCase`/`run_test` and shared event helpers
-(`key`, `esc`, `enter`, `backspace`, `resize`).
+(`key`, `ctrl`, `esc`, `enter`, `backspace`, `resize`).
 
 `run_test` runs the pager with `--scroll instant` by default, since a running
 scroll animation makes the expected output cumbersome to compare against. A
@@ -36,7 +36,7 @@ construction and `run()`.
 The log alternates between input and output:
 
 - `[EVENT]:...` — one line per key or resize event as it is consumed (e.g.
-  `[EVENT]:char:j`, `[EVENT]:esc`, `[EVENT]:resize:10x6`). Unhandled key codes
+  `[EVENT]:char:j`, `[EVENT]:ctrl:f`, `[EVENT]:esc`, `[EVENT]:resize:10x6`). Unhandled key codes
   log as `[EVENT]:ERROR:unexpected:...`, which will fail a diff loudly rather
   than silently passing. A resize event also updates `MockScreen`'s tracked
   size and grid to match, simulating a real terminal resize.
