@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Reject pushing commits with temporary markers (fixup!, squash!, amend!, etc.).
+# Git passes lines of "<local ref> <local sha> <remote ref> <remote sha>" via stdin
+# on pre-push.
+
+zero_sha_pattern='^0+$'
+status=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # Skip branch deletion
+  if [[ "$local_sha" =~ $zero_sha_pattern ]]; then
+    continue
+  fi
+
+  if [[ "$remote_sha" =~ $zero_sha_pattern ]]; then
+    # New remote branch: check commits that do not exist on any remote yet
+    range=("$local_sha" --not --remotes)
+  else
+    range=("$remote_sha..$local_sha")
+  fi
+
+  temporary_commits=$(git log --format='%h %s' "${range[@]}" | grep -E '^[0-9a-f]+ [a-z]+! ')
+  if [[ -n "$temporary_commits" ]]; then
+    echo "ERROR: Temporary commits found in $local_ref. Squash them before push."
+    echo "$temporary_commits" | sed 's/^/  /'
+    status=1
+  fi
+done
+
+exit $status
