@@ -315,7 +315,7 @@ line 2
 line 3
 /ab█
 -----
-[EVENT]:ctrl:b
+[EVENT]:ctrl+char:b
 line 1
 line 2
 line 3
@@ -327,13 +327,13 @@ line 2
 line 3
 /ax█b
 -----
-[EVENT]:ctrl:f
+[EVENT]:ctrl+char:f
 line 1
 line 2
 line 3
 /axb█
 -----
-[EVENT]:ctrl:a
+[EVENT]:ctrl+char:a
 line 1
 line 2
 line 3
@@ -345,7 +345,7 @@ line 2
 line 3
 /y█axb
 -----
-[EVENT]:ctrl:e
+[EVENT]:ctrl+char:e
 line 1
 line 2
 line 3
@@ -426,19 +426,19 @@ line 4
 line 5
 /foo█
 -----
-[EVENT]:ctrl:b
+[EVENT]:ctrl+char:b
 {rev}{b}foo{/rev}{/b} bar
 line 4
 line 5
 /fo█o
 -----
-[EVENT]:ctrl:b
+[EVENT]:ctrl+char:b
 {rev}{b}foo{/rev}{/b} bar
 line 4
 line 5
 /f█oo
 -----
-[EVENT]:ctrl:k
+[EVENT]:ctrl+char:k
 {rev}{b}f{/rev}{/b}oo bar
 line 4
 line 5
@@ -489,13 +489,13 @@ line 2
 line 3
 /a█
 -----
-[EVENT]:ctrl:h
+[EVENT]:ctrl+char:h
 line 1
 line 2
 line 3
 /█
 -----
-[EVENT]:ctrl:h
+[EVENT]:ctrl+char:h
 line 1
 line 2
 line 3
@@ -550,7 +550,7 @@ line 2
 line 3
 /a█
 -----
-[EVENT]:ctrl:g
+[EVENT]:ctrl+char:g
 line 1
 line 2
 line 3
@@ -568,7 +568,7 @@ line 2
 line 3
 /b█
 -----
-[EVENT]:ctrl:c
+[EVENT]:ctrl+char:c
 line 1
 line 2
 line 3
@@ -620,7 +620,7 @@ line 2
 line 3
 /a█
 -----
-[EVENT]:ctrl:z
+[EVENT]:ctrl+char:z
 [EVENT]:char:b
 line 1
 line 2

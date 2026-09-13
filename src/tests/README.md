@@ -36,7 +36,10 @@ construction and `run()`.
 The log alternates between input and output:
 
 - `[EVENT]:...` — one line per key or resize event as it is consumed (e.g.
-  `[EVENT]:char:j`, `[EVENT]:ctrl:f`, `[EVENT]:esc`, `[EVENT]:resize:10x6`). Unhandled key codes
+  `[EVENT]:char:j`, `[EVENT]:esc`, `[EVENT]:resize:10x6`). Modifiers precede
+  the key kind, each followed by `+` (e.g. `[EVENT]:ctrl+char:f`,
+  `[EVENT]:ctrl+alt+char:@`); Shift is left out for character keys since the
+  character itself reflects it. Unhandled key codes
   log as `[EVENT]:ERROR:unexpected:...`, which will fail a diff loudly rather
   than silently passing. A resize event also updates `MockScreen`'s tracked
   size and grid to match, simulating a real terminal resize.
