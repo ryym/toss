@@ -37,8 +37,9 @@ a combining mark that follows it, for example between `a` and `U+0301` in the de
 `á`. That position has no cell of its own on screen: the two characters render as one. The cursor
 then marks a zero-width cell and is not visible.
 
-Moving by grapheme cluster instead changes the editing model rather than the rendering, so it is
-tracked separately in `dev/issues/draft/search-cursor-invisible-on-combining-mark.md`.
+The same gap runs through the rendering as well, where a cluster can be cut by clipping or by the
+escape sequences that highlight the cursor. It is tracked as a whole in
+`dev/issues/draft/text-handling-ignores-grapheme-clusters.md`.
 
 ## Horizontally scrolling the search input
 
@@ -47,4 +48,5 @@ cursor is moved far to the left, the cursor falls outside the clipped range and 
 not drawn.
 
 Keeping the cursor visible means replacing the current clipping with a cursor-following viewport,
-which is a separate change.
+which is a separate change, tracked in
+`dev/issues/draft/search-input-does-not-scroll-horizontally.md`.
