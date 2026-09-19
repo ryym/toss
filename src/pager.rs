@@ -682,18 +682,20 @@ mod tests {
     }
 
     #[test]
-    fn status_line_is_reverse_in_view_but_plain_in_search_input() {
+    fn status_line_is_reverse_in_view_but_only_at_the_cursor_in_search_input() {
         let mut pager = Pager::new(doc_lines(5), Options::default(), ScreenSize::new(20, 5));
         // View mode: wrapped in reverse video.
         let view = pager.snapshot().0.status_line;
         assert!(view.starts_with(STATUS_REVERSE_ON) && view.ends_with(STATUS_REVERSE_OFF));
 
-        // Search input: plain, no reverse-video wrapper.
+        // Search input: plain except for the cursor, which sits past the last typed character.
         pager.start_search_input(SearchDirection::Forward);
         type_query(&mut pager, "line");
         let input = pager.snapshot().0.status_line;
-        assert!(!input.contains(STATUS_REVERSE_ON));
-        assert!(input.starts_with('/'));
+        assert_eq!(
+            input,
+            format!("/line{STATUS_REVERSE_ON} {STATUS_REVERSE_OFF}")
+        );
     }
 
     #[test]

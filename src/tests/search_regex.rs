@@ -27,25 +27,25 @@ line 3
 line 1
 abc
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:a
 line 1
 {rev}{b}a{/rev}{/b}bc
 line 3
-/a█
+/a{rev} {/rev}
 -----
 [EVENT]:char:.
 line 1
 {rev}{b}ab{/rev}{/b}c
 line 3
-/a.█
+/a.{rev} {/rev}
 -----
 [EVENT]:char:c
 line 1
 {rev}{b}abc{/rev}{/b}
 line 3
-/a.c█
+/a.c{rev} {/rev}
 -----
 [EVENT]:esc
 line 1
@@ -94,37 +94,37 @@ line 3
 line 1
 foo bar
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:(
 line 1
 foo bar
 line 3
-/(█
+/({rev} {/rev}
 -----
 [EVENT]:char:f
 line 1
 foo bar
 line 3
-/(f█
+/(f{rev} {/rev}
 -----
 [EVENT]:char:o
 line 1
 foo bar
 line 3
-/(fo█
+/(fo{rev} {/rev}
 -----
 [EVENT]:char:o
 line 1
 foo bar
 line 3
-/(foo█
+/(foo{rev} {/rev}
 -----
 [EVENT]:char:)
 line 1
 {rev}{b}foo{/rev}{/b} bar
 line 3
-/(foo)█
+/(foo){rev} {/rev}
 -----
 [EVENT]:esc
 line 1
@@ -172,37 +172,37 @@ line 3
 line 1
 foo bar
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:f
 line 1
 {rev}{b}f{/rev}{/b}oo bar
 line 3
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:char:o
 line 1
 {rev}{b}fo{/rev}{/b}o bar
 line 3
-/fo█
+/fo{rev} {/rev}
 -----
 [EVENT]:char:o
 line 1
 {rev}{b}foo{/rev}{/b} bar
 line 3
-/foo█
+/foo{rev} {/rev}
 -----
 [EVENT]:char:(
 line 1
 {rev}{b}foo{/rev}{/b} bar
 line 3
-/foo(█
+/foo({rev} {/rev}
 -----
 [EVENT]:backspace
 line 1
 {rev}{b}foo{/rev}{/b} bar
 line 3
-/foo█
+/foo{rev} {/rev}
 -----
 [EVENT]:esc
 line 1
@@ -250,31 +250,31 @@ line 3
 line 1
 foo bar
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:f
 line 1
 {rev}{b}f{/rev}{/b}oo bar
 line 3
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:char:o
 line 1
 {rev}{b}fo{/rev}{/b}o bar
 line 3
-/fo█
+/fo{rev} {/rev}
 -----
 [EVENT]:char:o
 line 1
 {rev}{b}foo{/rev}{/b} bar
 line 3
-/foo█
+/foo{rev} {/rev}
 -----
 [EVENT]:char:(
 line 1
 {rev}{b}foo{/rev}{/b} bar
 line 3
-/foo(█
+/foo({rev} {/rev}
 -----
 [EVENT]:enter
 [EVENT]:esc
@@ -313,19 +313,19 @@ line 3
 bbb
 aaa
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:a
 bbb
 {rev}{b}a{/rev}{/b}{rev}{line}{b}a{/rev}{/line}{/b}{rev}{line}{b}a{/rev}{/line}{/b}
 line 3
-/a█
+/a{rev} {/rev}
 -----
 [EVENT]:char:*
 bbb
 {rev}{b}aaa{/rev}{/b}
 line 3
-/a*█
+/a*{rev} {/rev}
 -----
 [EVENT]:esc
 bbb

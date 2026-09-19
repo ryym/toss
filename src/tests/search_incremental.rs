@@ -30,25 +30,25 @@ foo bar
 line 1
 line 2
 foo bar
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:f
 {rev}{b}f{/rev}{/b}oo bar
 line 4
 line 5
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}fo{/rev}{/b}o bar
 line 4
 line 5
-/fo█
+/fo{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}foo{/rev}{/b} bar
 line 4
 line 5
-/foo█
+/foo{rev} {/rev}
 -----
 [EVENT]:esc
 line 1
@@ -99,43 +99,43 @@ target here
 line 1
 line 2
 target here
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:t
 {rev}{b}t{/rev}{/b}arge{rev}{line}{b}t{/rev}{/line}{/b} here
 line 4
 line 5
-/t█
+/t{rev} {/rev}
 -----
 [EVENT]:char:a
 {rev}{b}ta{/rev}{/b}rget here
 line 4
 line 5
-/ta█
+/ta{rev} {/rev}
 -----
 [EVENT]:char:r
 {rev}{b}tar{/rev}{/b}get here
 line 4
 line 5
-/tar█
+/tar{rev} {/rev}
 -----
 [EVENT]:char:g
 {rev}{b}targ{/rev}{/b}et here
 line 4
 line 5
-/targ█
+/targ{rev} {/rev}
 -----
 [EVENT]:char:e
 {rev}{b}targe{/rev}{/b}t here
 line 4
 line 5
-/targe█
+/targe{rev} {/rev}
 -----
 [EVENT]:char:t
 {rev}{b}target{/rev}{/b} here
 line 4
 line 5
-/target█
+/target{rev} {/rev}
 -----
 [EVENT]:enter
 {rev}{b}target{/rev}{/b} here
@@ -183,25 +183,25 @@ foo 2
 foo 1
 bar
 foo 2
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:f
 {rev}{b}f{/rev}{/b}oo 1
 bar
 {rev}{line}{b}f{/rev}{/line}{/b}oo 2
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}fo{/rev}{/b}o 1
 bar
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o 2
-/fo█
+/fo{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}foo{/rev}{/b} 1
 bar
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
-/foo█
+/foo{rev} {/rev}
 -----
 [EVENT]:enter
 {rev}{b}foo{/rev}{/b} 1
@@ -258,43 +258,43 @@ line 3
 line 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:t
 line 3
 line 4
 {rev}{b}t{/rev}{/b}arge{rev}{line}{b}t{/rev}{/line}{/b} here
-/t█
+/t{rev} {/rev}
 -----
 [EVENT]:char:a
 line 3
 line 4
 {rev}{b}ta{/rev}{/b}rget here
-/ta█
+/ta{rev} {/rev}
 -----
 [EVENT]:char:r
 line 3
 line 4
 {rev}{b}tar{/rev}{/b}get here
-/tar█
+/tar{rev} {/rev}
 -----
 [EVENT]:char:g
 line 3
 line 4
 {rev}{b}targ{/rev}{/b}et here
-/targ█
+/targ{rev} {/rev}
 -----
 [EVENT]:char:e
 line 3
 line 4
 {rev}{b}targe{/rev}{/b}t here
-/targe█
+/targe{rev} {/rev}
 -----
 [EVENT]:char:t
 line 3
 line 4
 {rev}{b}target{/rev}{/b} here
-/target█
+/target{rev} {/rev}
 -----
 [EVENT]:esc
 line 1
@@ -352,43 +352,43 @@ line 4
 line 2
 line 3
 line 4
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:t
 line 3
 line 4
 {rev}{b}t{/rev}{/b}arge{rev}{line}{b}t{/rev}{/line}{/b} here
-/t█
+/t{rev} {/rev}
 -----
 [EVENT]:char:a
 line 3
 line 4
 {rev}{b}ta{/rev}{/b}rget here
-/ta█
+/ta{rev} {/rev}
 -----
 [EVENT]:char:r
 line 3
 line 4
 {rev}{b}tar{/rev}{/b}get here
-/tar█
+/tar{rev} {/rev}
 -----
 [EVENT]:char:g
 line 3
 line 4
 {rev}{b}targ{/rev}{/b}et here
-/targ█
+/targ{rev} {/rev}
 -----
 [EVENT]:char:e
 line 3
 line 4
 {rev}{b}targe{/rev}{/b}t here
-/targe█
+/targe{rev} {/rev}
 -----
 [EVENT]:char:t
 line 3
 line 4
 {rev}{b}target{/rev}{/b} here
-/target█
+/target{rev} {/rev}
 -----
 [EVENT]:esc
 line 2
@@ -427,7 +427,7 @@ line 3
 line 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:backspace
 line 1
@@ -474,31 +474,31 @@ line 3
 ab here
 abc there
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:a
 {rev}{b}a{/rev}{/b}b here
 {rev}{line}{b}a{/rev}{/line}{/b}bc there
 line 3
-/a█
+/a{rev} {/rev}
 -----
 [EVENT]:char:b
 {rev}{b}ab{/rev}{/b} here
 {rev}{line}{b}a{/rev}{/line}{/b}{line}{b}b{/line}{/b}c there
 line 3
-/ab█
+/ab{rev} {/rev}
 -----
 [EVENT]:char:c
 {rev}{b}abc{/rev}{/b} there
 line 3
 line 4
-/abc█
+/abc{rev} {/rev}
 -----
 [EVENT]:backspace
 {rev}{b}ab{/rev}{/b} here
 {rev}{line}{b}a{/rev}{/line}{/b}{line}{b}b{/line}{/b}c there
 line 3
-/ab█
+/ab{rev} {/rev}
 -----
 [EVENT]:esc
 ab here
@@ -546,25 +546,25 @@ line 3
 foo here
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:f
 {rev}{b}f{/rev}{/b}oo here
 line 2
 line 3
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}fo{/rev}{/b}o here
 line 2
 line 3
-/fo█
+/fo{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}foo{/rev}{/b} here
 line 2
 line 3
-/foo█
+/foo{rev} {/rev}
 -----
 [EVENT]:enter
 {rev}{b}foo{/rev}{/b} here
@@ -576,7 +576,7 @@ line 3
 {rev}{b}foo{/rev}{/b} here
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:enter
 {rev}{b}foo{/rev}{/b} here
@@ -628,25 +628,25 @@ line 3
 foo here
 bar there
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:f
 {rev}{b}f{/rev}{/b}oo here
 bar there
 line 3
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}fo{/rev}{/b}o here
 bar there
 line 3
-/fo█
+/fo{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}foo{/rev}{/b} here
 bar there
 line 3
-/foo█
+/foo{rev} {/rev}
 -----
 [EVENT]:enter
 {rev}{b}foo{/rev}{/b} here
@@ -658,25 +658,25 @@ line 3
 {rev}{b}foo{/rev}{/b} here
 bar there
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:b
 {rev}{b}b{/rev}{/b}ar there
 line 3
 line 4
-/b█
+/b{rev} {/rev}
 -----
 [EVENT]:char:a
 {rev}{b}ba{/rev}{/b}r there
 line 3
 line 4
-/ba█
+/ba{rev} {/rev}
 -----
 [EVENT]:char:r
 {rev}{b}bar{/rev}{/b} there
 line 3
 line 4
-/bar█
+/bar{rev} {/rev}
 -----
 [EVENT]:esc
 {rev}{b}foo{/rev}{/b} here
@@ -715,25 +715,25 @@ line 3
 ff bar
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:f
 {rev}{b}f{/rev}{/b}{rev}{line}{b}f{/rev}{/line}{/b} bar
 line 2
 line 3
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:char:f
 {rev}{b}ff{/rev}{/b} bar
 line 2
 line 3
-/ff█
+/ff{rev} {/rev}
 -----
 [EVENT]:char:f
 ff bar
 line 2
 line 3
-/fff█
+/fff{rev} {/rev}
 -----
 [EVENT]:esc
 ff bar
@@ -789,25 +789,25 @@ foo ccc
 bar aaa foo
 foo bbb
 foo ccc
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:f
 bar aaa {rev}{b}f{/rev}{/b}oo
 {rev}{line}{b}f{/rev}{/line}{/b}oo bbb
 {rev}{line}{b}f{/rev}{/line}{/b}oo ccc
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:char:o
 bar aaa {rev}{b}fo{/rev}{/b}o
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o bbb
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o ccc
-/fo█
+/fo{rev} {/rev}
 -----
 [EVENT]:char:o
 bar aaa {rev}{b}foo{/rev}{/b}
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} bbb
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} ccc
-/foo█
+/foo{rev} {/rev}
 -----
 [EVENT]:enter
 bar aaa {rev}{b}foo{/rev}{/b}
@@ -819,25 +819,25 @@ bar aaa {rev}{b}foo{/rev}{/b}
 bar aaa {rev}{b}foo{/rev}{/b}
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} bbb
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} ccc
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:b
 {rev}{b}b{/rev}{/b}ar aaa foo
 foo {rev}{line}{b}b{/rev}{/line}{/b}{rev}{line}{b}b{/rev}{/line}{/b}{rev}{line}{b}b{/rev}{/line}{/b}
 foo ccc
-/b█
+/b{rev} {/rev}
 -----
 [EVENT]:char:a
 {rev}{b}ba{/rev}{/b}r aaa foo
 foo bbb
 foo ccc
-/ba█
+/ba{rev} {/rev}
 -----
 [EVENT]:char:r
 {rev}{b}bar{/rev}{/b} aaa foo
 foo bbb
 foo ccc
-/bar█
+/bar{rev} {/rev}
 -----
 [EVENT]:esc
 bar aaa {rev}{b}foo{/rev}{/b}
@@ -880,25 +880,25 @@ foo third
 foo first
 foo second
 foo third
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:f
 {rev}{b}f{/rev}{/b}oo {rev}{line}{b}f{/rev}{/line}{/b}irst
 {rev}{line}{b}f{/rev}{/line}{/b}oo second
 {rev}{line}{b}f{/rev}{/line}{/b}oo third
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}fo{/rev}{/b}o first
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o second
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o third
-/fo█
+/fo{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}foo{/rev}{/b} first
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} second
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} third
-/foo█
+/foo{rev} {/rev}
 -----
 [EVENT]:enter
 {rev}{b}foo{/rev}{/b} first
@@ -953,28 +953,28 @@ foo 1
 foo 2
 foo 3
 foo 4
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:f
 {rev}{b}f{/rev}{/b}oo 1
 {rev}{line}{b}f{/rev}{/line}{/b}oo 2
 {rev}{line}{b}f{/rev}{/line}{/b}oo 3
 {rev}{line}{b}f{/rev}{/line}{/b}oo 4
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}fo{/rev}{/b}o 1
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o 2
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o 3
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o 4
-/fo█
+/fo{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}foo{/rev}{/b} 1
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 2
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 3
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 4
-/foo█
+/foo{rev} {/rev}
 -----
 [EVENT]:enter
 {rev}{b}foo{/rev}{/b} 1
@@ -995,14 +995,14 @@ foo 4
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 3
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 4
 {rev}{line}{b}f{/rev}{/line}{/b}{line}{b}oo{/line}{/b} 5
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:z
 foo 2
 foo 3
 foo 4
 foo 5
-/z█
+/z{rev} {/rev}
 -----
 [EVENT]:enter
 foo 2

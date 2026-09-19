@@ -29,19 +29,19 @@ bcde
 line 1
 01234a>
 bcde
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:a
 01234{rev}{b}a{/rev}{/b}>
 bcde
 line 3
-/a█
+/a{rev} {/rev}
 -----
 [EVENT]:char:b
 01234{rev}{b}a>
 b{/rev}{/b}cde
 line 3
-/ab█
+/ab{rev} {/rev}
 -----
 [EVENT]:enter
 01234{rev}{b}a>
@@ -79,25 +79,25 @@ bcde
 line 1
 01234a>
 bcde
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:c
 01234a>
 b{rev}{b}c{/rev}{/b}de
 line 3
-/c█
+/c{rev} {/rev}
 -----
 [EVENT]:char:d
 01234a>
 b{rev}{b}cd{/rev}{/b}e
 line 3
-/cd█
+/cd{rev} {/rev}
 -----
 [EVENT]:char:e
 01234a>
 b{rev}{b}cde{/rev}{/b}
 line 3
-/cde█
+/cde{rev} {/rev}
 -----
 [EVENT]:enter
 01234a>
@@ -134,19 +134,19 @@ ghij
 [EVENT]:char:/
 abcde_XX_f>
 ghij
-/█
+/{rev} {/rev}
 
 -----
 [EVENT]:char:X
 abcde_{rev}{b}X{/rev}{/b}{rev}{line}{b}X{/rev}{/line}{/b}_f>
 ghij
-/X█
+/X{rev} {/rev}
 
 -----
 [EVENT]:char:X
 abcde_{rev}{b}XX{/rev}{/b}_f>
 ghij
-/XX█
+/XX{rev} {/rev}
 
 -----
 [EVENT]:enter

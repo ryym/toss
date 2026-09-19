@@ -34,6 +34,15 @@ pub struct LineEditor {
     cursor: usize,
 }
 
+/// The input characters split at the cursor. The cursor sits on the first character of
+/// [`Self::from_cursor`], or past the end of the input when that half is empty.
+pub struct InputAtCursor<'i> {
+    /// Characters preceding the cursor.
+    pub before: &'i [char],
+    /// Characters from the cursor on.
+    pub from_cursor: &'i [char],
+}
+
 impl Default for LineEditor {
     fn default() -> Self {
         Self::new()
@@ -85,12 +94,13 @@ impl LineEditor {
         self.input.iter().collect()
     }
 
-    /// Return the input with a block cursor character at the current position.
-    pub fn input_with_cursor(&self) -> String {
-        let mut result: String = self.input[..self.cursor].iter().collect();
-        result.push('█');
-        result.extend(&self.input[self.cursor..]);
-        result
+    /// Return the input split at the cursor.
+    pub fn at_cursor(&self) -> InputAtCursor<'_> {
+        let (before, from_cursor) = self.input.split_at(self.cursor);
+        InputAtCursor {
+            before,
+            from_cursor,
+        }
     }
 }
 
@@ -113,19 +123,6 @@ mod tests {
     }
 
     #[test]
-    fn input_with_cursor_shows_block_at_position() {
-        let mut editor = LineEditor::new();
-        assert_eq!(editor.input_with_cursor(), "█");
-
-        editor.edit(LineEdit::AddChar('a'));
-        editor.edit(LineEdit::AddChar('b'));
-        assert_eq!(editor.input_with_cursor(), "ab█");
-
-        editor.edit(LineEdit::DeleteCharBeforeCursor);
-        assert_eq!(editor.input_with_cursor(), "a█");
-    }
-
-    #[test]
     fn move_left_and_right() {
         let mut editor = LineEditor::new();
         editor.edit(LineEdit::AddChar('a'));
@@ -135,24 +132,22 @@ mod tests {
 
         editor.edit(LineEdit::MoveCursorLeft);
         assert_eq!(editor.cursor, 2);
-        assert_eq!(editor.input_with_cursor(), "ab█c");
 
         editor.edit(LineEdit::MoveCursorLeft);
         assert_eq!(editor.cursor, 1);
-        assert_eq!(editor.input_with_cursor(), "a█bc");
 
         // Insert at middle position.
         editor.edit(LineEdit::AddChar('x'));
         assert_eq!(editor.input(), "axbc");
-        assert_eq!(editor.input_with_cursor(), "ax█bc");
+        assert_eq!(editor.cursor, 2);
 
         editor.edit(LineEdit::MoveCursorRight);
-        assert_eq!(editor.input_with_cursor(), "axb█c");
+        assert_eq!(editor.cursor, 3);
 
         // Backspace at middle position.
         editor.edit(LineEdit::DeleteCharBeforeCursor);
         assert_eq!(editor.input(), "axc");
-        assert_eq!(editor.input_with_cursor(), "ax█c");
+        assert_eq!(editor.cursor, 2);
     }
 
     #[test]
@@ -210,10 +205,10 @@ mod tests {
         editor.edit(LineEdit::MoveCursorLeft);
 
         editor.edit(LineEdit::MoveCursorToStart);
-        assert_eq!(editor.input_with_cursor(), "█abc");
+        assert_eq!(editor.cursor, 0);
 
         editor.edit(LineEdit::MoveCursorToEnd);
-        assert_eq!(editor.input_with_cursor(), "abc█");
+        assert_eq!(editor.cursor, 3);
     }
 
     #[test]
@@ -225,15 +220,18 @@ mod tests {
 
         // At the end, nothing to delete.
         editor.edit(LineEdit::DeleteToEnd);
-        assert_eq!(editor.input_with_cursor(), "abcd█");
+        assert_eq!(editor.input(), "abcd");
+        assert_eq!(editor.cursor, 4);
 
         editor.edit(LineEdit::MoveCursorLeft);
         editor.edit(LineEdit::MoveCursorLeft);
         editor.edit(LineEdit::DeleteToEnd);
-        assert_eq!(editor.input_with_cursor(), "ab█");
+        assert_eq!(editor.input(), "ab");
+        assert_eq!(editor.cursor, 2);
 
         editor.edit(LineEdit::MoveCursorToStart);
         editor.edit(LineEdit::DeleteToEnd);
-        assert_eq!(editor.input_with_cursor(), "█");
+        assert_eq!(editor.input(), "");
+        assert_eq!(editor.cursor, 0);
     }
 }
