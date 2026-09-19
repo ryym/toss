@@ -2,6 +2,7 @@ use unicode_width::UnicodeWidthChar;
 
 use crate::document::Document;
 use crate::line::Row;
+use crate::line_editor::InputAtCursor;
 use crate::pager::PagerMode;
 
 /// ANSI reverse-video on/off, used to render the view-mode status line like `less`.
@@ -16,14 +17,41 @@ pub(super) fn build(mode: &PagerMode, rows: &[Row], width: usize, doc: &Document
             format!("{STATUS_REVERSE_ON}{line}{STATUS_REVERSE_OFF}")
         }
         PagerMode::SearchInput(search) => {
-            let line = format!(
-                "{}{}",
-                search.direction.prompt(),
-                search.editor.input_with_cursor()
-            );
-            clip(&line, width)
+            let input = search.editor.at_cursor();
+            search_input(search.direction.prompt(), input, width)
         }
     }
+}
+
+/// Build the search prompt line, e.g. `/query`, with the cell the cursor covers shown in
+/// reverse video. The line is clipped to `width` columns, keeping the right side.
+fn search_input(prompt: &str, input: InputAtCursor, width: usize) -> String {
+    let (cell, tail) = cursor_cell(input.from_cursor);
+    let head: String = prompt.chars().chain(input.before.iter().copied()).collect();
+
+    let cursor_and_tail_width = text_width(&cell) + text_width(&tail);
+    if cursor_and_tail_width > width {
+        return clip(&format!("{cell}{tail}"), width);
+    }
+
+    let head = clip(&head, width - cursor_and_tail_width);
+    format!("{head}{STATUS_REVERSE_ON}{cell}{STATUS_REVERSE_OFF}{tail}")
+}
+
+/// Split `from_cursor`, the input from the cursor on, into the cell the cursor covers and
+/// the rest. The cell is one character plus any zero-width characters that follow it, since
+/// a combining mark renders on the cell of the character it follows rather than on one of
+/// its own.
+fn cursor_cell(from_cursor: &[char]) -> (String, String) {
+    let Some((ch, rest)) = from_cursor.split_first() else {
+        // The cursor sits past the last character, where it covers a space of its own.
+        return (" ".to_string(), String::new());
+    };
+    let marks = rest.iter().take_while(|ch| char_width(**ch) == 0).count();
+    let cell = std::iter::once(*ch)
+        .chain(rest[..marks].iter().copied())
+        .collect();
+    (cell, rest[marks..].iter().collect())
 }
 
 /// Build the `less`-style position indicator, e.g. `src/pager.rs lines 1-31/1084 2%`.
@@ -63,14 +91,13 @@ fn position(rows: &[Row], doc: &Document) -> String {
 /// A wide character that would straddle the left edge is dropped whole, which may
 /// leave the result one column narrower than `width`.
 fn clip(line: &str, width: usize) -> String {
-    let total: usize = line.chars().map(|c| c.width().unwrap_or(0)).sum();
-    if total <= width {
+    if text_width(line) <= width {
         return line.to_string();
     }
     let mut kept = 0;
     let mut start = line.len();
     for (i, ch) in line.char_indices().rev() {
-        let w = ch.width().unwrap_or(0);
+        let w = char_width(ch);
         if kept + w > width {
             break;
         }
@@ -78,6 +105,14 @@ fn clip(line: &str, width: usize) -> String {
         start = i;
     }
     line[start..].to_string()
+}
+
+fn text_width(text: &str) -> usize {
+    text.chars().map(char_width).sum()
+}
+
+fn char_width(ch: char) -> usize {
+    ch.width().unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -91,6 +126,53 @@ mod tests {
         // Too long: drop from the left, keep the rightmost columns.
         assert_eq!(clip("lines 3-30/500 2%", 14), "es 3-30/500 2%");
         assert_eq!(clip("lines 3-30/500 2%", 4), "0 2%");
+    }
+
+    /// Build a search prompt line, with the reversed span shown as `[...]` instead of escape
+    /// sequences. The cursor sits on the first character of `from_cursor`.
+    fn prompt(before: &str, from_cursor: &str, width: usize) -> String {
+        let before: Vec<char> = before.chars().collect();
+        let from_cursor: Vec<char> = from_cursor.chars().collect();
+        let input = InputAtCursor {
+            before: &before,
+            from_cursor: &from_cursor,
+        };
+        search_input("/", input, width)
+            .replace(STATUS_REVERSE_ON, "[")
+            .replace(STATUS_REVERSE_OFF, "]")
+    }
+
+    #[test]
+    fn cursor_reverses_the_cell_it_sits_on() {
+        assert_eq!(prompt("a", "bc", 10), "/a[b]c");
+        // Past the last character, the cursor gets a space of its own.
+        assert_eq!(prompt("abc", "", 10), "/abc[ ]");
+    }
+
+    #[test]
+    fn cursor_reverses_a_wide_char_whole() {
+        assert_eq!(prompt("", "あx", 10), "/[あ]x");
+    }
+
+    #[test]
+    fn cursor_keeps_combining_marks_in_its_cell() {
+        // "a" and the combining acute that follows it render as one cell.
+        assert_eq!(prompt("", "a\u{301}bc", 10), "/[a\u{301}]bc");
+        // The mark takes no column of its own, so it must not be mistaken for the cursor cell.
+        assert_eq!(prompt("a\u{301}", "bc", 10), "/a\u{301}[b]c");
+    }
+
+    #[test]
+    fn clipping_drops_the_left_side_to_keep_the_cursor() {
+        // The cursor and the rest fit, so only what precedes them is clipped.
+        assert_eq!(prompt("ab", "cde", 6), "/ab[c]de");
+        assert_eq!(prompt("ab", "cde", 5), "ab[c]de");
+    }
+
+    #[test]
+    fn cursor_is_unmarked_once_it_no_longer_fits() {
+        // The cursor cell and what follows are wider than the screen on their own.
+        assert_eq!(prompt("a", "bcde", 3), "cde");
     }
 
     #[test]

@@ -32,13 +32,13 @@ line 2
 # Title
 line 1
 line 2
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:3
 # Title
 line {rev}{b}3{/rev}{/b}
 line 4
-/3█
+/3{rev} {/rev}
 -----
 [EVENT]:enter
 # Title
@@ -96,14 +96,14 @@ line 2
 A
 line 1
 line 2
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:A
 # Title
 {rev}{b}A{/rev}{/b}
 line 1
 line 2
-/A█
+/A{rev} {/rev}
 -----
 [EVENT]:enter
 # Title
@@ -169,13 +169,13 @@ line 2
 # Section A
 line 1
 line 2
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:3
 # Section A
 line {rev}{b}3{/rev}{/b}
 line 4
-/3█
+/3{rev} {/rev}
 -----
 [EVENT]:enter
 # Section A
@@ -237,21 +237,21 @@ line 2
 AAA
 line 1
 line 2
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:A
 # Section 1
 {rev}{b}A{/rev}{/b}{rev}{line}{b}A{/rev}{/line}{/b}{rev}{line}{b}A{/rev}{/line}{/b}
 line 1
 line 2
-/A█
+/A{rev} {/rev}
 -----
 [EVENT]:char:A
 # Section 1
 {rev}{b}AA{/rev}{/b}A
 line 1
 line 2
-/AA█
+/AA{rev} {/rev}
 -----
 [EVENT]:enter
 # Section 1
@@ -330,19 +330,19 @@ fn search_with_heading_jump_back_one_line() {
 # Section A
 127
 128
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:1
 # Section A
 {rev}{b}1{/rev}{/b}27
 {rev}{line}{b}1{/rev}{/line}{/b}28
-/1█
+/1{rev} {/rev}
 -----
 [EVENT]:char:3
 # Section A
 {rev}{b}13{/rev}{/b}0
 {rev}{line}{b}1{/rev}{/line}{/b}{line}{b}3{/line}{/b}1
-/13█
+/13{rev} {/rev}
 -----
 [EVENT]:enter
 # Section A
@@ -431,7 +431,7 @@ description 1-1
 description 1-2
 line 1
 line 2
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:A
 # Section 1
@@ -439,7 +439,7 @@ description 1-1
 description 1-2
 {rev}{b}A{/rev}{/b}
 line 3
-/A█
+/A{rev} {/rev}
 -----
 [EVENT]:enter
 # Section 1
@@ -517,13 +517,13 @@ line 1
 # Section A1
 AX
 line 1
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:A
 # Section {rev}{b}A{/rev}{/b}1
 {rev}{line}{b}A{/rev}{/line}{/b}X
 line 1
-/A█
+/A{rev} {/rev}
 -----
 [EVENT]:enter
 # Section {rev}{b}A{/rev}{/b}1

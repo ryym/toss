@@ -458,7 +458,7 @@ H2
 az
 # B
 b1
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:z
 H1
@@ -467,7 +467,7 @@ H2
 a{rev}{b}z{/rev}{/b}
 # B
 b1
-/z█
+/z{rev} {/rev}
 -----
 [EVENT]:enter
 H1

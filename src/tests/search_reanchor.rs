@@ -44,13 +44,13 @@ line 3
 A 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:A
 {rev}{b}A{/rev}{/b} 1
 line 2
 line 3
-/A█
+/A{rev} {/rev}
 -----
 [EVENT]:enter
 {rev}{b}A{/rev}{/b} 1
@@ -122,13 +122,13 @@ line 3
 A 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:A
 {rev}{b}A{/rev}{/b} 1
 line 2
 line 3
-/A█
+/A{rev} {/rev}
 -----
 [EVENT]:enter
 {rev}{b}A{/rev}{/b} 1
@@ -200,13 +200,13 @@ line 3
 line 1
 A 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:A
 {rev}{b}A{/rev}{/b} 2
 line 3
 {rev}{line}{b}A{/rev}{/line}{/b} 4
-/A█
+/A{rev} {/rev}
 -----
 [EVENT]:enter
 {rev}{b}A{/rev}{/b} 2
@@ -270,13 +270,13 @@ line 3
 line 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:A
 {rev}{b}A{/rev}{/b} 4
 line 5
 {rev}{line}{b}A{/rev}{/line}{/b} 6
-/A█
+/A{rev} {/rev}
 -----
 [EVENT]:enter
 {rev}{b}A{/rev}{/b} 4
@@ -358,14 +358,14 @@ line 3
 A 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:A
 # Sec
 {rev}{b}A{/rev}{/b} 1
 line 2
 line 3
-/A█
+/A{rev} {/rev}
 -----
 [EVENT]:enter
 # Sec
@@ -448,25 +448,25 @@ foo34
 short
 foo12>
 foo34
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:f
 {rev}{b}f{/rev}{/b}oo12{rev}{line}{b}>
 f{/rev}{/line}{/b}oo34>
 end
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}fo{/rev}{/b}o12{rev}{line}{b}>
 f{/rev}{/line}{/b}{line}{b}o{/line}{/b}o34>
 end
-/fo█
+/fo{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}foo{/rev}{/b}12{rev}{line}{b}>
 f{/rev}{/line}{/b}{line}{b}oo{/line}{/b}34>
 end
-/foo█
+/foo{rev} {/rev}
 -----
 [EVENT]:enter
 {rev}{b}foo{/rev}{/b}12{rev}{line}{b}>

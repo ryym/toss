@@ -41,19 +41,19 @@ line 3
 line 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:a
 line 1
 line 2
 line 3
-/a█
+/a{rev} {/rev}
 -----
 [EVENT]:char:b
 line 1
 line 2
 line 3
-/ab█
+/ab{rev} {/rev}
 -----
 [EVENT]:esc
 line 1
@@ -93,13 +93,13 @@ line 3
 line 1
 line 2
 line 3
-?█
+?{rev} {/rev}
 -----
 [EVENT]:char:x
 line 1
 line 2
 line 3
-?x█
+?x{rev} {/rev}
 -----
 [EVENT]:enter
 line 1
@@ -138,25 +138,25 @@ line 3
 line 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:a
 line 1
 line 2
 line 3
-/a█
+/a{rev} {/rev}
 -----
 [EVENT]:char:b
 line 1
 line 2
 line 3
-/ab█
+/ab{rev} {/rev}
 -----
 [EVENT]:backspace
 line 1
 line 2
 line 3
-/a█
+/a{rev} {/rev}
 -----
 [EVENT]:esc
 line 1
@@ -206,49 +206,49 @@ line 3
 line 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:a
 line 1
 line 2
 line 3
-/a█
+/a{rev} {/rev}
 -----
 [EVENT]:char:b
 line 1
 line 2
 line 3
-/ab█
+/ab{rev} {/rev}
 -----
 [EVENT]:char:c
 line 1
 line 2
 line 3
-/abc█
+/abc{rev} {/rev}
 -----
 [EVENT]:left
 line 1
 line 2
 line 3
-/ab█c
+/ab{rev}c{/rev}
 -----
 [EVENT]:left
 line 1
 line 2
 line 3
-/a█bc
+/a{rev}b{/rev}c
 -----
 [EVENT]:char:x
 line 1
 line 2
 line 3
-/ax█bc
+/ax{rev}b{/rev}c
 -----
 [EVENT]:right
 line 1
 line 2
 line 3
-/axb█c
+/axb{rev}c{/rev}
 -----
 [EVENT]:esc
 line 1
@@ -301,61 +301,61 @@ line 3
 line 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:a
 line 1
 line 2
 line 3
-/a█
+/a{rev} {/rev}
 -----
 [EVENT]:char:b
 line 1
 line 2
 line 3
-/ab█
+/ab{rev} {/rev}
 -----
 [EVENT]:ctrl+char:b
 line 1
 line 2
 line 3
-/a█b
+/a{rev}b{/rev}
 -----
 [EVENT]:char:x
 line 1
 line 2
 line 3
-/ax█b
+/ax{rev}b{/rev}
 -----
 [EVENT]:ctrl+char:f
 line 1
 line 2
 line 3
-/axb█
+/axb{rev} {/rev}
 -----
 [EVENT]:ctrl+char:a
 line 1
 line 2
 line 3
-/█axb
+/{rev}a{/rev}xb
 -----
 [EVENT]:char:y
 line 1
 line 2
 line 3
-/y█axb
+/y{rev}a{/rev}xb
 -----
 [EVENT]:ctrl+char:e
 line 1
 line 2
 line 3
-/yaxb█
+/yaxb{rev} {/rev}
 -----
 [EVENT]:char:z
 line 1
 line 2
 line 3
-/yaxbz█
+/yaxbz{rev} {/rev}
 -----
 [EVENT]:esc
 line 1
@@ -406,43 +406,43 @@ foo bar
 line 1
 line 2
 foo bar
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:f
 {rev}{b}f{/rev}{/b}oo bar
 line 4
 line 5
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}fo{/rev}{/b}o bar
 line 4
 line 5
-/fo█
+/fo{rev} {/rev}
 -----
 [EVENT]:char:o
 {rev}{b}foo{/rev}{/b} bar
 line 4
 line 5
-/foo█
+/foo{rev} {/rev}
 -----
 [EVENT]:ctrl+char:b
 {rev}{b}foo{/rev}{/b} bar
 line 4
 line 5
-/fo█o
+/fo{rev}o{/rev}
 -----
 [EVENT]:ctrl+char:b
 {rev}{b}foo{/rev}{/b} bar
 line 4
 line 5
-/f█oo
+/f{rev}o{/rev}o
 -----
 [EVENT]:ctrl+char:k
 {rev}{b}f{/rev}{/b}oo bar
 line 4
 line 5
-/f█
+/f{rev} {/rev}
 -----
 [EVENT]:esc
 line 1
@@ -481,19 +481,19 @@ line 3
 line 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:a
 line 1
 line 2
 line 3
-/a█
+/a{rev} {/rev}
 -----
 [EVENT]:ctrl+char:h
 line 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:ctrl+char:h
 line 1
@@ -542,13 +542,13 @@ line 3
 line 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:a
 line 1
 line 2
 line 3
-/a█
+/a{rev} {/rev}
 -----
 [EVENT]:ctrl+char:g
 line 1
@@ -560,13 +560,13 @@ line 3
 line 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:b
 line 1
 line 2
 line 3
-/b█
+/b{rev} {/rev}
 -----
 [EVENT]:ctrl+char:c
 line 1
@@ -612,20 +612,20 @@ line 3
 line 1
 line 2
 line 3
-/█
+/{rev} {/rev}
 -----
 [EVENT]:char:a
 line 1
 line 2
 line 3
-/a█
+/a{rev} {/rev}
 -----
 [EVENT]:ctrl+char:z
 [EVENT]:char:b
 line 1
 line 2
 line 3
-/ab█
+/ab{rev} {/rev}
 -----
 [EVENT]:esc
 line 1
