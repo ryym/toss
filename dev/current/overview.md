@@ -30,6 +30,16 @@ cursor control, `Renderer` becomes responsible for placing the cursor every fram
 needs a way to express the cursor in its snapshots. Reverse video needs none of that and reuses the
 escape handling the status line already has.
 
+## Moving the cursor by grapheme cluster
+
+`LineEditor` moves the cursor one character at a time, so it can stop between a base character and
+a combining mark that follows it, for example between `a` and `U+0301` in the decomposed form of
+`á`. That position has no cell of its own on screen: the two characters render as one. The cursor
+then marks a zero-width cell and is not visible.
+
+Moving by grapheme cluster instead changes the editing model rather than the rendering, so it is
+tracked separately in `dev/issues/draft/search-cursor-invisible-on-combining-mark.md`.
+
 ## Horizontally scrolling the search input
 
 The status line is clipped to the screen width. When the input is longer than the screen and the
