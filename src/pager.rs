@@ -28,10 +28,10 @@ struct ViewportSize {
 }
 
 impl ViewportSize {
-    fn new(screen_width: usize, screen_height: usize) -> Self {
+    fn new(screen_size: ScreenSize) -> Self {
         Self {
-            width: screen_width,
-            height: screen_height - 1, // Reserve the status line area
+            width: screen_size.width(),
+            height: screen_size.height() - 1, // Reserve the status line area
         }
     }
 
@@ -154,7 +154,7 @@ pub struct Pager {
 
 impl Pager {
     pub fn new(mut doc: Document, options: Options, screen_size: ScreenSize) -> Self {
-        let size = ViewportSize::new(screen_size.width(), screen_size.height());
+        let size = ViewportSize::new(screen_size);
         let mut layout = Layout::new(options, size);
         let frame = layout::compose(&mut doc, &mut layout, RowPos::line_start(0));
         Self {
@@ -274,8 +274,8 @@ impl Pager {
     /// Resize the page to the new screen dimensions, reflowing the rows at the new width.
     /// The page stays at its current position unless growing it forces a pull-back toward
     /// the start of the document.
-    pub fn resize(&mut self, screen_width: usize, screen_height: usize) -> bool {
-        let size = ViewportSize::new(screen_width, screen_height);
+    pub fn resize(&mut self, screen_size: ScreenSize) -> bool {
+        let size = ViewportSize::new(screen_size);
         self.layout.resize(size);
         self.recompose();
         true
@@ -966,7 +966,7 @@ mod tests {
     #[test]
     fn resize_rebuilds_content_at_new_height() {
         let mut pager = Pager::new(doc_lines(10), Options::default(), ScreenSize::new(20, 5));
-        pager.resize(20, 10);
+        pager.resize(ScreenSize::new(20, 10));
         let (snap, _doc) = pager.snapshot();
         // New viewport height = 9.
         assert_eq!(line_indices(snap.content), (0..9).collect::<Vec<_>>());

@@ -7,7 +7,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use crate::line_editor::LineEdit;
 use crate::pager::{Pager, PagerMode};
 use crate::renderer::Renderer;
-use crate::screen::Screen;
+use crate::screen::{Screen, ScreenSize};
 use crate::scroll::ScrollPhysics;
 use crate::search::SearchDirection;
 
@@ -120,8 +120,9 @@ impl<S: Screen> App<S> {
             Event::Key(key) => Ok(self.handle_key(key)),
             Event::Resize(w, h) => {
                 log::debug!("Resize: {w}x{h}");
-                let changed = self.pager.resize(usize::from(w), usize::from(h));
-                self.scroll_physics.configure(usize::from(h));
+                let size = ScreenSize::new(w, h);
+                let changed = self.pager.resize(size);
+                self.scroll_physics.configure(size.height());
                 Ok(AppAction::Continue(changed))
             }
             _ => Ok(AppAction::Continue(false)),
