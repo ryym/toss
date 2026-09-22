@@ -168,11 +168,7 @@ pub(super) fn compose(doc: &mut Document, layout: &mut Layout, anchor: RowPos) -
     );
     let rows = fill_from(doc, layout, anchor);
 
-    // Resolve from the first row the global header does not cover, which is not the first
-    // visible row: a heading covers rows of its own. That reference point is what decides
-    // when one heading hands over to the next (see push_up_offset).
-    let block = rows
-        .get(header.len())
+    let block = first_row_below_header(&rows, &header)
         .map(|row| row.line_index())
         .and_then(|line| resolve_heading(doc, layout, &header, line));
 
@@ -189,6 +185,16 @@ pub(super) fn compose(doc: &mut Document, layout: &mut Layout, anchor: RowPos) -
         header,
         heading,
     }
+}
+
+/// Return the first viewport row the global header does not cover, which the pinned heading
+/// is resolved from.
+///
+/// It is not the first visible row: a heading covers rows of its own. This reference point
+/// is what decides when one heading hands over to the next (see push_up_offset). Heading
+/// jumps search from it too, so that they always agree with the heading on screen.
+fn first_row_below_header<'a>(rows: &'a [Row], header: &[Row]) -> Option<&'a Row> {
+    rows.get(header.len())
 }
 
 /// List the viewport rows starting at `anchor`, pulling the anchor back toward the start of
@@ -303,10 +309,41 @@ pub(super) fn heading_placement(
     })
 }
 
+/// Return the start of the next heading after the one pinned on `frame`, or `None` if there
+/// is none below.
+pub(super) fn next_heading_start(
+    doc: &mut Document,
+    layout: &Layout,
+    frame: &Frame,
+) -> Option<usize> {
+    let row = first_row_below_header(&frame.rows, &frame.header)?;
+    let headings = layout.heading.as_ref()?;
+    headings.start_below(doc, layout.header_lines, row.line_index())
+}
+
+/// Return the start of the heading to go back to from `frame`: the pinned heading itself
+/// when the page is partway into its section, or the one before it when the page is at
+/// its start. `None` if there is none above.
+pub(super) fn previous_heading_start(
+    doc: &mut Document,
+    layout: &mut Layout,
+    frame: &Frame,
+) -> Option<usize> {
+    let row = first_row_below_header(&frame.rows, &frame.header)?;
+    // A row partway through a wrapped line hides the start of that line, so the line itself
+    // is still worth going back to.
+    let from = if row.wrap_index() > 0 {
+        row.line_index()
+    } else {
+        row.line_index().checked_sub(1)?
+    };
+    heading_start_at_or_above(doc, layout, from)
+}
+
 /// Return the nearest heading start at or above `at_line`, if any.
 /// Lines covered by the global header are never candidates, since the header already
 /// shows them.
-pub(super) fn heading_start_at_or_above(
+fn heading_start_at_or_above(
     doc: &mut Document,
     layout: &mut Layout,
     at_line: usize,
@@ -314,18 +351,6 @@ pub(super) fn heading_start_at_or_above(
     let header_lines = layout.header_lines;
     let headings = layout.heading.as_mut()?;
     headings.start_at_or_above(doc, header_lines, at_line)
-}
-
-/// Return the nearest heading start strictly below `at_line`, if any.
-/// Lines covered by the global header are never candidates, as in
-/// [`heading_start_at_or_above`].
-pub(super) fn heading_start_below(
-    doc: &mut Document,
-    layout: &Layout,
-    at_line: usize,
-) -> Option<usize> {
-    let headings = layout.heading.as_ref()?;
-    headings.start_below(doc, layout.header_lines, at_line)
 }
 
 /// Compute the anchor that shows the last page of the document.

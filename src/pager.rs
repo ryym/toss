@@ -319,34 +319,17 @@ impl Pager {
         self.compose_at(anchor)
     }
 
-    /// Move the page to the nearest heading start in `direction`, landing at the start of
-    /// that section with its heading pinned.
-    ///
-    /// The search starts from the row the pinned heading is resolved from: the first row
-    /// below the global header, which the heading covers. Searching from there keeps the
-    /// result consistent with the heading on screen, e.g. `Up` in the middle of a section
-    /// returns to the start of the pinned heading rather than the one before it.
+    /// Move the page to the next or previous heading, landing at the start of that section
+    /// with its heading pinned. `Up` in the middle of a section returns to the start of the
+    /// pinned heading rather than the one before it.
     ///
     /// Returns whether the page moved. It does not when there is no heading in `direction`,
     /// or when the heading is on the last page and the page cannot scroll any further.
     pub fn jump_to_heading(&mut self, direction: Direction) -> bool {
-        let Some(reference) = self.frame.rows().get(self.frame.header().len()) else {
-            return false;
-        };
-        let line = reference.line_index();
         let target = match direction {
-            Direction::Down => layout::heading_start_below(&mut self.doc, &self.layout, line),
+            Direction::Down => layout::next_heading_start(&mut self.doc, &self.layout, &self.frame),
             Direction::Up => {
-                // A reference row partway through a wrapped line hides the start of that
-                // line, so the line itself is still worth jumping back to.
-                let from = if reference.wrap_index() > 0 {
-                    Some(line)
-                } else {
-                    line.checked_sub(1)
-                };
-                from.and_then(|from| {
-                    layout::heading_start_at_or_above(&mut self.doc, &mut self.layout, from)
-                })
+                layout::previous_heading_start(&mut self.doc, &mut self.layout, &self.frame)
             }
         };
         match target {
