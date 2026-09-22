@@ -95,10 +95,15 @@ impl Headings {
         true
     }
 
-    /// Find the nearest heading start in `lo..=at`, touching the document only for the
-    /// lines the memo cannot answer.
-    pub fn start_at_or_above(&mut self, doc: &mut Document, lo: usize, at: usize) -> Option<usize> {
-        if at < lo {
+    /// Find the nearest heading start in `first_candidate..=at`, touching the document only
+    /// for the lines the memo cannot answer.
+    pub fn start_at_or_above(
+        &mut self,
+        doc: &mut Document,
+        first_candidate: usize,
+        at: usize,
+    ) -> Option<usize> {
+        if at < first_candidate {
             return None;
         }
         let settled_end = if doc.is_complete() {
@@ -112,14 +117,14 @@ impl Headings {
         let found = loop {
             if self.tested.contains(&line) {
                 // The memo covers this line down to `tested.start`.
-                let from = self.tested.start.max(lo);
+                let from = self.tested.start.max(first_candidate);
                 if let Some(start) = self.recorded_start_in(from..(line + 1)) {
                     break Some(start);
                 }
-                if self.tested.start <= lo {
+                if self.tested.start <= first_candidate {
                     break None;
                 }
-                // The memo ran out above `lo`: keep scanning below it.
+                // The memo ran out above `first_candidate`: keep scanning below it.
                 line = self.tested.start - 1;
                 continue;
             }
@@ -131,7 +136,7 @@ impl Headings {
                 }
                 break Some(line);
             }
-            if line == lo {
+            if line == first_candidate {
                 break None;
             }
             line -= 1;
@@ -141,11 +146,16 @@ impl Headings {
         found
     }
 
-    /// Find the nearest heading start strictly below `at`, never above `lo`.
-    pub fn start_below(&self, doc: &mut Document, lo: usize, at: usize) -> Option<usize> {
+    /// Find the nearest heading start strictly below `at`, never above `first_candidate`.
+    pub fn start_below(
+        &self,
+        doc: &mut Document,
+        first_candidate: usize,
+        at: usize,
+    ) -> Option<usize> {
         // No memo here: unlike start_at_or_above, which runs on every frame, this runs only
         // once per key press.
-        let mut line = (at + 1).max(lo);
+        let mut line = (at + 1).max(first_candidate);
         while doc.line(line).is_some() {
             if self.is_start(doc, line) {
                 return Some(line);
