@@ -7,7 +7,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use crate::line_editor::LineEdit;
 use crate::pager::{Pager, PagerMode};
 use crate::renderer::Renderer;
-use crate::screen::{Screen, ScreenSize};
+use crate::screen::{Direction, Screen, ScreenSize};
 use crate::scroll::ScrollPhysics;
 use crate::search::SearchDirection;
 
@@ -178,6 +178,14 @@ impl<S: Screen> App<S> {
             KeyCode::Char('N') => {
                 self.scroll_physics.stop();
                 self.pager.jump_to_next_match(true)
+            }
+            KeyCode::Char(')') => {
+                self.scroll_physics.stop();
+                self.pager.jump_to_heading(Direction::Down)
+            }
+            KeyCode::Char('(') => {
+                self.scroll_physics.stop();
+                self.pager.jump_to_heading(Direction::Up)
             }
             _ => false,
         };
