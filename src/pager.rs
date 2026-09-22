@@ -195,8 +195,11 @@ impl Pager {
 
     /// Rebuild the page for `anchor`. The composed frame may end up at a different anchor:
     /// [`layout::compose`] pulls it back when the page would otherwise be under-filled.
-    fn compose_at(&mut self, anchor: RowPos) {
+    /// Returns whether the anchor moved.
+    fn compose_at(&mut self, anchor: RowPos) -> bool {
+        let before = self.frame.anchor();
         self.frame = layout::compose(&mut self.doc, &mut self.layout, anchor);
+        self.frame.anchor() != before
     }
 
     /// Rebuild the page at the current anchor, for when the inputs to the layout changed
@@ -286,6 +289,8 @@ impl Pager {
     /// - If the specified line is within the heading that would be pinned, move so that it
     ///   comes right below the global header.
     /// - Otherwise, move so that the specified line comes right after the pinned rows.
+    ///
+    /// Returns whether the page actually moved.
     pub fn jump_to(&mut self, mut line_index: usize) -> bool {
         if self.layout.is_header_line(line_index) {
             line_index = 0;
@@ -311,23 +316,25 @@ impl Pager {
             RowPos::line_start(line_index),
             rows_above,
         );
-        self.compose_at(anchor);
-        true
+        self.compose_at(anchor)
     }
 
     /// Jump to the end of the document so that the last line is at the bottom.
     /// For streamed input this jumps to the currently known end (non-blocking);
     /// lines still arriving become reachable as they are pumped in.
+    ///
+    /// Returns whether the page changed. Besides moving, input that arrived by the jump
+    /// counts too, since it may grow an unfilled page or update the status line.
     pub fn jump_to_end(&mut self) -> bool {
-        self.doc.pump();
+        let pumped = self.doc.pump();
         let anchor = layout::end_anchor(&mut self.doc, &self.layout);
-        self.compose_at(anchor);
-        true
+        self.compose_at(anchor) || pumped.grew || pumped.reached_eof
     }
 
     /// Move the page so that the specified line is fully shown with its last row at the bottom.
     /// Unlike [`Self::jump_to`], which anchors the line at the top, this anchors the whole line
     /// at the bottom so that wherever a match sits within the line it stays visible.
+    /// Returns whether the page actually moved.
     fn jump_to_bottom(&mut self, line_index: usize) -> bool {
         let width = self.layout.size().width();
         let row_count = self
@@ -342,8 +349,7 @@ impl Pager {
             RowPos::line_start(line_index),
             rows_above,
         );
-        self.compose_at(anchor);
-        true
+        self.compose_at(anchor)
     }
 
     /// Scroll by the given number of rows (positive = down, negative = up).
@@ -358,8 +364,7 @@ impl Pager {
             n => layout::anchor_forward(&mut self.doc, &self.layout, before, n as usize),
         };
 
-        self.compose_at(anchor);
-        self.frame.anchor() != before
+        self.compose_at(anchor)
     }
 
     /// Return whether a search input is in progress and not empty.
@@ -766,6 +771,38 @@ mod tests {
         // currently known end (lines 0..=9, last 4 visible).
         let (snap, _) = pager.snapshot();
         assert_eq!(line_indices(snap.content), vec![6, 7, 8, 9]);
+    }
+
+    /// Lines that jump_to_end pumps in count as a change even when the anchor stays put,
+    /// since pump_input will not see them afterwards.
+    #[test]
+    fn jump_to_end_reports_lines_pumped_into_an_unfilled_page() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        send_lines(&tx, 0, 1);
+        doc.pump();
+        // viewport height = 4, so the page is not filled yet.
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
+
+        send_lines(&tx, 1, 2);
+        assert!(pager.jump_to_end());
+        let (snap, _) = pager.snapshot();
+        assert_eq!(line_indices(snap.content), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn jump_to_end_reports_eof_pumped_at_the_end() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut doc = Document::from_channel(rx);
+        send_lines(&tx, 0, 5);
+        doc.pump();
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 5));
+        pager.jump_to_end();
+
+        // Only EOF arrives: the page stays, but the status line drops the loading marker.
+        tx.send(StreamMsg::Eof).unwrap();
+        assert!(pager.jump_to_end());
+        assert!(!pager.is_loading());
     }
 
     #[test]
