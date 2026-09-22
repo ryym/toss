@@ -141,6 +141,20 @@ impl Headings {
         found
     }
 
+    /// Find the nearest heading start strictly below `at`, never above `lo`.
+    pub fn start_below(&self, doc: &mut Document, lo: usize, at: usize) -> Option<usize> {
+        // No memo here: unlike start_at_or_above, which runs on every frame, this runs only
+        // once per key press.
+        let mut line = (at + 1).max(lo);
+        while doc.line(line).is_some() {
+            if self.is_start(doc, line) {
+                return Some(line);
+            }
+            line += 1;
+        }
+        None
+    }
+
     /// Return the greatest recorded start within `range`.
     fn recorded_start_in(&self, range: Range<usize>) -> Option<usize> {
         let end = self.starts.partition_point(|&start| start < range.end);
@@ -245,5 +259,34 @@ mod tests {
             .unwrap();
         doc.pump();
         assert_eq!(headings.start_at_or_above(&mut doc, 0, 0), None);
+    }
+
+    #[test]
+    fn start_below_finds_the_nearest_heading_start_after_the_line() {
+        let mut doc = doc_with_headings();
+        let headings = Headings::new(heading_options("^# ", 1));
+        for (at, expected) in [(0, Some(5)), (4, Some(5)), (5, Some(12)), (11, Some(12))] {
+            assert_eq!(
+                headings.start_below(&mut doc, 0, at),
+                expected,
+                "at line {at}"
+            );
+        }
+    }
+
+    #[test]
+    fn start_below_never_returns_a_line_above_the_lower_bound() {
+        let mut doc = doc_with_headings();
+        let headings = Headings::new(heading_options("^# ", 1));
+        // Lines 0..6 are the global header: the heading at line 5 is not a candidate.
+        assert_eq!(headings.start_below(&mut doc, 6, 0), Some(12));
+    }
+
+    #[test]
+    fn start_below_returns_none_without_a_heading_below() {
+        let mut doc = doc_with_headings();
+        let headings = Headings::new(heading_options("^# ", 1));
+        assert_eq!(headings.start_below(&mut doc, 0, 12), None);
+        assert_eq!(headings.start_below(&mut doc, 0, 19), None);
     }
 }
