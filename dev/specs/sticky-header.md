@@ -65,3 +65,24 @@ Line 0 matches the pattern, but because line 1 also matches within its 2-line wi
 Fixed header and section heading can be used together. The fixed header is always shown at the top, with the section heading displayed below it.
 
 If a section heading block overlaps with the fixed header lines, only the non-overlapping portion of the section heading is shown (the fixed header takes priority).
+
+### Jumping between sections (`--heading`)
+
+With `--heading`, sections are also a unit of navigation.
+
+| Key | Action                               |
+| --- | ------------------------------------ |
+| `)` | Jump to the next section heading     |
+| `(` | Jump to the previous section heading |
+
+- A jump lands at the start of the target section: its heading is pinned and the content starts right after it.
+- Which heading is "next" or "previous" is decided relative to the currently pinned heading,
+  so the result always agrees with what is on screen.
+- Pressing `(` in the middle of a section first goes back to the start of that section.
+  Pressing it again goes to the previous section.
+- Near the end of the document, the page cannot scroll far enough to bring a heading on the last page to the top,
+  so `)` stops there.
+- Nothing happens when:
+  - `--heading` is not given.
+  - There is no heading in that direction. The page does not move to the start or end of the document;
+    use `g` / `G` for that.
