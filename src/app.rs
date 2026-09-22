@@ -179,6 +179,14 @@ impl<S: Screen> App<S> {
                 self.scroll_physics.stop();
                 self.pager.jump_to_next_match(true)
             }
+            KeyCode::Char(')') => {
+                self.scroll_physics.stop();
+                self.pager.jump_to_next_heading()
+            }
+            KeyCode::Char('(') => {
+                self.scroll_physics.stop();
+                self.pager.jump_to_previous_heading()
+            }
             _ => false,
         };
         AppAction::Continue(changed)

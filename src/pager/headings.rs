@@ -95,10 +95,15 @@ impl Headings {
         true
     }
 
-    /// Find the nearest heading start in `lo..=at`, touching the document only for the
-    /// lines the memo cannot answer.
-    pub fn start_at_or_above(&mut self, doc: &mut Document, lo: usize, at: usize) -> Option<usize> {
-        if at < lo {
+    /// Find the nearest heading start in `first_candidate..=at`, touching the document only
+    /// for the lines the memo cannot answer.
+    pub fn start_at_or_above(
+        &mut self,
+        doc: &mut Document,
+        first_candidate: usize,
+        at: usize,
+    ) -> Option<usize> {
+        if at < first_candidate {
             return None;
         }
         let settled_end = if doc.is_complete() {
@@ -112,14 +117,14 @@ impl Headings {
         let found = loop {
             if self.tested.contains(&line) {
                 // The memo covers this line down to `tested.start`.
-                let from = self.tested.start.max(lo);
+                let from = self.tested.start.max(first_candidate);
                 if let Some(start) = self.recorded_start_in(from..(line + 1)) {
                     break Some(start);
                 }
-                if self.tested.start <= lo {
+                if self.tested.start <= first_candidate {
                     break None;
                 }
-                // The memo ran out above `lo`: keep scanning below it.
+                // The memo ran out above `first_candidate`: keep scanning below it.
                 line = self.tested.start - 1;
                 continue;
             }
@@ -131,7 +136,7 @@ impl Headings {
                 }
                 break Some(line);
             }
-            if line == lo {
+            if line == first_candidate {
                 break None;
             }
             line -= 1;
@@ -139,6 +144,25 @@ impl Headings {
         // Everything from `line` up to `at` has now been tested, one way or another.
         self.mark_tested(line..(at + 1).min(settled_end));
         found
+    }
+
+    /// Find the nearest heading start strictly below `at`, never above `first_candidate`.
+    pub fn start_below(
+        &self,
+        doc: &mut Document,
+        first_candidate: usize,
+        at: usize,
+    ) -> Option<usize> {
+        // No memo here: unlike start_at_or_above, which runs on every frame, this runs only
+        // once per key press.
+        let mut line = (at + 1).max(first_candidate);
+        while doc.line(line).is_some() {
+            if self.is_start(doc, line) {
+                return Some(line);
+            }
+            line += 1;
+        }
+        None
     }
 
     /// Return the greatest recorded start within `range`.
@@ -245,5 +269,34 @@ mod tests {
             .unwrap();
         doc.pump();
         assert_eq!(headings.start_at_or_above(&mut doc, 0, 0), None);
+    }
+
+    #[test]
+    fn start_below_finds_the_nearest_heading_start_after_the_line() {
+        let mut doc = doc_with_headings();
+        let headings = Headings::new(heading_options("^# ", 1));
+        for (at, expected) in [(0, Some(5)), (4, Some(5)), (5, Some(12)), (11, Some(12))] {
+            assert_eq!(
+                headings.start_below(&mut doc, 0, at),
+                expected,
+                "at line {at}"
+            );
+        }
+    }
+
+    #[test]
+    fn start_below_never_returns_a_line_above_the_lower_bound() {
+        let mut doc = doc_with_headings();
+        let headings = Headings::new(heading_options("^# ", 1));
+        // Lines 0..6 are the global header: the heading at line 5 is not a candidate.
+        assert_eq!(headings.start_below(&mut doc, 6, 0), Some(12));
+    }
+
+    #[test]
+    fn start_below_returns_none_without_a_heading_below() {
+        let mut doc = doc_with_headings();
+        let headings = Headings::new(heading_options("^# ", 1));
+        assert_eq!(headings.start_below(&mut doc, 0, 12), None);
+        assert_eq!(headings.start_below(&mut doc, 0, 19), None);
     }
 }

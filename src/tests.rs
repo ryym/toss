@@ -2,6 +2,7 @@
 mod display;
 mod header;
 mod heading;
+mod heading_jump;
 mod heading_multi;
 mod heading_resize;
 mod mock_screen;

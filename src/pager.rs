@@ -319,6 +319,30 @@ impl Pager {
         self.compose_at(anchor)
     }
 
+    /// Move the page to the next heading, landing at the start of that section with its
+    /// heading pinned.
+    ///
+    /// Returns whether the page moved. It does not when there is no heading below, or when
+    /// the heading is on the last page and the page cannot scroll any further.
+    pub fn jump_to_next_heading(&mut self) -> bool {
+        match layout::next_heading_start(&mut self.doc, &self.layout, &self.frame) {
+            Some(target) => self.jump_to(target),
+            None => false,
+        }
+    }
+
+    /// Move the page back to the previous heading, landing at the start of that section with
+    /// its heading pinned. In the middle of a section, this returns to the start of the
+    /// pinned heading rather than the one before it.
+    ///
+    /// Returns whether the page moved. It does not when there is no heading above.
+    pub fn jump_to_previous_heading(&mut self) -> bool {
+        match layout::previous_heading_start(&mut self.doc, &mut self.layout, &self.frame) {
+            Some(target) => self.jump_to(target),
+            None => false,
+        }
+    }
+
     /// Jump to the end of the document so that the last line is at the bottom.
     /// For streamed input this jumps to the currently known end (non-blocking);
     /// lines still arriving become reachable as they are pumped in.
