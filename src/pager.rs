@@ -8,7 +8,7 @@ use crate::{
     line::{MatchPosition, Row, RowPos},
     line_editor::{LineEdit, LineEditor},
     pager::layout::{Frame, Layout},
-    screen::ScreenSize,
+    screen::{Direction, ScreenSize},
     search::{self, SearchDirection, SearchFrom, SearchState},
 };
 
@@ -317,6 +317,42 @@ impl Pager {
             rows_above,
         );
         self.compose_at(anchor)
+    }
+
+    /// Move the page to the nearest heading start in `direction`, landing at the start of
+    /// that section with its heading pinned.
+    ///
+    /// The search starts from the row the pinned heading is resolved from: the first row
+    /// below the global header, which the heading covers. Searching from there keeps the
+    /// result consistent with the heading on screen, e.g. `Up` in the middle of a section
+    /// returns to the start of the pinned heading rather than the one before it.
+    ///
+    /// Returns whether the page moved. It does not when there is no heading in `direction`,
+    /// or when the heading is on the last page and the page cannot scroll any further.
+    pub fn jump_to_heading(&mut self, direction: Direction) -> bool {
+        let Some(reference) = self.frame.rows().get(self.frame.header().len()) else {
+            return false;
+        };
+        let line = reference.line_index();
+        let target = match direction {
+            Direction::Down => layout::heading_start_below(&mut self.doc, &self.layout, line),
+            Direction::Up => {
+                // A reference row partway through a wrapped line hides the start of that
+                // line, so the line itself is still worth jumping back to.
+                let from = if reference.wrap_index() > 0 {
+                    Some(line)
+                } else {
+                    line.checked_sub(1)
+                };
+                from.and_then(|from| {
+                    layout::heading_start_at_or_above(&mut self.doc, &mut self.layout, from)
+                })
+            }
+        };
+        match target {
+            Some(target) => self.jump_to(target),
+            None => false,
+        }
     }
 
     /// Jump to the end of the document so that the last line is at the bottom.
@@ -1025,6 +1061,156 @@ mod tests {
         let (snap, _doc) = pager.snapshot();
         assert_eq!(line_indices(snap.heading), vec![0]);
         assert_eq!(line_indices(snap.content), vec![3, 4, 5]);
+    }
+
+    /// `n` lines of `line{i}`, except for the given lines replaced with their text.
+    fn doc_with(n: usize, overrides: &[(usize, &str)]) -> Document {
+        let mut lines: Vec<String> = (0..n).map(|i| format!("line{i}")).collect();
+        for &(i, text) in overrides {
+            lines[i] = text.to_string();
+        }
+        Document::from_string(lines.join("\n"))
+    }
+
+    fn heading_pager(doc: Document, header: usize, num_lines: usize, size: ScreenSize) -> Pager {
+        let opts = Options {
+            header,
+            heading: Some(heading_opts("^# ", num_lines)),
+        };
+        Pager::new(doc, opts, size)
+    }
+
+    #[test]
+    fn jump_to_heading_does_nothing_without_the_heading_option() {
+        let doc = doc_with(20, &[(5, "# a")]);
+        let mut pager = Pager::new(doc, Options::default(), ScreenSize::new(20, 6));
+        assert!(!pager.jump_to_heading(Direction::Down));
+        assert_eq!(
+            line_indices(pager.snapshot().0.content),
+            vec![0, 1, 2, 3, 4]
+        );
+    }
+
+    #[test]
+    fn jump_to_heading_moves_section_by_section() {
+        let doc = doc_with(20, &[(0, "# a"), (5, "# b"), (10, "# c")]);
+        let mut pager = heading_pager(doc, 0, 1, ScreenSize::new(20, 6));
+
+        assert!(pager.jump_to_heading(Direction::Down));
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.heading), vec![5]);
+        assert_eq!(line_indices(snap.content), vec![6, 7, 8, 9]);
+
+        assert!(pager.jump_to_heading(Direction::Down));
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.heading), vec![10]);
+        assert_eq!(line_indices(snap.content), vec![11, 12, 13, 14]);
+
+        // No heading below the last one.
+        assert!(!pager.jump_to_heading(Direction::Down));
+    }
+
+    #[test]
+    fn jump_to_heading_up_returns_to_the_current_section_start_first() {
+        let doc = doc_with(20, &[(0, "# a"), (5, "# b"), (10, "# c")]);
+        let mut pager = heading_pager(doc, 0, 1, ScreenSize::new(20, 6));
+        pager.jump_to(12);
+        assert_eq!(line_indices(pager.snapshot().0.heading), vec![10]);
+
+        assert!(pager.jump_to_heading(Direction::Up));
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.heading), vec![10]);
+        assert_eq!(line_indices(snap.content), vec![11, 12, 13, 14]);
+
+        assert!(pager.jump_to_heading(Direction::Up));
+        assert_eq!(line_indices(pager.snapshot().0.heading), vec![5]);
+        assert!(pager.jump_to_heading(Direction::Up));
+        assert_eq!(line_indices(pager.snapshot().0.heading), vec![0]);
+
+        // No heading above the first one.
+        assert!(!pager.jump_to_heading(Direction::Up));
+    }
+
+    #[test]
+    fn jump_to_heading_up_within_a_multi_line_heading_returns_to_its_start() {
+        let doc = doc_with(20, &[(0, "# a"), (5, "# b")]);
+        let mut pager = heading_pager(doc, 0, 2, ScreenSize::new(20, 6));
+        pager.jump_to(5);
+        // The top row is now the second line of the heading block, which the block covers.
+        pager.scroll(1);
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![8, 9, 10]);
+
+        assert!(pager.jump_to_heading(Direction::Up));
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.heading), vec![5, 6]);
+        assert_eq!(line_indices(snap.content), vec![7, 8, 9]);
+    }
+
+    #[test]
+    fn jump_to_heading_up_within_a_wrapped_heading_line_returns_to_its_start() {
+        // The heading at line 5 wraps into 2 rows at width 10.
+        let doc = doc_with(20, &[(0, "# a"), (5, "# bbbbbbbbbbbb")]);
+        let mut pager = heading_pager(doc, 0, 1, ScreenSize::new(10, 6));
+        pager.jump_to(5);
+        // The top row is now the second row of the heading line.
+        pager.scroll(1);
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![7, 8, 9]);
+
+        assert!(pager.jump_to_heading(Direction::Up));
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.heading), vec![5, 5]);
+        assert_eq!(line_indices(snap.content), vec![6, 7, 8]);
+    }
+
+    #[test]
+    fn jump_to_heading_down_stops_at_the_first_heading_on_the_last_page() {
+        // The last page shows lines 7-11, which includes both headings at 8 and 10.
+        let doc = doc_with(12, &[(0, "# a"), (8, "# b"), (10, "# c")]);
+        let mut pager = heading_pager(doc, 0, 1, ScreenSize::new(20, 6));
+
+        assert!(pager.jump_to_heading(Direction::Down));
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.heading), vec![0]);
+        assert_eq!(line_indices(snap.content), vec![8, 9, 10, 11]);
+
+        // The page cannot scroll any further to bring the heading at 8 to the top.
+        assert!(!pager.jump_to_heading(Direction::Down));
+    }
+
+    #[test]
+    fn jump_to_heading_never_targets_the_global_header() {
+        let doc = doc_with(20, &[(1, "# h"), (6, "# b")]);
+        let mut pager = heading_pager(doc, 2, 1, ScreenSize::new(20, 8));
+        assert!(!pager.jump_to_heading(Direction::Up));
+
+        assert!(pager.jump_to_heading(Direction::Down));
+        let (snap, _doc) = pager.snapshot();
+        assert_eq!(line_indices(snap.header), vec![0, 1]);
+        assert_eq!(line_indices(snap.heading), vec![6]);
+        assert_eq!(line_indices(snap.content), vec![7, 8, 9, 10]);
+
+        assert!(!pager.jump_to_heading(Direction::Up));
+    }
+
+    #[test]
+    fn jump_to_heading_works_when_no_room_is_left_for_the_heading() {
+        // The header takes all rows but one, so no heading is ever pinned.
+        let doc = doc_with(20, &[(5, "# a"), (9, "# b")]);
+        let mut pager = heading_pager(doc, 3, 1, ScreenSize::new(20, 5));
+
+        assert!(pager.jump_to_heading(Direction::Down));
+        let (snap, _doc) = pager.snapshot();
+        assert!(snap.heading.is_empty());
+        assert_eq!(line_indices(snap.content), vec![5]);
+
+        assert!(pager.jump_to_heading(Direction::Down));
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![9]);
+
+        pager.scroll(2);
+        assert!(pager.jump_to_heading(Direction::Up));
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![9]);
+        assert!(pager.jump_to_heading(Direction::Up));
+        assert_eq!(line_indices(pager.snapshot().0.content), vec![5]);
     }
 
     #[test]

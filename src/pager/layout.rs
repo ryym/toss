@@ -305,6 +305,29 @@ pub(super) fn heading_placement(
     })
 }
 
+/// Return the nearest heading start at or above `at_line`, if any.
+/// Lines covered by the global header are never candidates, as in [`resolve_heading`].
+pub(super) fn heading_start_at_or_above(
+    doc: &mut Document,
+    layout: &mut Layout,
+    at_line: usize,
+) -> Option<usize> {
+    let header_lines = layout.header_lines;
+    let headings = layout.heading.as_mut()?;
+    headings.start_at_or_above(doc, header_lines, at_line)
+}
+
+/// Return the nearest heading start strictly below `at_line`, if any.
+/// Lines covered by the global header are never candidates, as in [`resolve_heading`].
+pub(super) fn heading_start_below(
+    doc: &mut Document,
+    layout: &Layout,
+    at_line: usize,
+) -> Option<usize> {
+    let headings = layout.heading.as_ref()?;
+    headings.start_below(doc, layout.header_lines, at_line)
+}
+
 /// Compute the anchor that shows the last page of the document.
 pub(super) fn end_anchor(doc: &mut Document, layout: &Layout) -> RowPos {
     let last_page =
