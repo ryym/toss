@@ -224,8 +224,7 @@ struct HeadingBlock {
 }
 
 /// Find the heading the line at `at_line` belongs to: the nearest line at or above it that
-/// starts a heading. Lines covered by the global header are never candidates, since the
-/// header already shows them.
+/// starts a heading (see [`heading_start_at_or_above`]).
 fn resolve_heading(
     doc: &mut Document,
     layout: &mut Layout,
@@ -233,15 +232,14 @@ fn resolve_heading(
     at_line: usize,
 ) -> Option<HeadingBlock> {
     let max_height = layout.max_heading_height(header);
-    if max_height == 0 || at_line < layout.header_lines {
+    if max_height == 0 {
         return None;
     }
 
-    let header_lines = layout.header_lines;
+    let start_line = heading_start_at_or_above(doc, layout, at_line)?;
+    let num_lines = layout.heading.as_ref()?.num_lines();
     let width = layout.size.width();
-    let headings = layout.heading.as_mut()?;
-    let start_line = headings.start_at_or_above(doc, header_lines, at_line)?;
-    let line_range = start_line..(start_line + headings.num_lines());
+    let line_range = start_line..(start_line + num_lines);
     let rows = rows::from_lines(doc, width, line_range, max_height);
     if rows.is_empty() {
         return None;
@@ -306,7 +304,8 @@ pub(super) fn heading_placement(
 }
 
 /// Return the nearest heading start at or above `at_line`, if any.
-/// Lines covered by the global header are never candidates, as in [`resolve_heading`].
+/// Lines covered by the global header are never candidates, since the header already
+/// shows them.
 pub(super) fn heading_start_at_or_above(
     doc: &mut Document,
     layout: &mut Layout,
@@ -318,7 +317,8 @@ pub(super) fn heading_start_at_or_above(
 }
 
 /// Return the nearest heading start strictly below `at_line`, if any.
-/// Lines covered by the global header are never candidates, as in [`resolve_heading`].
+/// Lines covered by the global header are never candidates, as in
+/// [`heading_start_at_or_above`].
 pub(super) fn heading_start_below(
     doc: &mut Document,
     layout: &Layout,
