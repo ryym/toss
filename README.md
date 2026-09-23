@@ -8,17 +8,10 @@ Toss is a terminal pager like `less`. Toss focuses on the following features:
 
 ![](./assets/example-git-delta.giff)
 
-## Status
-
-- In active development
-- Not a direct replacement of `less`; Toss currently lacks many features of `less`
-
 ## Installation
 
 ```bash
-git clone https://github.com/ryym/toss
-cd toss
-cargo install --path .
+cargo install --git https://github.com/ryym/toss
 ```
 
 ## Usage Examples
